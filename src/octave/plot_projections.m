@@ -13,7 +13,7 @@ end
 
 classes = unique(tr_label)';
 
-colors = repmat(colors,1,ceil(length(classes)/8);
+colors = repmat(colors,1,ceil(length(classes)/8));
 try
   if (topdf == 1)
     figure('visible', 'off');

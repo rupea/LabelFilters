@@ -1,5 +1,11 @@
 function [projected_labels,projected] = \
-project_tests(x,tr_label,xtest,test_labels, pr_func, params,exp_name,no_projections,restarts)
+project_tests(x,tr_label,xtest,test_labels, pr_func, params,exp_name,no_projections,restarts, resume)
+  
+% if we have multiple restarts we can't resume the computation
+if (restarts != 1)
+  resume = 0
+end
+
   
 C1 = params(1);
 C2 = params(2);
@@ -9,9 +15,13 @@ if strcmp(pr_func,"find_w")==1
     best_obj=Inf;
     for r=1:restarts
       disp(sprintf('restart %d\n', r));
-      w=init_w(2, x, tr_label, size(x,2), no_projections);
-    
-      [w,min_proj,max_proj, obj_val]=oct_find_w(x,tr_label,C1,C2,w);
+      if ( resume && exist(sprintf('results/wlu_%s_C1_%d_C2_%d.mat',exp_name, C1, C2), "file"))
+        load(sprintf('results/wlu_%s_C1_%d_C2_%d.mat',exp_name, C1, C2))
+        [w,min_proj,max_proj, obj_val]=oct_find_w(x,tr_label,C1,C2,w,min_proj, max_proj);
+      else 
+        w=init_w(2, x, tr_label, size(x,2), no_projections);
+        [w,min_proj,max_proj, obj_val]=oct_find_w(x,tr_label,C1,C2,w);
+      end    
       
       if (best_obj > obj_val(length(obj_val)))
         best_w = w;
@@ -38,6 +48,8 @@ else
 end
 
 save(sprintf('results/wlu_%s_C1_%d_C2_%d.mat',exp_name, C1, C2), "w", "min_proj", "max_proj" , "obj_val");
+
+disp(norm(w));
 
 %project the test instances and eliminate the filtered out classes
 projected = xtest * w;

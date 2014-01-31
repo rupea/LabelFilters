@@ -9,6 +9,7 @@
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
+using Eigen::VectorXi;
 
 using namespace std;
 
@@ -191,24 +192,24 @@ void assign_add(Eigen::EigenBase<SparseM>& w,
   assign_add(w.derived(),x.derived(),i,C);
 }
 
-void prod(MatrixXd& tmp, const MatrixXd& x, const VectorXd& w)
+void prod(VectorXd& projection, const MatrixXd& x, const VectorXd& w)
 {
-  tmp = x * w;
+  projection = x * w;
 }
 
-void prod(MatrixXd& tmp, const Eigen::EigenBase<MatrixXd>& x, const VectorXd& w)
+void prod(VectorXd& projection, const Eigen::EigenBase<MatrixXd>& x, const VectorXd& w)
 {
-  tmp = x.derived() * w;
+  projection = x.derived() * w;
 }
 
-void prod(MatrixXd& tmp, const SparseM& x, const VectorXd& w)
+void prod(VectorXd& projection, const SparseM& x, const VectorXd& w)
 {
-  tmp = x * w;
+  projection = x * w;
 }
 
-void prod(MatrixXd& tmp, const Eigen::EigenBase<SparseM> & x, const VectorXd& w)
+void prod(VectorXd& projection, const Eigen::EigenBase<SparseM> & x, const VectorXd& w)
 {
-  tmp = (x.derived()) * w;
+  projection = (x.derived()) * w;
 }
 
 void prod(Eigen::EigenBase<MatrixXd> & w, const double scalar)
@@ -358,7 +359,7 @@ void normalize(MatrixXd & mat)
 template<typename EigenType>
 double calculate_objective_hinge(const VectorXd& w,
 				 const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
-				 const VectorXd& l, const VectorXd& u, const std::vector<int>& mids,
+				 const VectorXd& l, const VectorXd& u, const std::vector<int>& class_order,
 				 double C1, double C2)
 {
 
@@ -366,41 +367,40 @@ double calculate_objective_hinge(const VectorXd& w,
   obj_val = .5 * obj_val * obj_val;
   int c;
   double sj;
-  MatrixXd tmp;
-  prod(tmp, x, w);
+  VectorXd projection;
+  prod(projection, x, w);
   for (int i = 0; i < x.rows(); i++)
     {
       c = (int) y[i] - 1; // again the label is started from 1
       obj_val += (C1
-		  * (hinge_loss(tmp(i) - l[c]) + hinge_loss(-tmp(i) + u[c])));
+		  * (hinge_loss(projection(i) - l[c]) + hinge_loss(-projection(i) + u[c])));
 	  
       for (int cp = 0; cp < l.size(); cp++)
 	{
 	  if (c != cp)
 	    {
-	      sj = (mids[c] < mids[cp]) ? 1 : 0;
+	      sj = (class_order[c] < class_order[cp]) ? 1 : 0;
 	      obj_val += (C2
-			  * (sj * hinge_loss(-tmp(i) + l[cp])
-			     + (1 - sj) * hinge_loss(tmp(i) - u[cp])));
+			  * (sj * hinge_loss(-projection(i) + l[cp])
+			     + (1 - sj) * hinge_loss(projection(i) - u[cp])));
 	    }
 	}
 	  
-    }
-	
+    }	
   return obj_val;
 }
 
 template<typename EigenType>
 double calculate_objective_hinge(const VectorXd& w,
 				 const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
-				 const VectorXd& l, const VectorXd& u, const VectorXd& mids, double C1,
+				 const VectorXd& l, const VectorXd& u, const VectorXd& class_order, double C1,
 				 double C2)
 {
   if (PRINT_O)
     cout << "calc objective: ";
 
-  std::vector<int> v(mids.size());
-  toVector(v, mids);
+  std::vector<int> v(class_order.size());
+  toVector(v, class_order);
   double d = calculate_objective_hinge(w, x, y, l, u, v, C1, C2);
 
   if (PRINT_O)
@@ -464,15 +464,58 @@ void rank_classes(std::vector<int>& cranks, VectorXd& l, VectorXd& u)
     }
 }
 
+
+// *******************************
+// Get the number of exampls in each class
+
+void init_nc(VectorXi& nc, const VectorXd& y, const int noClasses)
+{  
+  int c;
+  if (nc.rows() != noClasses) 
+    {
+      cerr << "init_nc has been called with vector nc of wrong size" << endl;
+      exit(-1);
+    }
+  int n = y.rows();
+  for (int k = 0; k < noClasses; k++)
+    {
+      nc(k)=0;
+    }
+  for (int i=0;i<n;i++)
+    {
+      c = (int) y[i] - 1; // Assuming all the class labels start from 1
+      nc(c)++;
+    }
+}
+
 // ********************************
 // Initializes the lower and upper bound
 template<typename EigenType>
-void init_lu(VectorXd& l, VectorXd& u, const VectorXd& w,
+void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc, const VectorXd& w,
 	     const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
 	     const int noClasses)
 {
-  l.setZero();
-  u.setZero();
+  int n = x.rows();
+  int c,i,k;
+  for (k = 0; k < noClasses; k++)
+    {
+      means(k)=0;
+      l(k)=std::numeric_limits<double>::max();
+      u(k)=std::numeric_limits<double>::min();	      
+    }
+  VectorXd projection;
+  prod(projection, x, w);
+  for (i=0;i<n;i++)
+    {
+      c = (int) y[i] - 1; // Assuming all the class labels start from 1
+      means(c)+=projection(i);
+      l(c)=projection(i)<l(c)?projection(i):l(c);
+      u(c)=projection(i)>u(c)?projection(i):u(c);
+    }
+  for (k = 0; k < noClasses; k++)
+    {
+      means(k) /= nc(k);
+    }
 }
 
 // ******************************
@@ -508,7 +551,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 			MatrixXd& upper_bounds, VectorXd& objective_val,
 			const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
 			const double C1_, const double C2_,
-			Eigen::EigenBase<EigenType>& w_gradient)
+			Eigen::EigenBase<EigenType>& w_gradient, bool resumed)
 
 {
 
@@ -529,6 +572,8 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 
   int noClasses = classes.size();
   VectorXd w(d),l(noClasses),u(noClasses),w_prev(d);
+  VectorXd means(noClasses); // used for initialization of the class order vector;
+  VectorXi nc(noClasses); // the number of examples in each class 
   double eta_t, tmp, sj;
   double prev_norm = 0, cur_norm = 1;// current and previous changes in the norm of w ...
   //used as stopping point if it doesn't change
@@ -539,7 +584,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
   unsigned int t = 1, i=0, k=0;
   char iter_str[30];
   for(i=0; i<30; i++) iter_str[i]=' ';
-  std::vector<int> mids(noClasses), prev_mids(noClasses);// mid points in the bound; used as the switch
+  std::vector<int> class_order(noClasses), prev_class_order(noClasses);// mid points in the bound; used as the switch
        
   lower_bounds.resize(noClasses, no_projections);
   upper_bounds.resize(noClasses, no_projections);
@@ -547,43 +592,33 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 
   init_gradient(x,w_gradient);
 
+  init_nc(nc, y, noClasses);
+  
+  // can't do it this way because the initial projections won't be orthogonal
+  // this will create some problems when we initialize the calss order vector
+  // we'll need to change this. 
   for(int projection_dim=0; projection_dim < no_projections; projection_dim++)
     {
-	  
-
+	 
       prev_norm = 0, cur_norm = 1;
       w = weights.col(projection_dim);
 
       // w.setRandom(); // initialize to a random value
       w_prev = w*2;
-
-      //initialize the mids vector by sorting the means of the projections of each class. Use l to store the means. l is initialized after
-      for (k = 0; k < noClasses; k++)
+      
+      if (!resumed)
 	{
-	  mids[k] = 0;
-	  l(k)=0;
+	  //initialize the class_order vector by sorting the means of the projections of each class. Use l to store the means.
+	  init_lu(l,u,means,nc,w,x,y,noClasses);
+	  rank_classes(class_order,means,means);
 	}
-      MatrixXd tmp1;
-      prod(tmp1, x, w);
-      for (i=0;i<n;i++)
-	{
-	  c = (int) y[i] - 1; // Assuming all the class labels start from 1
-	  l(c)+=tmp1(i);
-	  mids[c]++;
+      else 
+	{	  
+	  l = lower_bounds.col(projection_dim);
+	  u = upper_bounds.col(projection_dim);
+	  rank_classes(class_order, l, u);
 	}
-      for (k = 0; k < noClasses; k++)
-	{
-	  l(k) /= mids[k];		    
-	}
-      rank_classes(mids,l,l);
-	
-      l = lower_bounds.col(projection_dim);
-      u = upper_bounds.col(projection_dim);
-
-      // initialize the values of l and u
-      init_lu(l,u,w,x,y,noClasses);
-
-
+	      
 
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,w.size(),x);
 
@@ -593,15 +628,17 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 	  sprintf(iter_str,"Iteration %d > ",iter+1);
 
 	  // init the optimization specific parameters
-	  std::copy(mids.begin(),mids.end(), prev_mids.begin());
+	  std::copy(class_order.begin(),class_order.end(), prev_class_order.begin());
 		    
-	  cout << "\n Mids: ";
+	  cout << "\n Class_Order: ";
 		    
 	  for (k = 0; k < noClasses; k++)
 	    {
-	      cout << mids[k] << "  ";
+	      cout << class_order[k] << "  ";
 	    }
 	  cout << "\n";fflush(stdout);
+
+	  cout << "w norm: " << w.norm()<< endl;
 		    
 	  t = 1;
 	  cur_norm = OPT_EPSILON+1;// if s is changed make sure we go through another iteration
@@ -622,7 +659,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 	      if(t % OPT_EPOCH == 0)
 		{
 		  print_progress(iter_str, t, OPT_MAX_ITER);
-		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, mids, C1, C2); // save the objective value
+		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, C1, C2); // save the objective value
 		  if(PRINT_O)
 		    {
 		      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
@@ -680,7 +717,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 		    {
 		      if (cp != c)
 			{
-			  sj = (mids[c] < mids[cp]) ? 1 : 0;
+			  sj = (class_order[c] < class_order[cp]) ? 1 : 0;
 			  if (sj == 1 && hinge_loss(-tmp + l(cp)) > 0) // I3 Condition
 			    {
 			      if(PRINT_I)
@@ -742,12 +779,12 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 	  // Let's check if s changed
 	  // check if the orders are the same
 	  order_changed = 0;
-	  // check if the mids are still the same
-	  rank_classes(mids, l, u);// ranking classes				
+	  // check if the class_order are still the same
+	  rank_classes(class_order, l, u);// ranking classes				
 	  // check that the ranks are the same 
 	  for(int c = 0; c < noClasses; c++)
 	    {
-	      if (mids[c] != prev_mids[c])
+	      if (class_order[c] != prev_class_order[c])
 		{
 		  order_changed = 1;
 		  break;
@@ -778,8 +815,10 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
   cout << "\n---------------\n" << endl;
 	
   objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u,
-						       mids, C1, C2);// save the objective value
+						       class_order, C1, C2);// save the objective value
   objective_val = objective_val.head(obj_idx);
+
+  cout << "w norm at the end: "<< weights.col(0).norm() << endl;
 }
 
 // ---------------------------------------

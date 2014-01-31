@@ -1,5 +1,5 @@
 function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = run_svm_test(bestC, ...
-x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name,datadir,proj_params, no_projections, restarts)
+x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name,datadir,proj_params, no_projections, restarts, resume)
 tic;
 
 iterations = size(proj_params,1);
@@ -33,7 +33,7 @@ end
 for iter = 1 : iterations
     tic;
     fprintf(1,"performing the projection ... \n");
-    [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func,proj_params(iter,:),exp_name,no_projections, restarts);   
+    [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func,proj_params(iter,:),exp_name,no_projections, restarts, resume);   
     
 	    
     fprintf(1,"projection and label selection time: %f\n", toc);

@@ -1,8 +1,5 @@
 function [out_final] = perform_parallel_svm(exp_name, C, option, exp_dir, force_retrain, tr_label)
 
-svm_dir = '../libsvm-3.17/';
-addpath([svm_dir "/matlab/"]);
-
 if ~exist('option', 'var'),
     option = '';
 end      
@@ -44,19 +41,20 @@ else
     
     cur_file = @(idx) ["svm_results/svm_" file_expr(idx) ".mat"];    
     
-    octave_cmd = @(idx) sprintf("octave -q --eval \"perform_svm_batch('%s','%s',%f,%d,%d)\"", ...
-    exp_name,exp_dir,C, label_range(idx),label_range(idx+1));
+    octave_cmd = @(idx) sprintf("octave -q --path %s --eval \"perform_svm_batch('%s','%s',%f,%d,%d)\"", ...
+    path(), exp_name,exp_dir,C, label_range(idx),label_range(idx+1));
     
     pbs_command = @(idx) ["#!/bin/bash \n" ...
     "#PBS -l nodes=1:ppn=1,walltime=5:00:00 \n" ...
     "#PBS -N svm_" exp_name " \n" ...
-    "#PBS -o localhost:{$PBS_O_WORKDIR}/svm_results/" file_expr(idx) ".out \n" ...
-    "#PBS -e localhost:{$PBS_O_WORKDIR}/svm_results/" file_expr(idx) ".err \n" ...
+    "#PBS -o localhost:${PBS_O_WORKDIR}/svm_results/" file_expr(idx) ".out \n" ...
+    "#PBS -e localhost:${PBS_O_WORKDIR}/svm_results/" file_expr(idx) ".err \n" ...
     "#PBS -V \n" ...
-    "cd {$PBS_O_WORKDIR} \n" octave_cmd(idx)]; % .${PBS_JOBID}
+    "cd ${PBS_O_WORKDIR} \n" octave_cmd(idx)]; % .${PBS_JOBID}
      
     for lbl_idx = 1 : 1 : length(label_range) -1
         f = ["svm_results/" file_expr(lbl_idx) ".pbs"];       
+	display(f);
         fid = fopen(f, 'w');
         fprintf(fid, pbs_command(lbl_idx)); 
         fclose(fid);
