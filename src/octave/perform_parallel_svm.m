@@ -53,8 +53,7 @@ else
     "cd ${PBS_O_WORKDIR} \n" octave_cmd(idx)]; % .${PBS_JOBID}
      
     for lbl_idx = 1 : 1 : length(label_range) -1
-        fname = ["svm_results/" file_expr(lbl_idx) ".mat"];
-	if (~exist(fname,'file') && ~force_retrain)
+	if (~exist(cur_file(lbl_idx),'file') && ~force_retrain)
           f = ["svm_results/" file_expr(lbl_idx) ".pbs"];       
 	  display(f);
           fid = fopen(f, 'w');
@@ -66,8 +65,6 @@ else
     end       
     
     disp('All jobs submitted. Now wait ...');            
-    
-    exp_name_substr = ["svm_" exp_name](1:10) % we use a substring of the exp_name since we are checking with the table and it mightbe trunctaed ...
     
     all_exist = false;
     while ~all_exist

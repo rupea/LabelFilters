@@ -1,8 +1,5 @@
 function perform_svm_batch(exp_name,exp_dir,C,class_idx_start,class_idx_end)
 
-svm_dir = '../libsvm-3.17/';
-addpath([svm_dir "/matlab/"]);
-
 %loading data
 load([exp_dir exp_name ".mat"], "-v6");
 

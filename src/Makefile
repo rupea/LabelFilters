@@ -1,8 +1,8 @@
 CXX ?= g++
 
-OCTAVEDIR ?= ~/Programs/octave-3.6.4/
+OCTAVEDIR ?= $(HOME)/Programs/octave-3.6.4
 OCTAVE_MEX ?= env CC=$(CXX)  $(OCTAVEDIR)/bin/mkoctfile -v -g -I/home/mlshack/alex/Programs/gperftools-2.1/install/include -L/home/mlshack/alex/Programs/gperftools-2.1/install/lib -lprofiler
-OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.6.4/octave/ -I..
+OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.6.4/octave -I..
 
 export
 
