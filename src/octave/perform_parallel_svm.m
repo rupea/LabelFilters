@@ -53,13 +53,16 @@ else
     "cd ${PBS_O_WORKDIR} \n" octave_cmd(idx)]; % .${PBS_JOBID}
      
     for lbl_idx = 1 : 1 : length(label_range) -1
-        f = ["svm_results/" file_expr(lbl_idx) ".pbs"];       
-	display(f);
-        fid = fopen(f, 'w');
-        fprintf(fid, pbs_command(lbl_idx)); 
-        fclose(fid);
-        disp(file_expr(lbl_idx));
-        system(["qsub " f]);
+        fname = ["svm_results/" file_expr(lbl_idx) ".mat"];
+	if (~exist(fname,'file'))
+          f = ["svm_results/" file_expr(lbl_idx) ".pbs"];       
+	  display(f);
+          fid = fopen(f, 'w');
+          fprintf(fid, pbs_command(lbl_idx)); 
+          fclose(fid);
+          disp(file_expr(lbl_idx));
+          system(["qsub " f]);
+	end
     end       
     
     disp('All jobs submitted. Now wait ...');            
