@@ -561,7 +561,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
   double lambda = 1.0/C2_;
   double C1 = C1_/C2_;
   double C2 = 1.0;
-  srand (time(NULL));
+  //  srand (time(NULL));
 
   const	int no_projections = weights.cols();
   cout << "no_projections: " << no_projections << endl;
@@ -627,7 +627,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
       // staring optimization
       for (int iter = 0; iter < OPT_MAX_REORDERING && order_changed == 1; iter++)
 	{
-	  sprintf(iter_str,"Iteration %d > ",iter+1);
+	  snprintf(iter_str,30, "Iteration %d > ",iter+1);
 
 	  // init the optimization specific parameters
 	  std::copy(class_order.begin(),class_order.end(), prev_class_order.begin());
@@ -656,7 +656,6 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 		{
 		  eta_t = 1e-4;
 		}
-			    
 			    
 	      if(t % OPT_EPOCH == 0)
 		{
@@ -687,7 +686,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 		  c = (int) y[i] - 1; // Assuming all the class labels start from 1
 				
 		  double multiplier = 0;
-				
+
 		  if(PRINT_I)
 		    {	
 		      cout << i << ", c: " << c << endl;
@@ -741,6 +740,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 			    }
 			} // end if cp != c
 		    } // end for cp
+
 		  if (multiplier != 0)
 		    {
 		      assign_add(w_gradient,x,i,multiplier);
@@ -828,54 +828,79 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 // ---------------------------------------
 int main()
 {
-  MatrixXd x(2, 3);
-  float C1 = 1, C2 = 1;
-  VectorXd y(10), s(10);
+
+  srand (42782);
+  
+  MatrixXd weights(400,1),lower_bounds(10,1),upper_bounds(10,1), x(1000,400),w_gradient(1,400);
+  VectorXd y(1000),objective_val;
+
+  weights.setRandom();
+  lower_bounds.setZero();
+  upper_bounds.setZero();
+  x.setRandom();
+  SparseM xs = x.sparseView();
+  w_gradient.setZero();
+  SparseM gs = w_gradient.sparseView();
   for (int i = 0; i < y.size(); i++)
     {
-      y(i) = 10 - i;
-      if (i == 5)
-	{
-	  y(i) = 100;
-	}
+      y(i) = (i%10)+1;
     }
-
-  std::vector<int> cranks(y.size());
-  IndexComparator cmp(y);
-  sort_index(y, cranks);
-  // for(int i=0;i<y.size();i++){cranks[i]=i;}
-  //std::sort(cranks.begin(), cranks.end(), cmp);
-  for (std::vector<int>::iterator it = cranks.begin(); it != cranks.end();
-       ++it)
-    std::cout << ' ' << *it << "[" << y(*it) << "]";
-  std::cout << '\n';
-
-  MatrixXd x1(4, 3);
-  x1 << 0.54343, 0.14613, 0.55317, 0.62082, 0.41308, 0.59649, 0.64365, 0.58947, 0.94562, 0.99690, 0.91504, 0.92640;
-  SparseM x2 = x1.sparseView();
-  cout << "before init ... \n" << x1 << endl;
-  // MatrixXd xx(x1);
-  normalize(x1);	// should print out :
-  cout << "\n---------------\n" << endl;
-  normalize(x2);	// should print out :
-  // -0.78203  -1.14666  -0.96574
-  //  -0.39843  -0.31890  -0.75890
-  // -0.28525   0.22802   0.90822
-  //  1.46571   1.23754   0.81642
-
-  cout << x2 << endl;
-
-  // std::cout << getClasses(y) << std::endl;
-  // std::vector<int> classes = getClasses(y);
-  // for (std::vector<int>::iterator it = classes.begin(); it != classes.end(); ++it)
-  //  std::cout << ' ' << *it;
-  // std::cout << '\n';
-
-  //  VectorXd w = solve_optimization(x,y,s,C1,C2);
-
-  // std::cout << w << "---\n" << OPT_MAX_ITER << std::endl;
-
-  // read_sparse("../data/IPC/ipc.train.svm");
-
-  return 0;
+  
+  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,10,1,gs,0);
 }
+
+
+  
+
+
+//   MatrixXd x(2, 3);
+//   float C1 = 1, C2 = 1;
+//   VectorXd y(10), s(10);
+//   for (int i = 0; i < y.size(); i++)
+//     {
+//       y(i) = 10 - i;
+//       if (i == 5)
+// 	{
+// 	  y(i) = 100;
+// 	}
+//     }
+
+//   std::vector<int> cranks(y.size());
+//   IndexComparator cmp(y);
+//   sort_index(y, cranks);
+//   // for(int i=0;i<y.size();i++){cranks[i]=i;}
+//   //std::sort(cranks.begin(), cranks.end(), cmp);
+//   for (std::vector<int>::iterator it = cranks.begin(); it != cranks.end();
+//        ++it)
+//     std::cout << ' ' << *it << "[" << y(*it) << "]";
+//   std::cout << '\n';
+
+//   MatrixXd x1(4, 3);
+//   x1 << 0.54343, 0.14613, 0.55317, 0.62082, 0.41308, 0.59649, 0.64365, 0.58947, 0.94562, 0.99690, 0.91504, 0.92640;
+//   SparseM x2 = x1.sparseView();
+//   cout << "before init ... \n" << x1 << endl;
+//   // MatrixXd xx(x1);
+//   normalize(x1);	// should print out :
+//   cout << "\n---------------\n" << endl;
+//   normalize(x2);	// should print out :
+//   // -0.78203  -1.14666  -0.96574
+//   //  -0.39843  -0.31890  -0.75890
+//   // -0.28525   0.22802   0.90822
+//   //  1.46571   1.23754   0.81642
+
+//   cout << x2 << endl;
+
+//   // std::cout << getClasses(y) << std::endl;
+//   // std::vector<int> classes = getClasses(y);
+//   // for (std::vector<int>::iterator it = classes.begin(); it != classes.end(); ++it)
+//   //  std::cout << ' ' << *it;
+//   // std::cout << '\n';
+
+//   //  VectorXd w = solve_optimization(x,y,s,C1,C2);
+
+//   // std::cout << w << "---\n" << OPT_MAX_ITER << std::endl;
+
+//   // read_sparse("../data/IPC/ipc.train.svm");
+
+//   return 0;
+// }
