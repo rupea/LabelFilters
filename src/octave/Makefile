@@ -1,6 +1,5 @@
 OCTAVEDIR ?= ~/Programs/octave-3.6.4/
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile
-OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.6.4/octave/ -I..
 
 OCTFILES = oct_find_w.oct oct_normalize_data.oct oct_calc_objective.oct
 

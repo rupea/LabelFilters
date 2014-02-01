@@ -4,6 +4,7 @@
 #include <typeinfo>
 #include <math.h>
 #include <stdlib.h>
+#include <gperftools/profiler.h>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 
@@ -18,8 +19,8 @@ using namespace std;
 typedef Eigen::SparseMatrix<double, Eigen::RowMajor> SparseM;
 
 // ***********  Constant values used
-const unsigned int OPT_MAX_ITER = 1e5; 	// Maximum number of iterations
-const int OPT_MAX_REORDERING = 10; // maximum time the ordering of switches have to be changed
+const unsigned int OPT_MAX_ITER = 1e4; 	// Maximum number of iterations
+const int OPT_MAX_REORDERING = 1; // maximum time the ordering of switches have to be changed
 const double OPT_EPSILON = 1e-4; // optimization epsilon: how different the update for w is
 const int PRINT_T = 0;                 	// print values in each iteration
 const int PRINT_O = 1;                // print objective function in each epoch
@@ -555,6 +556,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 
 {
 
+  ProfilerStart("codeprofiler");
   /* initialize random seed: */
   double lambda = 1.0/C2_;
   double C1 = C1_/C2_;
@@ -819,6 +821,8 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
   objective_val = objective_val.head(obj_idx);
 
   cout << "w norm at the end: "<< weights.col(0).norm() << endl;
+
+  ProfilerStop();
 }
 
 // ---------------------------------------
