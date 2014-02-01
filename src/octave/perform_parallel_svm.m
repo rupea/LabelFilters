@@ -54,7 +54,7 @@ else
      
     for lbl_idx = 1 : 1 : length(label_range) -1
         fname = ["svm_results/" file_expr(lbl_idx) ".mat"];
-	if (~exist(fname,'file'))
+	if (~exist(fname,'file') && ~force_retrain)
           f = ["svm_results/" file_expr(lbl_idx) ".pbs"];       
 	  display(f);
           fid = fopen(f, 'w');
