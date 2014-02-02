@@ -6,7 +6,6 @@
 #include "find_w.cpp"
 #include "EigenOctave.cpp"
 
-using Eigen::MatrixXd;
 using Eigen::VectorXd;
 
 void test(SparseM& x)
@@ -14,7 +13,7 @@ void test(SparseM& x)
 	std::cout << x.rows();
 }
 
-void test(MatrixXd& x)
+void test(DenseM& x)
 {
 	std::cout << x.rows();
 }
@@ -24,7 +23,7 @@ void test(Eigen::EigenBase<SparseM >& x)
 	test(x);
 }
 
-void test(Eigen::EigenBase<MatrixXd>& x)
+void test(Eigen::EigenBase<DenseM>& x)
 {
 	test(x);
 }
@@ -76,8 +75,8 @@ DEFUN_DLD (oct_find_w, args, nargout,
   VectorXd y = toEigenVec(yArray);
   double C1 = C1Array(0,0);
   double C2 = C2Array(0,0);
-  MatrixXd w = toEigenMat(wArray);
-  MatrixXd l,u;
+  DenseM w = toEigenMat(wArray);
+  DenseM l,u;
   if (nargin == 7)
     {
       l = toEigenMat(lArray);
@@ -93,7 +92,6 @@ DEFUN_DLD (oct_find_w, args, nargout,
     {
       // Sparse data
       Sparse<double> xArray = args(0).sparse_matrix_value();
-      SparseM w_gradient(1,xArray.cols());
 
       SparseM x = toEigenMat(xArray);
 
@@ -103,8 +101,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
     {
       // Dense data
       FloatNDArray xArray = args(0).float_array_value();
-      MatrixXd x = toEigenMat(xArray);
-      MatrixXd w_gradient(1,xArray.cols());
+      DenseM x = toEigenMat(xArray);
 
       solve_optimization(w,l,u,objective_vals,x,y,C1,C2, resumed);
     }

@@ -5,7 +5,6 @@
 #include "EigenOctave.cpp"
 
 using Eigen::MatrixXd;
-using Eigen::VectorXd;
 
 DEFUN_DLD (oct_normalize_data, args, nargout,
     "returns the normalized data")
@@ -13,7 +12,7 @@ DEFUN_DLD (oct_normalize_data, args, nargout,
     octave_value_list retval(1);
 
     FloatNDArray optArray = args(1).float_array_value();
-    MatrixXd opt = toEigenMat(optArray);
+    DenseM opt = toEigenMat(optArray);
 
     if(args(0).is_sparse_type())
       {
@@ -36,7 +35,7 @@ DEFUN_DLD (oct_normalize_data, args, nargout,
     else
       {
         FloatNDArray xArray = args(0).float_array_value();
-        MatrixXd x = toEigenMat(xArray);
+        DenseM x = toEigenMat(xArray);
         normalize(x);
         retval(0) = toMatrix(x);
       }

@@ -3,16 +3,16 @@
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 
-using Eigen::MatrixXd;
 using Eigen::VectorXd;
 
+typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> DenseM;
 typedef Eigen::SparseMatrix<double,Eigen::RowMajor>  SparseM;
 
 
-Eigen::MatrixXd toEigenMat(const FloatNDArray& data) {
+DenseM toEigenMat(const FloatNDArray& data) {
   dim_vector datasize = data.dims();
 
-  MatrixXd m(datasize(0), datasize(1));
+  DenseM m(datasize(0), datasize(1));
   for (int i = 0; i < datasize(0); i++) {
     for (int j = 0; j < datasize(1); j++) {
       m(i, j) = data(i, j);
@@ -69,7 +69,7 @@ VectorXd toEigenVec(FloatNDArray data) {
   return v;
 }
 
-Matrix toMatrix(MatrixXd data) {
+Matrix toMatrix(DenseM data) {
   Matrix m(data.rows(), data.cols());
 
   for (int i = 0; i < data.rows(); i++) {
