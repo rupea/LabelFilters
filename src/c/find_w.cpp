@@ -4,9 +4,12 @@
 #include <typeinfo>
 #include <math.h>
 #include <stdlib.h>
-#include <gperftools/profiler.h>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
+
+#ifdef PROFILE
+#include <gperftools/profiler.h>
+#endif
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;
@@ -15,12 +18,12 @@ using Eigen::VectorXi;
 using namespace std;
 
 // type definitions
-
+typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> DenseM;
 typedef Eigen::SparseMatrix<double, Eigen::RowMajor> SparseM;
 
 // ***********  Constant values used
 const unsigned int OPT_MAX_ITER = 1e4; 	// Maximum number of iterations
-const int OPT_MAX_REORDERING = 1; // maximum time the ordering of switches have to be changed
+const int OPT_MAX_REORDERING = 10; // maximum time the ordering of switches have to be changed
 const double OPT_EPSILON = 1e-4; // optimization epsilon: how different the update for w is
 const int PRINT_T = 0;                 	// print values in each iteration
 const int PRINT_O = 1;                // print objective function in each epoch
@@ -66,7 +69,7 @@ void print_mat_size(const Eigen::VectorXd& mat)
   cout << "(" << mat.size() << ")";
 }
 
-void print_mat_size(const Eigen::MatrixXd& mat)
+void print_mat_size(const DenseM& mat)
 {
   cout << "(" << mat.rows() << ", " << mat.cols() << ")";
 }
@@ -76,20 +79,20 @@ void print_mat_size(const SparseM& mat)
   cout << "(" << mat.rows() << ", " << mat.cols() << ")";
 }
 
-void print_report(const Eigen::EigenBase<SparseM>& x)
+void print_report(const SparseM& x)
 {
-  int nnz = static_cast<SparseM>(x.derived()).nonZeros();
+  int nnz = x.nonZeros();
   cout << "x:non-zeros: " << nnz << ", avg. nnz/row: " << nnz / x.rows();
 }
 
-void print_report(const Eigen::EigenBase<MatrixXd>& x)
+void print_report(const DenseM& x)
 {
 }
 
 template<typename EigenType>
 void print_report(const int& projection_dim, const int& batch_size,
 		  const int& noClasses, const int& C1, const int& C2, const int& w_size,
-		  const Eigen::EigenBase<EigenType>& x)
+		  const EigenType& x)
 {
   cout << "projection_dim: " << projection_dim << ", batch_size: "
        << batch_size << ", noClasses: " << noClasses << ", C1: " << C1
@@ -99,36 +102,13 @@ void print_report(const int& projection_dim, const int& batch_size,
 
 }
 
-// *********************************
-// init values useful for faster gradient update
-// currently just a dummy function.
-void init_gradient_internal(const Eigen::EigenBase<SparseM>& x,
-			    Eigen::EigenBase<SparseM>& w_gradient)
-{
-}
-
-void init_gradient_internal(const Eigen::EigenBase<MatrixXd>& x,
-			    Eigen::EigenBase<MatrixXd>& w_gradient)
-{
-}
-
-template<typename EigenType>
-void init_gradient(const Eigen::EigenBase<EigenType>& x,
-		   Eigen::EigenBase<EigenType>& w_gradient)
-{
-  init_gradient_internal(x, w_gradient);
-}
-
 // *******************************
 // The hinge loss
-double hinge_loss(double val)
+inline double hinge_loss(double val)
 {
-  val = 1 - val;
-  if (val > 0)
-    return val;
-
-  return 0;
+  return 1 - ((val<1)?val:1.0);
 }
+
 
 // ******************************
 // Convert to a STD vetor from Eigen Vector
@@ -140,131 +120,168 @@ void toVector(std::vector<int>& to, const VectorXd& from)
     }
 }
 
-std::vector<int> toVector(const VectorXd from)
-{
-  std::vector<int> to(from.size());
+// // ***********************
+// // Some basic operations
 
-  toVector(to, from);
-}
+// // The following functions are a bit more efficient but compiling with -O2
+// // makes them unnecessary
 
-// ***********************
-// Some basic operations
+// // double rowprod(const DenseM& x, const int row, const VectorXd& w)
+// // {
+// //   //do the range checks here
+// //   assert(w.rows()==x.cols());
+// //   assert(row < x.rows());
+// //   assert(row >= 0);
+// //   double ret = 0;
+// //   int n = x.cols();
+// //   const double* w_ptr = w.data();
+// //   const double* x_ptr = x.data();
+// //   x_ptr+=n*row;
+// //   for(int j=0; j<n; j++, x_ptr++,w_ptr++)
+// //     {
+// //       ret+=(*w_ptr)*(*x_ptr);
+// //     }
+// //   return ret;
+// // }
 
-double rowprod(const MatrixXd& x, const int i, const VectorXd& w)
-{
-  return x.row(i) * w;
-}
+// // double rowprod(const SparseM& x, const int row, const VectorXd& w)
+// // {
+// //   assert(x.cols()==w.rows());
+// //   double ret=0;
+// //   // use direct access to the data array to avoid costly boudary checks. 
+// //   const double* data=w.data();
+// //   SparseM::InnerIterator it(x, row);
+// //   for (; it; ++it)
+// //     {
+// //       ret+=data[it.col()]*it.value();
+// //     } 
+// //   return ret;
+// // }
 
-double rowprod(const Eigen::EigenBase<MatrixXd>& x, const int i,
-	       const VectorXd& w)
-{
-  return x.derived().row(i) * w;
-}
+// // template<typename EigenType>
+// // double rowprod(const EigenType& x, const int row, const VectorXd& w)
+// // {
+// //   assert(x.cols()==w.rows());
+// //   double ret=0;
+// //   // use direct access to the data array to avoid costly boudary checks. 
+// //   const double* data=w.data();
+// //   typename EigenType::InnerIterator it(x, row);
+// //   for (; it; ++it)
+// //     {
+// //       ret+=data[it.col()]*it.value();
+// //     } 
+// //   return ret;
+// // }
 
-double rowprod(const SparseM& x, const int& i, const VectorXd& w)
-{
-  return (x.row(i)*w)(0,0);
 
-}
+// template<typename EigenType>
+// inline double rowprod(const EigenType& x, const int row, const VectorXd& w)
+// {
+//   return (x.row(row)*w)(0,0);
+// }
 
-double rowprod(const Eigen::EigenBase<SparseM>& x, const int& i,
-	       const VectorXd& w)
-{
-  return rowprod(x.derived(),i,w);
-}
+// template<typename EigenType>
+// inline double rowprod(const Eigen::EigenBase<EigenType>& x, const int row,
+// 	       const VectorXd& w)
+// {
+//   return  rowprod(x.derived(),row,w);
+// }
 
-//  assumes that w is a row vector
-void assign_add(Eigen::EigenBase<MatrixXd>& w,
-		const Eigen::EigenBase<MatrixXd>& x, const int& i, const double& C)
-{
-  (w.derived()) += (x.derived().row(i) * C);
-}
 
-// assumes that w is a row vector
-void assign_add(SparseM &w, const SparseM &x, const int i, const double C)
-{
-  w += (x.row(i)*C);
-}
+// //  assumes that w is a row vector
+// void assign_add(Eigen::EigenBase<DenseM>& w,
+// 		const Eigen::EigenBase<DenseM>& x, const int& i, const double& C)
+// {
+//   (w.derived()) += (x.derived().row(i) * C);
+// }
 
-// assumes that w is a row vector
-void assign_add(Eigen::EigenBase<SparseM>& w,
-		const Eigen::EigenBase<SparseM>& x, const int i, const double C)
-{
-  assign_add(w.derived(),x.derived(),i,C);
-}
+// // assumes that w is a row vector
+// void assign_add(SparseM &w, const SparseM &x, const int i, const double C)
+// {
+//   w += (x.row(i)*C);
+// }
 
-void prod(VectorXd& projection, const MatrixXd& x, const VectorXd& w)
-{
-  projection = x * w;
-}
+// // assumes that w is a row vector
+// void assign_add(Eigen::EigenBase<SparseM>& w,
+// 		const Eigen::EigenBase<SparseM>& x, const int i, const double C)
+// {
+//   assign_add(w.derived(),x.derived(),i,C);
+// }
 
-void prod(VectorXd& projection, const Eigen::EigenBase<MatrixXd>& x, const VectorXd& w)
-{
-  projection = x.derived() * w;
-}
+// template<typename EigenType>
+// void prod(VectorXd& projection, const EigenType& x, const VectorXd& w)
+// {
+//   projection = x * w;
+// }
 
-void prod(VectorXd& projection, const SparseM& x, const VectorXd& w)
-{
-  projection = x * w;
-}
+// template<typename EigenType>
+// void prod(VectorXd& projection, const Eigen::EigenBase<EigenType>& x, const VectorXd& w)
+// {
+//   return prod(projection,x.derived(),w);
+// }
 
-void prod(VectorXd& projection, const Eigen::EigenBase<SparseM> & x, const VectorXd& w)
-{
-  projection = (x.derived()) * w;
-}
 
-void prod(Eigen::EigenBase<MatrixXd> & w, const double scalar)
-{
-  w.derived() *= scalar;
-}
 
-void prod (SparseM &w, const double scalar)
-{
-  w*=scalar;
-}
+// void setZero(Eigen::EigenBase<DenseM>& w)
+// {
+//   ((DenseM*) &w.derived())->setZero();
+// }
 
-void prod(Eigen::EigenBase<SparseM> & w, const double scalar)
-{
-  prod(w.derived(),scalar);
-}
+// void setZero(Eigen::EigenBase<SparseM>& w)
+// {
+//   ((SparseM*) &w.derived())->setZero();
+// }
 
-void setZero(Eigen::EigenBase<MatrixXd>& w)
-{
-  ((MatrixXd*) &w.derived())->setZero();
-}
 
-void setZero(Eigen::EigenBase<SparseM>& w)
-{
-  ((SparseM*) &w.derived())->setZero();
-}
+// // // gradient is already divided by n if necessary
+// void update_gradient(VectorXd& w, const DenseM& x, const int row,
+// 		     const double& eta)
+// {
+//   w -= x.row(row).transpose()*eta;
+// }
 
-// *************************
-// update the gradient; gradient is already divided by n if necessary
-void update_gradient(VectorXd& w, const Eigen::EigenBase<MatrixXd>& w_gradient,
-		     const double& eta)
-{
-  w -= (w_gradient.derived().transpose() * eta);
-}
+// // void update_gradient(VectorXd& w, const DenseM& x, const int row,
+// // 		     const double& eta)
+// // {
+// //   assert(w.rows()==x.cols());
+// //   assert(row < x.rows());
+// //   assert(row >= 0);
+// //   double ret = 0;
+// //   int n = x.cols();
+// //   double* w_ptr = w.data();
+// //   const double* x_ptr = x.data();
+// //   x_ptr+=n*row;
+// //   for(int j=0; j<n; j++, x_ptr++,w_ptr++)
+// //     {
+// //       (*w_ptr)-=(*x_ptr)*eta;
+// //     }
+// // }
 
-// gradient is already divided by n if necessary
-void update_gradient(VectorXd& w, const Eigen::EigenBase<SparseM>& w_gradient,
-		     const double& eta)
-{
-  SparseM* mat = (SparseM*) &w_gradient.derived();
-  
-  for (int k = 0; k < mat->outerSize(); ++k)
-    {
-      SparseM::InnerIterator it(*mat, k);
-      for (; it; ++it)
-	{
-	  w(it.col()) -= (it.value() * eta);
-	}
-    }
-}
+
+// inline void update_gradient(VectorXd& w, const SparseM& x, const int row,
+// 		     const double& eta)
+// {
+//   w -= x.row(row).transpose()*eta;
+// }
+
+
+// // gradient is already divided by n if necessary
+// // void update_gradient(VectorXd& w, const SparseM& x, const int row,
+// // 		     const double& eta)
+// // {
+// //   assert(x.cols()==w.rows());
+// //   // use direct access to the data array to avoid costly boudary checks. 
+// //   double* data = w.data();
+// //   SparseM::InnerIterator it(x, row);
+// //   for (; it; ++it )
+// //     {
+// //       data[it.col()] -= (it.value() * eta);
+// //     } 
+// // }
 
 // *************************
 // Normalize data : centers and makes sure the variance is one
-void normalize_col(SparseM & mat)
+void normalize_col(SparseM& mat)
 {
   if (mat.rows() < 2)
     return;
@@ -334,7 +351,7 @@ void normalize(SparseM &mat)
   fflush (stdout);
 }
 
-void normalize(MatrixXd & mat)
+void normalize(DenseM& mat)
 {
   if (mat.rows() < 2)
     return;
@@ -344,7 +361,7 @@ void normalize(MatrixXd & mat)
 	 << mat.cols() << "cols ... \n";
 
   mat = mat.rowwise() - mat.colwise().mean();		// first center the data
-  MatrixXd v = mat.colwise().squaredNorm() / (mat.rows() - 1); // compute the sqruare of standard deviation
+  DenseM v = mat.colwise().squaredNorm() / (mat.rows() - 1); // compute the sqruare of standard deviation
   for (int i = 0; i < mat.cols(); i++)
     {
       print_progress("normalizing ...", i, mat.cols());
@@ -359,7 +376,7 @@ void normalize(MatrixXd & mat)
 // Calculates the objective function
 template<typename EigenType>
 double calculate_objective_hinge(const VectorXd& w,
-				 const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
+				 const EigenType& x, const VectorXd& y,
 				 const VectorXd& l, const VectorXd& u, const std::vector<int>& class_order,
 				 double C1, double C2)
 {
@@ -368,13 +385,14 @@ double calculate_objective_hinge(const VectorXd& w,
   obj_val = .5 * obj_val * obj_val;
   int c;
   double sj;
-  VectorXd projection;
-  prod(projection, x, w);
+  VectorXd projection = x * w;
+  //VectorXd projection;
+  //prod(projection, x, w);
   for (int i = 0; i < x.rows(); i++)
     {
-      c = (int) y[i] - 1; // again the label is started from 1
+      c = (int) y.coeff(i) - 1; // again the label is started from 1
       obj_val += (C1
-		  * (hinge_loss(projection(i) - l[c]) + hinge_loss(-projection(i) + u[c])));
+		  * (hinge_loss(projection.coeff(i) - l.coeff(c)) + hinge_loss(-projection.coeff(i) + u.coeff(c))));
 	  
       for (int cp = 0; cp < l.size(); cp++)
 	{
@@ -382,8 +400,8 @@ double calculate_objective_hinge(const VectorXd& w,
 	    {
 	      sj = (class_order[c] < class_order[cp]) ? 1 : 0;
 	      obj_val += (C2
-			  * (sj * hinge_loss(-projection(i) + l[cp])
-			     + (1 - sj) * hinge_loss(projection(i) - u[cp])));
+			  * (sj * hinge_loss(-projection.coeff(i) + l.coeff(cp))
+			     + (1 - sj) * hinge_loss(projection.coeff(i) - u.coeff(cp))));
 	    }
 	}
 	  
@@ -393,7 +411,7 @@ double calculate_objective_hinge(const VectorXd& w,
 
 template<typename EigenType>
 double calculate_objective_hinge(const VectorXd& w,
-				 const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
+				 const EigenType& x, const VectorXd& y,
 				 const VectorXd& l, const VectorXd& u, const VectorXd& class_order, double C1,
 				 double C2)
 {
@@ -455,7 +473,6 @@ void sort_index(VectorXd& m, std::vector<int>& cranks)
 // Ranks the classes to build the switches
 void rank_classes(std::vector<int>& cranks, VectorXd& l, VectorXd& u)
 {
-  //	VectorXd m = l; //  + ((u + l) * .5);
   VectorXd m = ((u + l) * .5);
   std::vector<int> indices(m.size());
   sort_index(m, indices);
@@ -493,7 +510,7 @@ void init_nc(VectorXi& nc, const VectorXd& y, const int noClasses)
 // Initializes the lower and upper bound
 template<typename EigenType>
 void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc, const VectorXd& w,
-	     const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
+	     EigenType& x, const VectorXd& y,
 	     const int noClasses)
 {
   int n = x.rows();
@@ -504,8 +521,9 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc, cons
       l(k)=std::numeric_limits<double>::max();
       u(k)=std::numeric_limits<double>::min();	      
     }
-  VectorXd projection;
-  prod(projection, x, w);
+  VectorXd projection = x * w;
+  //VectorXd projection;
+  //prod(projection, x, w);
   for (i=0;i<n;i++)
     {
       c = (int) y[i] - 1; // Assuming all the class labels start from 1
@@ -522,7 +540,7 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc, cons
 // ******************************
 // Projection to a new vector that is orthogonal to the rest
 // It is basically Gram-Schmidt Orthogonalization
-void project_orthogonal(VectorXd& w, const MatrixXd& weights,
+void project_orthogonal(VectorXd& w, const DenseM& weights,
 			const int& projection_dim)
 {
   if (projection_dim == 0)
@@ -530,7 +548,7 @@ void project_orthogonal(VectorXd& w, const MatrixXd& weights,
   
   // Assuming the first to the current projection_dim are the ones we want to be orthogonal to
   VectorXd proj_sum(w.rows());
-  MatrixXd wt = w.transpose();
+  DenseM wt = w.transpose();
   double norm;
   
   proj_sum.setZero();
@@ -548,21 +566,19 @@ void project_orthogonal(VectorXd& w, const MatrixXd& weights,
 // *********************************
 // Solve the optimization using the gradient decent on hinge loss
 template<typename EigenType>
-void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
-			MatrixXd& upper_bounds, VectorXd& objective_val,
-			const Eigen::EigenBase<EigenType>& x, const VectorXd& y,
-			const double C1_, const double C2_,
-			Eigen::EigenBase<EigenType>& w_gradient, bool resumed)
+void solve_optimization(DenseM& weights, DenseM& lower_bounds,
+			DenseM& upper_bounds, VectorXd& objective_val,
+			EigenType& x, const VectorXd& y,
+			const double C1_, const double C2_, bool resumed)
 
 {
+  #ifdef PROFILE
+  ProfilerStart("find_w.profile");
+  #endif
 
-  ProfilerStart("codeprofiler");
-  /* initialize random seed: */
   double lambda = 1.0/C2_;
   double C1 = C1_/C2_;
   double C2 = 1.0;
-  //  srand (time(NULL));
-
   const	int no_projections = weights.cols();
   cout << "no_projections: " << no_projections << endl;
   const double n = x.rows();  // number of samples in double
@@ -583,7 +599,11 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
   int obj_idx = 0, cp_count,cp1_count,cp0_count;
   bool order_changed = 1;
   VectorXd l_gradient(noClasses), u_gradient(noClasses);
-  unsigned int t = 1, i=0, k=0;
+  VectorXd proj(batch_size);
+  VectorXi index(batch_size);
+  double multiplier;
+ 
+  unsigned int t = 1, i=0, k=0,idx=0;
   char iter_str[30];
   for(i=0; i<30; i++) iter_str[i]=' ';
   std::vector<int> class_order(noClasses), prev_class_order(noClasses);// mid points in the bound; used as the switch
@@ -591,8 +611,6 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
   lower_bounds.resize(noClasses, no_projections);
   upper_bounds.resize(noClasses, no_projections);
   objective_val.resize(2 + (no_projections * OPT_MAX_ITER * OPT_MAX_REORDERING / OPT_EPOCH));
-
-  init_gradient(x,w_gradient);
 
   init_nc(nc, y, noClasses);
   
@@ -638,9 +656,7 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 	    {
 	      cout << class_order[k] << "  ";
 	    }
-	  cout << "\n";fflush(stdout);
-
-	  cout << "w norm: " << w.norm()<< endl;
+	  cout << endl;
 		    
 	  t = 1;
 	  cur_norm = OPT_EPSILON+1;// if s is changed make sure we go through another iteration
@@ -668,11 +684,14 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 		}
 			    
 	      // find the number of samples from other classes
-	      setZero(w_gradient);
 	      l_gradient.setZero();
 	      u_gradient.setZero();
-			    
-	      for (unsigned int idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
+	      
+	      
+
+	      // first compute all the projections so that we can update w directly
+
+	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
 		{
 		  if(STOCHASTIC_BATCH_SIZE > 0)
 		    {
@@ -682,36 +701,47 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 		    {
 		      i=idx;
 		    }
-				
-		  c = (int) y[i] - 1; // Assuming all the class labels start from 1
-				
-		  double multiplier = 0;
 
+		  //		  proj.coeffRef(idx)=rowprod(x,i, w);
+		  proj.coeffRef(idx) = (x.row(i)*w)(0,0);
+		  index.coeffRef(idx)=i;
+		}
+
+	      // now we can update w directly
+	      // update for the reglarizer
+	      w-=lambda*w*eta_t;
+		
+	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
+		{		
+		  c = (int) y[index.coeff(idx)] - 1; // Assuming all the class labels start from 1
+				
+		  multiplier = 0.0;
+		  
 		  if(PRINT_I)
 		    {	
-		      cout << i << ", c: " << c << endl;
+		      cout << index.coeff(i) << ", c: " << c << endl;
 		    }
 				
-		  tmp = rowprod(x,i, w);
+		  tmp = proj(idx);
 				
-		  if (hinge_loss(tmp - l(c)) > 0)// I1 Condition
+		  if (hinge_loss(tmp - l.coeff(c)) > 0)// I1 Condition
 		    {
 		      if(PRINT_I)
 			{
 			  cout << "I1 : " << idx << ", " << i<< endl;
 			}
 		      multiplier -= C1;
-		      l_gradient(c) += C1;
+		      l_gradient.coeffRef(c) += C1;
 		    } // end if
 				
-		  if (hinge_loss(-tmp + u(c)) > 0)//  I2 Condition
+		  if (hinge_loss(-tmp + u.coeff(c)) > 0)//  I2 Condition
 		    {
 		      if(PRINT_I)
 			{
 			  cout << "I2 : " << idx << ", " << i << endl;
 			}
 		      multiplier +=C1;
-		      u_gradient(c) -= C1;
+		      u_gradient.coeffRef(c) -= C1;
 		    } // end if
 				
 		  for (cp = 0; cp < noClasses; cp++)
@@ -719,44 +749,40 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 		      if (cp != c)
 			{
 			  sj = (class_order[c] < class_order[cp]) ? 1 : 0;
-			  if (sj == 1 && hinge_loss(-tmp + l(cp)) > 0) // I3 Condition
+			  if (sj == 1 && hinge_loss(-tmp + l.coeff(cp)) > 0) // I3 Condition
 			    {
 			      if(PRINT_I)
 				{
 				  cout << "I3 : " << idx << ", " << i << endl;
 				}
 			      multiplier +=C2;
-			      l_gradient(cp) -= C2;
+			      l_gradient.coeffRef(cp) -= C2;
 			    }
 					
-			  if (sj == 0 && hinge_loss(tmp - u(cp)) > 0) //  I4 Condition
+			  if (sj == 0 && hinge_loss(tmp - u.coeff(cp)) > 0) //  I4 Condition
 			    {
 			      if(PRINT_I)
 				{
 				  cout << "I4 : " << idx << ", " << i<< endl;
 				}
 			      multiplier -= C2;
-			      u_gradient(cp) += C2;
+			      u_gradient.coeffRef(cp) += C2;
 			    }
 			} // end if cp != c
 		    } // end for cp
 
 		  if (multiplier != 0)
 		    {
-		      assign_add(w_gradient,x,i,multiplier);
+		      multiplier = (multiplier*eta_t)/batch_size;
+		      w -= x.row(index.coeff(idx)).transpose()*multiplier;
+		      //		      update_gradient(w, x, index.coeff(idx), multiplier*eta_t/batch_size);
 		    }
-		} // end for idx (first)
+		} // end for idx (second)
 			    
-	      // after computing the gradients update the variables
-			    
-	      // update the gradient
-	      prod(w_gradient, 1.0 / batch_size);// * n /n
-	      // update for the reglarizer
-	      w-=lambda*w*eta_t;
-	      // update for the penalty
-	      update_gradient(w, w_gradient, eta_t);
-	      l = l - ( l_gradient * eta_t * 1.0 / batch_size );
-	      u = u - ( u_gradient * eta_t * 1.0 / batch_size );
+	      // update the lower and upper bounds
+	      multiplier = eta_t * 1.0 / batch_size;
+	      l -= ( l_gradient * multiplier );
+	      u -= ( u_gradient * multiplier );
 			    
 	      if(true)
 		{
@@ -822,7 +848,9 @@ void solve_optimization(MatrixXd& weights, MatrixXd& lower_bounds,
 
   cout << "w norm at the end: "<< weights.col(0).norm() << endl;
 
+  #ifdef PROFILE
   ProfilerStop();
+  #endif
 }
 
 // ---------------------------------------
@@ -831,29 +859,29 @@ int main()
 
   srand (42782);
   
-  MatrixXd weights(400,1),lower_bounds(10,1),upper_bounds(10,1), x(1000,400),w_gradient(1,400);
-  VectorXd y(1000),objective_val;
+  DenseM weights(400,1),lower_bounds(1000,1),upper_bounds(1000,1), x(10000,400);
+  VectorXd y(10000),objective_val;
 
   weights.setRandom();
   lower_bounds.setZero();
   upper_bounds.setZero();
   x.setRandom();
   SparseM xs = x.sparseView();
-  w_gradient.setZero();
-  SparseM gs = w_gradient.sparseView();
   for (int i = 0; i < y.size(); i++)
     {
-      y(i) = (i%10)+1;
+      y(i) = (i%1000)+1;
     }
-  
-  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,10,1,gs,0);
+
+  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,x,y,10,1,0);
+  //solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,10,1,0);
+
 }
 
 
   
 
 
-//   MatrixXd x(2, 3);
+//   DenseM x(2, 3);
 //   float C1 = 1, C2 = 1;
 //   VectorXd y(10), s(10);
 //   for (int i = 0; i < y.size(); i++)
@@ -875,11 +903,11 @@ int main()
 //     std::cout << ' ' << *it << "[" << y(*it) << "]";
 //   std::cout << '\n';
 
-//   MatrixXd x1(4, 3);
+//   DenseM x1(4, 3);
 //   x1 << 0.54343, 0.14613, 0.55317, 0.62082, 0.41308, 0.59649, 0.64365, 0.58947, 0.94562, 0.99690, 0.91504, 0.92640;
 //   SparseM x2 = x1.sparseView();
 //   cout << "before init ... \n" << x1 << endl;
-//   // MatrixXd xx(x1);
+//   // DenseM xx(x1);
 //   normalize(x1);	// should print out :
 //   cout << "\n---------------\n" << endl;
 //   normalize(x2);	// should print out :

@@ -86,6 +86,9 @@ DEFUN_DLD (oct_find_w, args, nargout,
   
   VectorXd objective_vals;
 
+  /* initialize random seed: */
+  srand (time(NULL));
+
   if(args(0).is_sparse_type())
     {
       // Sparse data
@@ -94,7 +97,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
 
       SparseM x = toEigenMat(xArray);
 
-      solve_optimization< SparseM >(w,l,u,objective_vals,x,y,C1,C2,w_gradient, resumed);
+      solve_optimization(w,l,u,objective_vals,x,y,C1,C2, resumed);
     }
   else
     {
@@ -103,7 +106,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
       MatrixXd x = toEigenMat(xArray);
       MatrixXd w_gradient(1,xArray.cols());
 
-      solve_optimization< MatrixXd >(w,l,u,objective_vals,x,y,C1,C2,w_gradient, resumed);
+      solve_optimization(w,l,u,objective_vals,x,y,C1,C2, resumed);
     }
 
   octave_value_list retval(4);// return value
