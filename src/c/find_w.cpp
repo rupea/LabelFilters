@@ -120,164 +120,6 @@ void toVector(std::vector<int>& to, const VectorXd& from)
     }
 }
 
-// // ***********************
-// // Some basic operations
-
-// // The following functions are a bit more efficient but compiling with -O2
-// // makes them unnecessary
-
-// // double rowprod(const DenseM& x, const int row, const VectorXd& w)
-// // {
-// //   //do the range checks here
-// //   assert(w.rows()==x.cols());
-// //   assert(row < x.rows());
-// //   assert(row >= 0);
-// //   double ret = 0;
-// //   int n = x.cols();
-// //   const double* w_ptr = w.data();
-// //   const double* x_ptr = x.data();
-// //   x_ptr+=n*row;
-// //   for(int j=0; j<n; j++, x_ptr++,w_ptr++)
-// //     {
-// //       ret+=(*w_ptr)*(*x_ptr);
-// //     }
-// //   return ret;
-// // }
-
-// // double rowprod(const SparseM& x, const int row, const VectorXd& w)
-// // {
-// //   assert(x.cols()==w.rows());
-// //   double ret=0;
-// //   // use direct access to the data array to avoid costly boudary checks. 
-// //   const double* data=w.data();
-// //   SparseM::InnerIterator it(x, row);
-// //   for (; it; ++it)
-// //     {
-// //       ret+=data[it.col()]*it.value();
-// //     } 
-// //   return ret;
-// // }
-
-// // template<typename EigenType>
-// // double rowprod(const EigenType& x, const int row, const VectorXd& w)
-// // {
-// //   assert(x.cols()==w.rows());
-// //   double ret=0;
-// //   // use direct access to the data array to avoid costly boudary checks. 
-// //   const double* data=w.data();
-// //   typename EigenType::InnerIterator it(x, row);
-// //   for (; it; ++it)
-// //     {
-// //       ret+=data[it.col()]*it.value();
-// //     } 
-// //   return ret;
-// // }
-
-
-// template<typename EigenType>
-// inline double rowprod(const EigenType& x, const int row, const VectorXd& w)
-// {
-//   return (x.row(row)*w)(0,0);
-// }
-
-// template<typename EigenType>
-// inline double rowprod(const Eigen::EigenBase<EigenType>& x, const int row,
-// 	       const VectorXd& w)
-// {
-//   return  rowprod(x.derived(),row,w);
-// }
-
-
-// //  assumes that w is a row vector
-// void assign_add(Eigen::EigenBase<DenseM>& w,
-// 		const Eigen::EigenBase<DenseM>& x, const int& i, const double& C)
-// {
-//   (w.derived()) += (x.derived().row(i) * C);
-// }
-
-// // assumes that w is a row vector
-// void assign_add(SparseM &w, const SparseM &x, const int i, const double C)
-// {
-//   w += (x.row(i)*C);
-// }
-
-// // assumes that w is a row vector
-// void assign_add(Eigen::EigenBase<SparseM>& w,
-// 		const Eigen::EigenBase<SparseM>& x, const int i, const double C)
-// {
-//   assign_add(w.derived(),x.derived(),i,C);
-// }
-
-// template<typename EigenType>
-// void prod(VectorXd& projection, const EigenType& x, const VectorXd& w)
-// {
-//   projection = x * w;
-// }
-
-// template<typename EigenType>
-// void prod(VectorXd& projection, const Eigen::EigenBase<EigenType>& x, const VectorXd& w)
-// {
-//   return prod(projection,x.derived(),w);
-// }
-
-
-
-// void setZero(Eigen::EigenBase<DenseM>& w)
-// {
-//   ((DenseM*) &w.derived())->setZero();
-// }
-
-// void setZero(Eigen::EigenBase<SparseM>& w)
-// {
-//   ((SparseM*) &w.derived())->setZero();
-// }
-
-
-// // // gradient is already divided by n if necessary
-// void update_gradient(VectorXd& w, const DenseM& x, const int row,
-// 		     const double& eta)
-// {
-//   w -= x.row(row).transpose()*eta;
-// }
-
-// // void update_gradient(VectorXd& w, const DenseM& x, const int row,
-// // 		     const double& eta)
-// // {
-// //   assert(w.rows()==x.cols());
-// //   assert(row < x.rows());
-// //   assert(row >= 0);
-// //   double ret = 0;
-// //   int n = x.cols();
-// //   double* w_ptr = w.data();
-// //   const double* x_ptr = x.data();
-// //   x_ptr+=n*row;
-// //   for(int j=0; j<n; j++, x_ptr++,w_ptr++)
-// //     {
-// //       (*w_ptr)-=(*x_ptr)*eta;
-// //     }
-// // }
-
-
-// inline void update_gradient(VectorXd& w, const SparseM& x, const int row,
-// 		     const double& eta)
-// {
-//   w -= x.row(row).transpose()*eta;
-// }
-
-
-// // gradient is already divided by n if necessary
-// // void update_gradient(VectorXd& w, const SparseM& x, const int row,
-// // 		     const double& eta)
-// // {
-// //   assert(x.cols()==w.rows());
-// //   // use direct access to the data array to avoid costly boudary checks. 
-// //   double* data = w.data();
-// //   SparseM::InnerIterator it(x, row);
-// //   for (; it; ++it )
-// //     {
-// //       data[it.col()] -= (it.value() * eta);
-// //     } 
-// // }
 
 // *************************
 // Normalize data : centers and makes sure the variance is one
@@ -702,7 +544,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		      i=idx;
 		    }
 
-		  //		  proj.coeffRef(idx)=rowprod(x,i, w);
 		  proj.coeffRef(idx) = (x.row(i)*w)(0,0);
 		  index.coeffRef(idx)=i;
 		}
@@ -775,7 +616,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		    {
 		      multiplier = (multiplier*eta_t)/batch_size;
 		      w -= x.row(index.coeff(idx)).transpose()*multiplier;
-		      //		      update_gradient(w, x, index.coeff(idx), multiplier*eta_t/batch_size);
 		    }
 		} // end for idx (second)
 			    
@@ -876,59 +716,3 @@ int main()
   //solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,10,1,0);
 
 }
-
-
-  
-
-
-//   DenseM x(2, 3);
-//   float C1 = 1, C2 = 1;
-//   VectorXd y(10), s(10);
-//   for (int i = 0; i < y.size(); i++)
-//     {
-//       y(i) = 10 - i;
-//       if (i == 5)
-// 	{
-// 	  y(i) = 100;
-// 	}
-//     }
-
-//   std::vector<int> cranks(y.size());
-//   IndexComparator cmp(y);
-//   sort_index(y, cranks);
-//   // for(int i=0;i<y.size();i++){cranks[i]=i;}
-//   //std::sort(cranks.begin(), cranks.end(), cmp);
-//   for (std::vector<int>::iterator it = cranks.begin(); it != cranks.end();
-//        ++it)
-//     std::cout << ' ' << *it << "[" << y(*it) << "]";
-//   std::cout << '\n';
-
-//   DenseM x1(4, 3);
-//   x1 << 0.54343, 0.14613, 0.55317, 0.62082, 0.41308, 0.59649, 0.64365, 0.58947, 0.94562, 0.99690, 0.91504, 0.92640;
-//   SparseM x2 = x1.sparseView();
-//   cout << "before init ... \n" << x1 << endl;
-//   // DenseM xx(x1);
-//   normalize(x1);	// should print out :
-//   cout << "\n---------------\n" << endl;
-//   normalize(x2);	// should print out :
-//   // -0.78203  -1.14666  -0.96574
-//   //  -0.39843  -0.31890  -0.75890
-//   // -0.28525   0.22802   0.90822
-//   //  1.46571   1.23754   0.81642
-
-//   cout << x2 << endl;
-
-//   // std::cout << getClasses(y) << std::endl;
-//   // std::vector<int> classes = getClasses(y);
-//   // for (std::vector<int>::iterator it = classes.begin(); it != classes.end(); ++it)
-//   //  std::cout << ' ' << *it;
-//   // std::cout << '\n';
-
-//   //  VectorXd w = solve_optimization(x,y,s,C1,C2);
-
-//   // std::cout << w << "---\n" << OPT_MAX_ITER << std::endl;
-
-//   // read_sparse("../data/IPC/ipc.train.svm");
-
-//   return 0;
-// }
