@@ -1,8 +1,9 @@
 #include <octave/oct.h>
 #include <iostream>
 #include "Eigen/Dense"
-#include "find_w.cpp"
-#include "EigenOctave.cpp"
+#include "Eigen/Sparse"
+#include "find_w.h"
+#include "EigenOctave.h"
 
 using Eigen::MatrixXd;
 using Eigen::VectorXd;

@@ -2,12 +2,10 @@
 #include <iostream>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
+#include "typedefs.h"
+#include "EigenOctave.h"
 
 using Eigen::VectorXd;
-
-typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> DenseM;
-typedef Eigen::SparseMatrix<double,Eigen::RowMajor>  SparseM;
-
 
 DenseM toEigenMat(const FloatNDArray& data) {
   dim_vector datasize = data.dims();

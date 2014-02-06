@@ -56,7 +56,7 @@ projected = xtest * w;
 classes = unique(tr_label)';
 ts_labels = zeros(size(xtest,1),length(classes));
 
-plot_projections(x,w,tr_label, classes, min_proj, max_proj,xtest, test_labels, exp_name, C1, C2);
+%plot_projections(x,w,tr_label, classes, min_proj, max_proj,xtest, test_labels, exp_name, C1, C2);
 
 projected_labels = ones(size(projected,1),length(classes));
 

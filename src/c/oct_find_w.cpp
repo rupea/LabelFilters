@@ -3,30 +3,11 @@
 #include <typeinfo>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
-#include "find_w.cpp"
-#include "EigenOctave.cpp"
+#include "find_w.h"
+#include "EigenOctave.h"
 
 using Eigen::VectorXd;
 
-void test(SparseM& x)
-{
-	std::cout << x.rows();
-}
-
-void test(DenseM& x)
-{
-	std::cout << x.rows();
-}
-
-void test(Eigen::EigenBase<SparseM >& x)
-{
-	test(x);
-}
-
-void test(Eigen::EigenBase<DenseM>& x)
-{
-	test(x);
-}
 
 void print_usage()
 {
@@ -95,7 +76,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
 
       SparseM x = toEigenMat(xArray);
 
-      solve_optimization(w,l,u,objective_vals,x,y,C1,C2, resumed);
+      solve_optimization(w, l, u, objective_vals, x, y, C1, C2, resumed);
     }
   else
     {
@@ -103,7 +84,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
       FloatNDArray xArray = args(0).float_array_value();
       DenseM x = toEigenMat(xArray);
 
-      solve_optimization(w,l,u,objective_vals,x,y,C1,C2, resumed);
+      solve_optimization(w, l, u, objective_vals, x, y, C1, C2, resumed);
     }
 
   octave_value_list retval(4);// return value

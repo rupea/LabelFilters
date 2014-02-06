@@ -1,8 +1,9 @@
 #include <octave/oct.h>
 #include <iostream>
 #include "Eigen/Dense"
-#include "find_w.cpp"
-#include "EigenOctave.cpp"
+#include "Eigen/Sparse"
+#include "normalize.h"
+#include "EigenOctave.h"
 
 using Eigen::MatrixXd;
 
@@ -22,7 +23,7 @@ DEFUN_DLD (oct_normalize_data, args, nargout,
         if(opt(0,0)==1)
           {
 	    cout << "normalize";fflush(stdout);
-            normalize(x);
+            normalize_row(x);
           }
         else
           {
@@ -36,7 +37,7 @@ DEFUN_DLD (oct_normalize_data, args, nargout,
       {
         FloatNDArray xArray = args(0).float_array_value();
         DenseM x = toEigenMat(xArray);
-        normalize(x);
+        normalize_col(x);
         retval(0) = toMatrix(x);
       }
 
