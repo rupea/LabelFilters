@@ -12,6 +12,8 @@ const int PRINT_M = 0;                 	// print matrix operations
 const int PRINT_I = 0;                 	// print Conditions in each iteration
 const int STOCHASTIC_BATCH_SIZE = 100; // perform stochastic gradient with this batchsize; if -1 then complete GD
 const int OPT_EPOCH = 1000;
+const bool FILTER_CLASS=0; //
+
 // ********************************
 
 #endif

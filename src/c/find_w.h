@@ -136,6 +136,24 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc, cons
     }
 }
 
+template<typename EigenType>
+void update_filtered(MatrixXb& filtered, const WeightVector& w, const VectorXd& l, const VectorXd& u, const EigenType& x, const VectorXd& y, bool filter_class)
+{
+  VectorXd projection;
+  w.project(projection,x);
+  for (int i = 0; i < x.rows(); i++)
+    {
+      int c = (int) y.coeff(i) - 1; // again the label is started from 1
+      for (int cp = 0; cp < l.size(); cp++)
+	{
+	  if (c != cp || filter_class)
+	    {
+	      filtered.coeffRef(i,cp) = filtered.coeffRef(i,cp) || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+	    }
+	}
+    }
+}
+
 // ******************************
 // Projection to a new vector that is orthogonal to the rest
 // It is basically Gram-Schmidt Orthogonalization
@@ -166,8 +184,9 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   double C2 = 1.0;
   const	int no_projections = weights.cols();
   cout << "no_projections: " << no_projections << endl;
-  const double n = x.rows();  // number of samples in double
-  const int batch_size = (STOCHASTIC_BATCH_SIZE < 1 || STOCHASTIC_BATCH_SIZE > n) ? (int) n : STOCHASTIC_BATCH_SIZE;
+  const int n = x.rows();
+  bool filter_class = FILTER_CLASS;
+  const int batch_size = (STOCHASTIC_BATCH_SIZE < 1 || STOCHASTIC_BATCH_SIZE > n) ? n : STOCHASTIC_BATCH_SIZE;
   int d = x.cols();
   std::vector<int> classes = get_classes(y);
   cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
@@ -197,6 +216,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   objective_val.resize(2 + (no_projections * OPT_MAX_ITER * OPT_MAX_REORDERING / OPT_EPOCH));
 
   init_nc(nc, y, noClasses);
+  MatrixXb filtered(n,noClasses);
   
   // can't do it this way because the initial projections won't be orthogonal
   // this will create some problems when we initialize the calss order vector
@@ -207,7 +227,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       w = WeightVector(weights.col(projection_dim));
       
       // w.setRandom(); // initialize to a random value
-      
       if (!resumed)
 	{
 	  //initialize the class_order vector by sorting the means of the projections of each class. Use l to store the means.
@@ -221,6 +240,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	  rank_classes(class_order, l, u);
 	}
 	      
+      order_changed = 1;
 
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,w.size(),x);
 
@@ -292,18 +312,19 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		
 	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
 		{		
-		  c = (int) y[index.coeff(idx)] - 1; // Assuming all the class labels start from 1
+		  tmp = proj.coeff(idx);
+		  i=index.coeff(idx);
+		  c = (int) y[i] - 1; // Assuming all the class labels start from 1
 				
 		  multiplier = 0.0;
 		  
 		  if(PRINT_I)
 		    {	
-		      cout << index.coeff(i) << ", c: " << c << endl;
+		      cout << i << ", c: " << c << endl;
 		    }
 				
-		  tmp = proj.coeff(idx);
 				
-		  if (hinge_loss(tmp - l.coeff(c)) > 0)// I1 Condition
+		  if ((hinge_loss(tmp - l.coeff(c)) > 0) && !filtered.coeff(i,c))// I1 Condition
 		    {
 		      if(PRINT_I)
 			{
@@ -313,7 +334,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		      l_gradient.coeffRef(c) += C1;
 		    } // end if
 				
-		  if (hinge_loss(-tmp + u.coeff(c)) > 0)//  I2 Condition
+		  if ((hinge_loss(-tmp + u.coeff(c)) > 0) && !filtered.coeff(i,c))//  I2 Condition
 		    {
 		      if(PRINT_I)
 			{
@@ -325,7 +346,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 				
 		  for (cp = 0; cp < noClasses; cp++)
 		    {
-		      if (cp != c)
+		      if (cp != c && !filtered.coeff(i,cp))
 			{
 			  sj = (class_order[c] < class_order[cp]) ? 1 : 0;
 			  if (sj == 1 && hinge_loss(-tmp + l.coeff(cp)) > 0) // I3 Condition
@@ -352,7 +373,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
 		  if (multiplier != 0)
 		    {
-		      w.gradient_update(x,index.coeff(idx),(multiplier*eta_t)/batch_size);
+		      w.gradient_update(x,i,(multiplier*eta_t)/batch_size);
 		    }
 		} // end for idx (second)
 			    
@@ -406,12 +427,16 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	       << " iterations ... with w.norm(): " << w.norm();
 			
 	} // end for iter
-		
+      
       VectorXd vect;
       w.toVectorXd(vect);
       weights.col(projection_dim) = vect;
       lower_bounds.col(projection_dim) = l;
       upper_bounds.col(projection_dim) = u;
+      
+      update_filtered(filtered, w, l, u, x, y, filter_class);
+
+		      
     } // end for projection_dim
 	
   cout << "\n---------------\n" << endl;
