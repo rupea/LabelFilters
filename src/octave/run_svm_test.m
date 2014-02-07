@@ -26,7 +26,6 @@ else
 end    
 
 % performing svm in parallel: if exists uses previously trained models. Otherwise, trains the svm on cluster
-% perform_parallel_svm(exp_name, C, option, exp_dir, force_retrain, tr_label)
 [out] = perform_parallel_svm(exp_name,bestC,"",datadir,false,tr_label);
 
 
@@ -35,37 +34,41 @@ for iter = 1 : iterations
     fprintf(1,"performing the projection ... \n");
     [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func,proj_params(iter,:),exp_name,no_projections, restarts, resume);   
     
-	    
+    
     fprintf(1,"projection and label selection time: %f\n", toc);
     tic;
-              
-    proj_lbl_ignore(iter) = length(find(projected_labels==0));
-    all_lbl_preds = length(projected_labels(:));
     
+    disp(size(projected_labels));
+    
+    for j=1:size(projected_labels,3)              
+      proj_lbl_ignore(iter) = length(find(projected_labels(:,:,j)==0));
+      all_lbl_preds = size(projected_labels,1)*size(projected_labels,2);
+      
+      
+      [class_acc_proj(iter) class_F1_proj(iter) acc_proj(iter)] = ...
+	  evaluate_svm_model(tr_label,te_label, projected_labels(:,:,j), out);
 	    
-    [class_acc_proj(iter) class_F1_proj(iter) acc_proj(iter)] = ...
-    evaluate_svm_model(tr_label,te_label, projected_labels, out);
-	    
-    fprintf(1,"time to train/predict in svm: %f\n", toc);
-    tic;
+      fprintf(1,"time to train/predict in svm: %f\n", toc);
+      tic;
 	      	    
 	
-    proj_lbl_ignore_percent(iter) = proj_lbl_ignore(iter) * 100 / all_lbl_preds;
+      proj_lbl_ignore_percent(iter) = proj_lbl_ignore(iter) * 100 / all_lbl_preds;
     
-    [class_acc(iter) class_F1(iter) acc(iter)] = ...
-    evaluate_svm_model(tr_label,te_label, [], out);
+      [class_acc(iter) class_F1(iter) acc(iter)] = ...
+	  evaluate_svm_model(tr_label,te_label, [], out);
 	    
-    fprintf(1,"**************************************************************************\n");
-    fprintf(1,"C1, C2:"); disp(proj_params(iter,:));
-    fprintf(1,"number of predications to ignore is (%d) out of (%d): %f\n", ...
-    proj_lbl_ignore(iter), all_lbl_preds, proj_lbl_ignore_percent(iter));
-  
-    fprintf(1,">> class_acc_proj: %f, class_F1_proj: %f, acc_proj: %f\n", ...
-    class_acc_proj(iter), class_F1_proj(iter), acc_proj(iter));
-    
-    fprintf(1,">> class_acc: %f, class_F1: %f, acc: %f\n", class_acc(iter), class_F1(iter), acc(iter));
-    fprintf(1,"**************************************************************************\n");
-    
+      fprintf(1,"**************************************************************************\n");
+      fprintf(1,"C1, C2:"); disp(proj_params(iter,:));
+      fprintf(1,"Projection:"); disp(j);
+      fprintf(1,"number of predications to ignore is (%d) out of (%d): %f\n", ...
+	      proj_lbl_ignore(iter), all_lbl_preds, proj_lbl_ignore_percent(iter));
+      
+      fprintf(1,">> class_acc_proj: %f, class_F1_proj: %f, acc_proj: %f\n", ...
+	      class_acc_proj(iter), class_F1_proj(iter), acc_proj(iter));
+      
+      fprintf(1,">> class_acc: %f, class_F1: %f, acc: %f\n", class_acc(iter), class_F1(iter), acc(iter));
+      fprintf(1,"**************************************************************************\n");
+    end
 end
 
 

@@ -35,10 +35,11 @@ void toVector(std::vector<int>& to, const VectorXd& from);
 template<typename EigenType>
 double calculate_objective_hinge(const WeightVector& w,
 				 const EigenType& x, const VectorXd& y,
-				 const VectorXd& l, const VectorXd& u, const std::vector<int>& class_order,
+				 const VectorXd& l, const VectorXd& u, 
+                                 const std::vector<int>& class_order, 
+                                 const MatrixXb& filtered,
 				 double C1, double C2)
 {
-
   double obj_val = w.norm();
   obj_val = .5 * obj_val * obj_val;
   int c;
@@ -48,12 +49,15 @@ double calculate_objective_hinge(const WeightVector& w,
   for (int i = 0; i < x.rows(); i++)
     {
       c = (int) y.coeff(i) - 1; // again the label is started from 1
-      obj_val += (C1
-		  * (hinge_loss(projection.coeff(i) - l.coeff(c)) + hinge_loss(-projection.coeff(i) + u.coeff(c))));
+      if ( !filtered.coeff(i,c) )
+	{
+	  obj_val += (C1
+		      * (hinge_loss(projection.coeff(i) - l.coeff(c)) + hinge_loss(-projection.coeff(i) + u.coeff(c))));
+	}
 	  
       for (int cp = 0; cp < l.size(); cp++)
 	{
-	  if (c != cp)
+	  if (c != cp && !filtered.coeff(i,cp))
 	    {
 	      sj = (class_order[c] < class_order[cp]) ? 1 : 0;
 	      obj_val += (C2
@@ -64,6 +68,17 @@ double calculate_objective_hinge(const WeightVector& w,
 	  
     }	
   return obj_val;
+}
+
+template<typename EigenType>
+double calculate_objective_hinge(const WeightVector& w,
+				 const EigenType& x, const VectorXd& y,
+				 const VectorXd& l, const VectorXd& u, 
+                                 const std::vector<int>& class_order, 
+				 double C1, double C2)
+{
+  MatrixXb filtered = MatrixXb::Zero(x.rows(),class_order.size());
+  return calculate_objective_hinge(w,x,y,l,u,class_order,filtered,C1,C2);
 }
 
 template<typename EigenType>
@@ -217,10 +232,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
   init_nc(nc, y, noClasses);
   MatrixXb filtered(n,noClasses);
+  filtered.setZero(n,noClasses);
   
-  // can't do it this way because the initial projections won't be orthogonal
-  // this will create some problems when we initialize the calss order vector
-  // we'll need to change this. 
   for(int projection_dim=0; projection_dim < no_projections; projection_dim++)
     {
 	 
@@ -242,7 +255,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      
       order_changed = 1;
 
-      print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,w.size(),x);
+      print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,lambda,w.size(),x);
 
       // staring optimization
       for (int iter = 0; iter < OPT_MAX_REORDERING && order_changed == 1; iter++)
@@ -276,7 +289,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      if(t % OPT_EPOCH == 0)
 		{
 		  print_progress(iter_str, t, OPT_MAX_ITER);
-		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, C1, C2); // save the objective value
+		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, filtered, C1, C2); // save the objective value
 		  if(PRINT_O)
 		    {
 		      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
@@ -424,7 +437,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	    } // end if print
 			
 	  cout << "\r>> " << iter+1 << ": Done in " << t
-	       << " iterations ... with w.norm(): " << w.norm();
+	       << " iterations ... with w.norm(): " << w.norm() << endl;
 			
 	} // end for iter
       
@@ -435,14 +448,22 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       upper_bounds.col(projection_dim) = u;
       
       update_filtered(filtered, w, l, u, x, y, filter_class);
+      int no_filtered = (filtered.cast<int>()).sum();
+      cout << "Filtered " << no_filtered << "  out of " << n*noClasses - (1-filter_class)*n << endl;
+      int no_remaining = (n-1)*noClasses - no_filtered;
+      lambda = no_remaining*1.0/((n-1)*noClasses*C2_);
 
-		      
+      //      C2*=((n-1)*noClasses)*1.0/no_remaining;
+      //C1*=((n-1)*noClasses)*1.0/no_remaining;
+
+      
+      
     } // end for projection_dim
 	
   cout << "\n---------------\n" << endl;
 	
   objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u,
-						       class_order, C1, C2);// save the objective value
+						       class_order, filtered, C1, C2);// save the objective value
   objective_val = objective_val.head(obj_idx);
   
   #ifdef PROFILE

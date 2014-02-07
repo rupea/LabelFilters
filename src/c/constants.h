@@ -4,7 +4,7 @@
 // ***********  Constant values used
 // most of these should be passed as arguments
 const unsigned int OPT_MAX_ITER = 1e5; 	// Maximum number of iterations
-const int OPT_MAX_REORDERING = 20; // maximum time the ordering of switches have to be changed
+const int OPT_MAX_REORDERING = 5; // maximum time the ordering of switches have to be changed
 const double OPT_EPSILON = 1e-4; // optimization epsilon: how different the update for w is
 const int PRINT_T = 0;                 	// print values in each iteration
 const int PRINT_O = 1;                // print objective function in each epoch
