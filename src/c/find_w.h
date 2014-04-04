@@ -194,7 +194,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
        
   lower_bounds.resize(noClasses, no_projections);
   upper_bounds.resize(noClasses, no_projections);
-  objective_val.resize(2 + (no_projections * OPT_MAX_ITER * OPT_MAX_REORDERING / OPT_EPOCH));
+  objective_val.resize(1000 + (no_projections * OPT_MAX_ITER * OPT_MAX_REORDERING / OPT_EPOCH));
 
   init_nc(nc, y, noClasses);
   
@@ -240,7 +240,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	    }
 	  cout << endl;
 		    
-	  t = 1;
+	  //	  t = 10000;
 		    
 	  while (t < OPT_MAX_ITER)
 	    {
@@ -248,12 +248,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			    
 	      // setting eta
 	      eta_t = 1.0 / sqrt(t);
-	      if(eta_t < 1e-4)// (t < OPT_MAX_IT		ER / 10){
+	      if(eta_t < 1e-4)// (t < OPT_MAX_ITER / 10){
 		{
 		  eta_t = 1e-4;
 		}
 			    
-	      if(t % OPT_EPOCH == 0)
+	      if( (t % OPT_EPOCH == 0) || (t < 10050) )
 		{
 		  print_progress(iter_str, t, OPT_MAX_ITER);
 		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, C1, C2); // save the objective value
@@ -262,7 +262,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
 		    }
 		}
-			    
+
+	      if (t % 1000 == 0)
+		{
+		  rank_classes(class_order, l, u);// ranking classes				
+		}
+	      
 	      // find the number of samples from other classes
 	      l_gradient.setZero();
 	      u_gradient.setZero();
