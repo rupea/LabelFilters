@@ -253,7 +253,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		  eta_t = 1e-4;
 		}
 			    
-	      if( (t % OPT_EPOCH == 0) || (t < 10050) )
+	      if( (t % OPT_EPOCH == 0) )
 		{
 		  print_progress(iter_str, t, OPT_MAX_ITER);
 		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, C1, C2); // save the objective value
