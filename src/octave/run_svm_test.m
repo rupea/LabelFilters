@@ -1,5 +1,5 @@
-function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = run_svm_test(bestC, ...
-x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name,datadir,proj_params, no_projections, restarts, resume)
+function [class_acc,class_acc_proj,class_acc_proj_svm, proj_lbl_ignore,proj_lbl_ignore_percent] = run_svm_test(bestC, ...
+x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name,datadir,proj_params, no_projections, restarts, resume, projected_svm=0)
 tic;
 
 iterations = size(proj_params,1);
@@ -25,10 +25,11 @@ else
     clear xtest_orig;
 end    
 
-% performing svm in parallel: if exists uses previously trained models. Otherwise, trains the svm on cluster
-% perform_parallel_svm(exp_name, C, option, exp_dir, force_retrain, tr_label)
-[out] = perform_parallel_svm(exp_name,bestC,"",datadir,false,tr_label);
-
+if( ~projected_svm ) 
+  %% performing svm in parallel: if exists uses previously trained models. Otherwise, trains the svm on cluster
+  %% perform_parallel_svm(exp_name, C, option, exp_dir, force_retrain, tr_label)
+  [out] = perform_parallel_svm(exp_name,bestC,"",datadir,false,tr_label);
+endif
 
 for iter = 1 : iterations
     tic;
@@ -54,7 +55,15 @@ for iter = 1 : iterations
     
     [class_acc(iter) class_F1(iter) acc(iter)] = ...
     evaluate_svm_model(tr_label,te_label, [], out);
-	    
+             
+    
+    if (projected_svm)      
+      projectionfile=sprintf("wlu_%s_C1_%d_C2_%d",exp_name, proj_params(iter,1), proj_params(iter,2));
+      [out_proj] = perform_parallel_projected_svm(exp_name, bestC, "", datadir, projectionfile, "results/", sprintf("C1_%g_C2_%g",proj_params(iter,:)), false, tr_label);
+      [class_acc_proj_svm(iter) class_F1_proj_svm(iter) acc_proj_svm(iter)] = ...
+	  evaluate_svm_model(tr_label,te_label, [], out_proj);
+    endif 
+    
     fprintf(1,"**************************************************************************\n");
     fprintf(1,"C1, C2:"); disp(proj_params(iter,:));
     fprintf(1,"number of predications to ignore is (%d) out of (%d): %f\n", ...
@@ -64,16 +73,21 @@ for iter = 1 : iterations
     class_acc_proj(iter), class_F1_proj(iter), acc_proj(iter));
     
     fprintf(1,">> class_acc: %f, class_F1: %f, acc: %f\n", class_acc(iter), class_F1(iter), acc(iter));
+
+    if (projected_svm)
+      fprintf(1,">> class_acc_proj_svm: %f, class_F1_proj_svm: %f, acc_proj_svm: %f\n", ...
+	      class_acc_proj_svm(iter), class_F1_proj_svm(iter), acc_proj_svm(iter));
+    endif
     fprintf(1,"**************************************************************************\n");
     
 end
 
 
 	
-fprintf(1,'all class_acc, class_acc_proj, acc, acc_proj, percent_ignored:\n');
-disp([class_acc, class_acc_proj, acc, acc_proj, proj_lbl_ignore_percent]);
-fprintf(1,'mean(class_acc): %f, mean(class_acc_proj): %f\n', mean(class_acc), mean(class_acc_proj));
-fprintf(1,'mean(acc): %f, mean(acc_proj): %f, mean(percent_ignored): %f\n', mean(acc), mean(acc_proj), proj_lbl_ignore_percent(iter));
+# fprintf(1,'all class_acc, class_acc_proj, acc, acc_proj, percent_ignored:\n');
+# disp([class_acc, class_acc_proj, acc, acc_proj, proj_lbl_ignore_percent]);
+# fprintf(1,"mean(class_acc): %f, mean(class_acc_proj): %f\n", mean(class_acc), mean(class_acc_proj));
+# fprintf(1,"mean(acc): %f, mean(acc_proj): %f, mean(percent_ignored): %f\n", mean(acc), mean(acc_proj), proj_lbl_ignore_percent(iter));
 end
 
 						    
