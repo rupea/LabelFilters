@@ -1,8 +1,8 @@
 function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = run_svm_test(bestC, ...
-x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name,datadir,proj_params, no_projections, restarts, resume)
+x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name,datadir, proj_params, restarts, resume)
 tic;
 
-iterations = size(proj_params,1);
+iterations = length(proj_params);
 
 probs = 0;
 close all
@@ -33,7 +33,7 @@ end
 for iter = 1 : iterations
     tic;
     fprintf(1,"performing the projection ... \n");
-    [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func,proj_params(iter,:),exp_name,no_projections, restarts, resume);   
+    [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func, proj_params(iter), exp_name, restarts, resume);   
     
 	    
     fprintf(1,"projection and label selection time: %f\n", toc);
@@ -56,7 +56,7 @@ for iter = 1 : iterations
     evaluate_svm_model(tr_label,te_label, [], out);
 	    
     fprintf(1,"**************************************************************************\n");
-    fprintf(1,"C1, C2:"); disp(proj_params(iter,:));
+    fprintf(1,"C1, C2: %g, %g \n", proj_params(iter).C1,proj_params(iter).C2);
     fprintf(1,"number of predications to ignore is (%d) out of (%d): %f\n", ...
     proj_lbl_ignore(iter), all_lbl_preds, proj_lbl_ignore_percent(iter));
   

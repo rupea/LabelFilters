@@ -190,6 +190,7 @@ int main()
   DenseM weights(467,1),lower_bounds(5,1),upper_bounds(5,1), x(281,467);
   VectorXd y(281),objective_val;
 
+  param_struct params = set_default_params();
   weights.setRandom();
   lower_bounds.setZero();
   upper_bounds.setZero();
@@ -202,13 +203,13 @@ int main()
     }
 
   // these calls are important so that the compiler instantiates the right templates
-  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,x,y,10,1,0);
-  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,10,1,0);
+  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,x,y,0,params);
+  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,0,params);
   
   
   xs.conservativeResize(281,1123497);
   DenseM sweights (1123497,1);
   sweights.setRandom();
-  solve_optimization(sweights,lower_bounds,upper_bounds,objective_val,xs,y,10,1,0);
+  solve_optimization(sweights,lower_bounds,upper_bounds,objective_val,xs,y,0,params);
   
 }

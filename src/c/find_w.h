@@ -5,6 +5,7 @@
 #include "typedefs.h"
 #include "WeightVector.h"
 #include "printing.h"
+#include "parameter.h"
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
@@ -154,20 +155,20 @@ template<typename EigenType>
 void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			DenseM& upper_bounds, VectorXd& objective_val,
 			EigenType& x, const VectorXd& y,
-			const double C1_, const double C2_, bool resumed)
+			bool resumed, const param_struct& params)
 
 {
   #ifdef PROFILE
   ProfilerStart("find_w.profile");
   #endif
 
-  double lambda = 1.0/C2_;
-  double C1 = C1_/C2_;
+  double lambda = 1.0/params.C2;
+  double C1 = params.C1/params.C2;
   double C2 = 1.0;
   const	int no_projections = weights.cols();
   cout << "no_projections: " << no_projections << endl;
   const double n = x.rows();  // number of samples in double
-  const int batch_size = (STOCHASTIC_BATCH_SIZE < 1 || STOCHASTIC_BATCH_SIZE > n) ? (int) n : STOCHASTIC_BATCH_SIZE;
+  const int batch_size = (params.batch_size < 1 || params.batch_size > n) ? (int) n : params.batch_size;
   int d = x.cols();
   std::vector<int> classes = get_classes(y);
   cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
@@ -194,7 +195,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
        
   lower_bounds.resize(noClasses, no_projections);
   upper_bounds.resize(noClasses, no_projections);
-  objective_val.resize(1000 + (no_projections * OPT_MAX_ITER * OPT_MAX_REORDERING / OPT_EPOCH));
+  objective_val.resize(1000 + (no_projections * params.max_iter * params.max_reorder / params.report_epoch));
 
   init_nc(nc, y, noClasses);
   
@@ -225,37 +226,27 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,w.size(),x);
 
       // staring optimization
-      for (int iter = 0; iter < OPT_MAX_REORDERING && order_changed == 1; iter++)
+      for (int iter = 0; iter < params.max_reorder && order_changed == 1; iter++)
 	{
 	  snprintf(iter_str,30, "Iteration %d > ",iter+1);
 
 	  // init the optimization specific parameters
 	  std::copy(class_order.begin(),class_order.end(), prev_class_order.begin());
 		    
-	  cout << "\n Class_Order: ";
-		    
-	  for (k = 0; k < noClasses; k++)
-	    {
-	      cout << class_order[k] << "  ";
-	    }
-	  cout << endl;
-		    
-	  //	  t = 10000;
-		    
-	  while (t < OPT_MAX_ITER)
+	  while (t < params.max_iter)
 	    {
 	      t++;
 			    
 	      // setting eta
-	      eta_t = 1.0 / sqrt(t);
-	      if(eta_t < 1e-4)// (t < OPT_MAX_ITER / 10){
+	      eta_t = params.eta / sqrt(t);
+	      if(eta_t < params.min_eta)
 		{
-		  eta_t = 1e-4;
+		  eta_t = params.min_eta;
 		}
-			    
-	      if( (t % OPT_EPOCH == 0) )
+	      
+	      if( params.report_epoch && (t % params.report_epoch == 0) )
 		{
-		  print_progress(iter_str, t, OPT_MAX_ITER);
+		  print_progress(iter_str, t, params.max_iter);
 		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, C1, C2); // save the objective value
 		  if(PRINT_O)
 		    {
@@ -263,7 +254,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		    }
 		}
 
-	      if (t % 1000 == 0)
+	      if (params.reorder_epoch && (t % params.reorder_epoch == 0))
 		{
 		  rank_classes(class_order, l, u);// ranking classes				
 		}
@@ -278,7 +269,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
 	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
 		{
-		  if(STOCHASTIC_BATCH_SIZE > 0)
+		  if(batch_size < n)
 		    {
 		      i = ((int) rand()) % ((int)n);
 		    }
@@ -286,26 +277,26 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		    {
 		      i=idx;
 		    }
-
-		  proj.coeffRef(idx) = w.project_row(x,i);// (x.row(i)*w)(0,0);
+		  
+		  proj.coeffRef(idx) = w.project_row(x,i);
 		  index.coeffRef(idx)=i;
 		}
-
+	      
 	      // now we can update w directly
 	      // update for the reglarizer
 	      w.scale(1.0-lambda*eta_t);
-		
+	      
 	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
 		{		
 		  c = (int) y[index.coeff(idx)] - 1; // Assuming all the class labels start from 1
-				
+		  
 		  multiplier = 0.0;
 		  
 		  if(PRINT_I)
 		    {	
 		      cout << index.coeff(i) << ", c: " << c << endl;
 		    }
-				
+		  
 		  tmp = proj.coeff(idx);
 				
 		  if (hinge_loss(tmp - l.coeff(c)) > 0)// I1 Condition
@@ -360,19 +351,19 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		      w.gradient_update(x,index.coeff(idx),(multiplier*eta_t)/batch_size);
 		    }
 		} // end for idx (second)
-			    
+	      
 	      // update the lower and upper bounds
 	      multiplier = eta_t * 1.0 / batch_size;
 	      l -= ( l_gradient * multiplier );
 	      u -= ( u_gradient * multiplier );
-			    
+	      
 	      /// not implemented yet
 	      // if(true)
 	      // 	{
 	      // 	  // perform orthogonal projection
 	      // 	  project_orthogonal(w,weights,projection_dim);
 	      // 	}
-			    			    
+	      
 	      if(PRINT_T==1)
 		{
 		  double obj = obj_idx >= 1 ? objective_val[obj_idx-1] : 0;
@@ -380,10 +371,10 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		       << ", l:" << l.transpose() << ", u:" << u.transpose()
 		       << ", cur_norm: " << w.norm() << endl;
 		} // end if print
-			    
+	      
 	    } // end while t
-			
-			
+	  
+	  
 	  // Let's check if s changed
 	  // check if the orders are the same
 	  order_changed = 0;
@@ -423,7 +414,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	
   objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u,
 						       class_order, C1, C2);// save the objective value
-  objective_val = objective_val.head(obj_idx);
+  objective_val.conservativeResize(obj_idx);
   
   #ifdef PROFILE
   ProfilerStop();

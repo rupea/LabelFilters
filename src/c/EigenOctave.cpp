@@ -67,15 +67,14 @@ VectorXd toEigenVec(FloatNDArray data) {
   return v;
 }
 
-Matrix toMatrix(DenseM data) {
+Matrix toMatrix(DenseM data) 
+{
   Matrix m(data.rows(), data.cols());
-
   for (int i = 0; i < data.rows(); i++) {
     for (int j = 0; j < data.cols(); j++) {
       m(i, j) = data(i, j);
     }
   }
-
   return m;
 }
 

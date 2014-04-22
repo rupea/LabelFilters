@@ -1,21 +1,32 @@
 #include <octave/oct.h>
+#include <octave/ov-struct.h>
 #include <iostream>
 #include <typeinfo>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #include "find_w.h"
 #include "EigenOctave.h"
+//#include "parameter.h"
 
 using Eigen::VectorXd;
 
 
 void print_usage()
 {
-  cout << "oct_find_w x y C1 C2 w_init [l_init u_init]" << endl;
+  cout << "oct_find_w x y parameters w_init [l_init u_init]" << endl;
   cout << "     x - the data matrix (can be dense or sparse)" << endl;
   cout << "     y - the label vector (same size as rows(x))" << endl;
-  cout << "     C1 - the penalty for an example being outside it's class bounary" << endl;
-  cout << "     C2 - the penalty for an example being inside other class' boundary" << endl;
+  cout << "     parameters - a structure with the optimization parameters. If a parmeter is not present the default is used" << endl;
+  cout << "         Parameters (structure field names) are:" << endl;
+  cout << "           C1 - the penalty for an example being outside it's class bounary" << endl;
+  cout << "           C2 - the penalty for an example being inside other class' boundary" << endl;
+  cout << "           max_iter - maximum number of iterations [1e^6]" << endl;
+  cout << "           batch_size - size of the minibatch [1000]" << endl;
+  cout << "           reorder_epoch - number of iterations between class reorderings. 0 for no reordering of classes [1000]" << endl;
+  cout << "           max_reorder - maxumum number of class reorderings. Each reordering runs until convergence or for Max_Iter iterations and after each reordering the learning rate is reset" << endl;
+  cout << "           report_epochs - number of iterations between computation and report the objective value (can be expensive because obj is calculated on the entire training set). 0 for no reporting [1000]." << endl;
+  cout << "           eta - the initial learning rate. The leraning rate is eta/sqrt(t) where t is the number of iterations [1]" << endl;
+  cout << "           min_eta - the minimum value of the lerarning rate (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]" << endl;
   cout << "     w_init - initial w vector" << endl;
   cout << "     l_init - initial lower bounds (optional)" << endl;
   cout << "     u_init - initial upper bounds (optional)" << endl;
@@ -37,28 +48,83 @@ DEFUN_DLD (oct_find_w, args, nargout,
       return octave_value_list(0);
     }
   
+  param_struct params = set_default_params();
+    
   FloatNDArray yArray = args(1).float_array_value(); // the label vector
-  FloatNDArray C1Array = args(2).float_array_value(); // C1 value
-  FloatNDArray C2Array = args(3).float_array_value(); // C2 value
-  FloatNDArray wArray = args(4).float_array_value(); // The initial weights
+
+  octave_scalar_map parameters = args(2).scalar_map_value(); // the parameter
+  octave_value tmp;
+  if (! error_state)
+    {
+      tmp = parameters.contents("C1");
+      if (tmp.is_defined())
+	{
+	  params.C1=tmp.double_value();
+	}
+      tmp = parameters.contents("C2");
+      if (tmp.is_defined())
+	{
+	  params.C2=tmp.double_value();
+	}
+      tmp = parameters.contents("max_iter");
+      if (tmp.is_defined())
+	{
+	  params.max_iter=tmp.int_value();
+	}
+      tmp = parameters.contents("max_reorder");
+      if (tmp.is_defined())
+	{
+	  params.max_reorder=tmp.int_value();
+	}
+      tmp = parameters.contents("eps");
+      if (tmp.is_defined())
+	{
+	  params.eps=tmp.double_value();
+	}
+      tmp = parameters.contents("eta");
+      if (tmp.is_defined())
+	{
+	  params.eta=tmp.double_value();
+	}
+      tmp = parameters.contents("min_eta");
+      if (tmp.is_defined())
+	{
+	  params.min_eta=tmp.double_value();
+	}
+      tmp = parameters.contents("batch_size");
+      if (tmp.is_defined())
+	{
+	  params.batch_size=tmp.int_value();
+	}
+      tmp = parameters.contents("report_epoch");
+      if (tmp.is_defined())
+	{
+	  params.report_epoch=tmp.int_value();
+	}
+      tmp = parameters.contents("reorder_epoch");
+      if (tmp.is_defined())
+	{
+	  params.reorder_epoch=tmp.int_value();
+	}
+    }
+
+  FloatNDArray wArray = args(3).float_array_value(); // The initial weights
 
   bool resumed = false;
   FloatNDArray lArray,uArray;
-  if (nargin == 7)
+  if (nargin == 6)
     {	    
-      lArray = args(5).float_array_value(); // optional the initial lower bounds
-      uArray = args(6).float_array_value(); // optional the initial upper bounds 
+      lArray = args(4).float_array_value(); // optional the initial lower bounds
+      uArray = args(5).float_array_value(); // optional the initial upper bounds 
       resumed = true; 
     }
 
   cout << "copying data starts ...\n";
 
   VectorXd y = toEigenVec(yArray);
-  double C1 = C1Array(0,0);
-  double C2 = C2Array(0,0);
   DenseM w = toEigenMat(wArray);
   DenseM l,u;
-  if (nargin == 7)
+  if (resumed)
     {
       l = toEigenMat(lArray);
       u = toEigenMat(uArray);
@@ -76,7 +142,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
 
       SparseM x = toEigenMat(xArray);
 
-      solve_optimization(w, l, u, objective_vals, x, y, C1, C2, resumed);
+      solve_optimization(w, l, u, objective_vals, x, y, resumed, params);
     }
   else
     {
@@ -84,11 +150,10 @@ DEFUN_DLD (oct_find_w, args, nargout,
       FloatNDArray xArray = args(0).float_array_value();
       DenseM x = toEigenMat(xArray);
 
-      solve_optimization(w, l, u, objective_vals, x, y, C1, C2, resumed);
+      solve_optimization(w, l, u, objective_vals, x, y, resumed, params);
     }
 
   octave_value_list retval(4);// return value
-
   retval(0) = toMatrix(w);
   retval(1) = toMatrix(l);
   retval(2) = toMatrix(u);
