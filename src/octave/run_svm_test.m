@@ -36,22 +36,25 @@ for iter = 1 : iterations
     fprintf(1,"performing the projection ... \n");
     [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func, proj_params(iter), exp_name, restarts, resume);   
     
-	    
+    
     fprintf(1,"projection and label selection time: %f\n", toc);
     tic;
-              
-    proj_lbl_ignore(iter) = length(find(projected_labels==0));
-    all_lbl_preds = length(projected_labels(:));
     
+    disp(size(projected_labels));
+    
+    for j=1:size(projected_labels,3)              
+      proj_lbl_ignore(iter) = length(find(projected_labels(:,:,j)==0));
+      all_lbl_preds = size(projected_labels,1)*size(projected_labels,2);
+      
+      
+      [class_acc_proj(iter) class_F1_proj(iter) acc_proj(iter)] = ...
+	  evaluate_svm_model(tr_label,te_label, projected_labels(:,:,j), out);
 	    
-    [class_acc_proj(iter) class_F1_proj(iter) acc_proj(iter)] = ...
-    evaluate_svm_model(tr_label,te_label, projected_labels, out);
-	    
-    fprintf(1,"time to train/predict in svm: %f\n", toc);
-    tic;
+      fprintf(1,"time to train/predict in svm: %f\n", toc);
+      tic;
 	      	    
 	
-    proj_lbl_ignore_percent(iter) = proj_lbl_ignore(iter) * 100 / all_lbl_preds;
+      proj_lbl_ignore_percent(iter) = proj_lbl_ignore(iter) * 100 / all_lbl_preds;
     
     [class_acc(iter) class_F1(iter) acc(iter)] = ...
     evaluate_svm_model(tr_label,te_label, [], out);

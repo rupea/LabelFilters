@@ -36,10 +36,11 @@ void toVector(std::vector<int>& to, const VectorXd& from);
 template<typename EigenType>
 double calculate_objective_hinge(const WeightVector& w,
 				 const EigenType& x, const VectorXd& y,
-				 const VectorXd& l, const VectorXd& u, const std::vector<int>& class_order,
+				 const VectorXd& l, const VectorXd& u, 
+                                 const std::vector<int>& class_order, 
+                                 const MatrixXb& filtered,
 				 double C1, double C2)
 {
-
   double obj_val = w.norm();
   obj_val = .5 * obj_val * obj_val;
   int c;
@@ -49,12 +50,15 @@ double calculate_objective_hinge(const WeightVector& w,
   for (int i = 0; i < x.rows(); i++)
     {
       c = (int) y.coeff(i) - 1; // again the label is started from 1
-      obj_val += (C1
-		  * (hinge_loss(projection.coeff(i) - l.coeff(c)) + hinge_loss(-projection.coeff(i) + u.coeff(c))));
+      if ( !filtered.coeff(i,c) )
+	{
+	  obj_val += (C1
+		      * (hinge_loss(projection.coeff(i) - l.coeff(c)) + hinge_loss(-projection.coeff(i) + u.coeff(c))));
+	}
 	  
       for (int cp = 0; cp < l.size(); cp++)
 	{
-	  if (c != cp)
+	  if (c != cp && !filtered.coeff(i,cp))
 	    {
 	      sj = (class_order[c] < class_order[cp]) ? 1 : 0;
 	      obj_val += (C2
@@ -65,6 +69,17 @@ double calculate_objective_hinge(const WeightVector& w,
 	  
     }	
   return obj_val;
+}
+
+template<typename EigenType>
+double calculate_objective_hinge(const WeightVector& w,
+				 const EigenType& x, const VectorXd& y,
+				 const VectorXd& l, const VectorXd& u, 
+                                 const std::vector<int>& class_order, 
+				 double C1, double C2)
+{
+  MatrixXb filtered = MatrixXb::Zero(x.rows(),class_order.size());
+  return calculate_objective_hinge(w,x,y,l,u,class_order,filtered,C1,C2);
 }
 
 template<typename EigenType>
@@ -137,6 +152,24 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc, cons
     }
 }
 
+template<typename EigenType>
+void update_filtered(MatrixXb& filtered, const WeightVector& w, const VectorXd& l, const VectorXd& u, const EigenType& x, const VectorXd& y, bool filter_class)
+{
+  VectorXd projection;
+  w.project(projection,x);
+  for (int i = 0; i < x.rows(); i++)
+    {
+      int c = (int) y.coeff(i) - 1; // again the label is started from 1
+      for (int cp = 0; cp < l.size(); cp++)
+	{
+	  if (c != cp || filter_class)
+	    {
+	      filtered.coeffRef(i,cp) = filtered.coeffRef(i,cp) || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+	    }
+	}
+    }
+}
+
 // ******************************
 // Projection to a new vector that is orthogonal to the rest
 // It is basically Gram-Schmidt Orthogonalization
@@ -168,6 +201,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   const	int no_projections = weights.cols();
   cout << "no_projections: " << no_projections << endl;
   const double n = x.rows();  // number of samples in double
+  bool filter_class = FILTER_CLASS;
   const int batch_size = (params.batch_size < 1 || params.batch_size > n) ? (int) n : params.batch_size;
   int d = x.cols();
   std::vector<int> classes = get_classes(y);
@@ -198,17 +232,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   objective_val.resize(1000 + (no_projections * params.max_iter * params.max_reorder / params.report_epoch));
 
   init_nc(nc, y, noClasses);
+  MatrixXb filtered(n,noClasses);
+  filtered.setZero(n,noClasses);
   
-  // can't do it this way because the initial projections won't be orthogonal
-  // this will create some problems when we initialize the calss order vector
-  // we'll need to change this. 
   for(int projection_dim=0; projection_dim < no_projections; projection_dim++)
     {
 	 
       w = WeightVector(weights.col(projection_dim));
       
       // w.setRandom(); // initialize to a random value
-      
       if (!resumed)
 	{
 	  //initialize the class_order vector by sorting the means of the projections of each class. Use l to store the means.
@@ -222,8 +254,9 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	  rank_classes(class_order, l, u);
 	}
 	      
+      order_changed = 1;
 
-      print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,w.size(),x);
+      print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,lambda,w.size(),x);
 
       // staring optimization
       for (int iter = 0; iter < params.max_reorder && order_changed == 1; iter++)
@@ -247,7 +280,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      if( params.report_epoch && (t % params.report_epoch == 0) )
 		{
 		  print_progress(iter_str, t, params.max_iter);
-		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, C1, C2); // save the objective value
+		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u, class_order, filtered, C1, C2); // save the objective value
 		  if(PRINT_O)
 		    {
 		      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
@@ -288,18 +321,19 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      
 	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
 		{		
-		  c = (int) y[index.coeff(idx)] - 1; // Assuming all the class labels start from 1
-		  
+		  tmp = proj.coeff(idx);
+		  i=index.coeff(idx);
+		  c = (int) y[i] - 1; // Assuming all the class labels start from 1
+				
 		  multiplier = 0.0;
 		  
 		  if(PRINT_I)
 		    {	
-		      cout << index.coeff(i) << ", c: " << c << endl;
+		      cout << i << ", c: " << c << endl;
 		    }
-		  
-		  tmp = proj.coeff(idx);
 				
-		  if (hinge_loss(tmp - l.coeff(c)) > 0)// I1 Condition
+				
+		  if ((hinge_loss(tmp - l.coeff(c)) > 0) && !filtered.coeff(i,c))// I1 Condition
 		    {
 		      if(PRINT_I)
 			{
@@ -309,7 +343,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		      l_gradient.coeffRef(c) += C1;
 		    } // end if
 				
-		  if (hinge_loss(-tmp + u.coeff(c)) > 0)//  I2 Condition
+		  if ((hinge_loss(-tmp + u.coeff(c)) > 0) && !filtered.coeff(i,c))//  I2 Condition
 		    {
 		      if(PRINT_I)
 			{
@@ -321,7 +355,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 				
 		  for (cp = 0; cp < noClasses; cp++)
 		    {
-		      if (cp != c)
+		      if (cp != c && !filtered.coeff(i,cp))
 			{
 			  sj = (class_order[c] < class_order[cp]) ? 1 : 0;
 			  if (sj == 1 && hinge_loss(-tmp + l.coeff(cp)) > 0) // I3 Condition
@@ -348,7 +382,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
 		  if (multiplier != 0)
 		    {
-		      w.gradient_update(x,index.coeff(idx),(multiplier*eta_t)/batch_size);
+		      w.gradient_update(x,i,(multiplier*eta_t)/batch_size);
 		    }
 		} // end for idx (second)
 	      
@@ -399,21 +433,33 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	    } // end if print
 			
 	  cout << "\r>> " << iter+1 << ": Done in " << t
-	       << " iterations ... with w.norm(): " << w.norm();
+	       << " iterations ... with w.norm(): " << w.norm() << endl;
 			
 	} // end for iter
-		
+      
       VectorXd vect;
       w.toVectorXd(vect);
       weights.col(projection_dim) = vect;
       lower_bounds.col(projection_dim) = l;
       upper_bounds.col(projection_dim) = u;
+      
+      update_filtered(filtered, w, l, u, x, y, filter_class);
+      int no_filtered = (filtered.cast<int>()).sum();
+      cout << "Filtered " << no_filtered << "  out of " << n*noClasses - (1-filter_class)*n << endl;
+      int no_remaining = (n-1)*noClasses - no_filtered;
+      lambda = no_remaining*1.0/((n-1)*noClasses*C2_);
+
+      //      C2*=((n-1)*noClasses)*1.0/no_remaining;
+      //C1*=((n-1)*noClasses)*1.0/no_remaining;
+
+      
+      
     } // end for projection_dim
 	
   cout << "\n---------------\n" << endl;
 	
   objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, l, u,
-						       class_order, C1, C2);// save the objective value
+						       class_order, filtered, C1, C2);// save the objective value
   objective_val.conservativeResize(obj_idx);
   
   #ifdef PROFILE

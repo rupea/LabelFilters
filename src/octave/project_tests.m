@@ -50,6 +50,12 @@ end
 save(sprintf('results/wlu_%s_C1_%d_C2_%d.mat',exp_name, C1, C2), "w", "min_proj", "max_proj" , "obj_val");
 
 disp(norm(w));
+for j=1:size(w,2)-1
+  for k=j+1:size(w,2)
+    fprintf(1,"W%d * W%d = %f \n", j,k,w(:,j)'*w(:,k)/(norm(w(:,j))*norm(w(:,k))));
+  end
+end
+
 
 %project the test instances and eliminate the filtered out classes
 projected = xtest * w;
@@ -58,14 +64,17 @@ ts_labels = zeros(size(xtest,1),length(classes));
 
 %plot_projections(x,w,tr_label, classes, min_proj, max_proj,xtest, test_labels, exp_name, C1, C2);
 
-projected_labels = ones(size(projected,1),length(classes));
-
+projected_labels = ones(size(projected,1),length(classes),size(projected,2));
+disp(size(projected,2))
 for c = 1 : length(classes),
-    in_range_lbls = ones(size(projected,1),1);
-    for j = 1 : size(projected,2),
-        in_range_lbls  = and(in_range_lbls, projected(:,j) >= min_proj(c,j) &  projected(:,j) <= max_proj(c,j));
+    in_range_lbls = ones(size(projected,1),1,size(projected,2));
+    in_range_lbls(:,:,1) = projected(:,1) >= min_proj(c,1) &  projected(:,1) <= max_proj(c,1);
+    if ( size(projected,2) > 1 )
+      for j = 2 : size(projected,2),
+          in_range_lbls(:,:,j)  = and(in_range_lbls(:,:,j-1), projected(:,j) >= min_proj(c,j) &  projected(:,j) <= max_proj(c,j));
+      end
     end
-    projected_labels(:,c) = in_range_lbls;
+    projected_labels(:,c,:) = in_range_lbls;
 end
 
 return ;

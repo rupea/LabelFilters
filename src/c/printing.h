@@ -24,13 +24,13 @@ void print_report(const DenseM& x);
 
 
 template<typename EigenType>
-void print_report(const int& projection_dim, const int& batch_size,
-		  const int& noClasses, const int& C1, const int& C2, const int& w_size,
+void print_report(const int projection_dim, const int batch_size,
+		  const int noClasses, const double C1, const double C2, const double lambda, const int w_size,
 		  const EigenType& x)
 {
   cout << "projection_dim: " << projection_dim << ", batch_size: "
        << batch_size << ", noClasses: " << noClasses << ", C1: " << C1
-       << ", C2: " << C2 << ", size w: " << w_size << ", ";
+       << ", C2: " << C2 << ", lambda: " << lambda << ", size w: " << w_size << ", ";
   print_report(x);
   cout << "\n-----------------------------\n";
 
