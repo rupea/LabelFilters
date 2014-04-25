@@ -27,6 +27,8 @@ void print_usage()
   cout << "           report_epochs - number of iterations between computation and report the objective value (can be expensive because obj is calculated on the entire training set). 0 for no reporting [1000]." << endl;
   cout << "           eta - the initial learning rate. The leraning rate is eta/sqrt(t) where t is the number of iterations [1]" << endl;
   cout << "           min_eta - the minimum value of the lerarning rate (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]" << endl;
+  cout << "           remove_constraints - whether to remove the constraints for instances that fall outside the class boundaries in previous projections. " << endl;
+  cout << "           remove_class_constraints - whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. " << endl;
   cout << "     w_init - initial w vector" << endl;
   cout << "     l_init - initial lower bounds (optional)" << endl;
   cout << "     u_init - initial upper bounds (optional)" << endl;
@@ -105,6 +107,16 @@ DEFUN_DLD (oct_find_w, args, nargout,
       if (tmp.is_defined())
 	{
 	  params.reorder_epoch=tmp.int_value();
+	}
+      tmp = parameters.contents("remove_constraints");
+      if (tmp.is_defined())
+	{
+	  params.remove_constraints=tmp.bool_value();
+	}
+      tmp = parameters.contents("remove_class_constraints");
+      if (tmp.is_defined())
+	{
+	  params.remove_class_constraints=tmp.bool_value();
 	}
     }
 

@@ -13,6 +13,8 @@ typedef struct
   int reorder_epoch; //number of iterations between class reorderings. 0 for no reordering of classes
   int max_reorder; // maxumum number of class reorderings. Each reordering runs until convergence or for Max_Iter iterations and after each reordering the learning rate is reset
   int report_epoch; //number of iterations between computation and report the objective value (can be expensive because obj is calculated on the entire training set). 0 for no reporting
+  bool remove_constraints; // whether to remove the constraints for instances that fall outside the class boundaries in previous projections. 
+  bool remove_class_constraints; // whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. 
 } param_struct;
 
 
@@ -29,6 +31,8 @@ inline param_struct set_default_params()
   def.batch_size=1000;
   def.report_epoch=1000;
   def.reorder_epoch=1000;
+  def.remove_constraints = false;
+  def.remove_class_constraints=false;
   return def;
 }
   

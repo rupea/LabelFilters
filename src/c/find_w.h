@@ -200,15 +200,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   double C2 = 1.0;
   const	int no_projections = weights.cols();
   cout << "no_projections: " << no_projections << endl;
-  const double n = x.rows();  // number of samples in double
-  bool filter_class = FILTER_CLASS;
+  const int n = x.rows();  // number of samples in double
   const int batch_size = (params.batch_size < 1 || params.batch_size > n) ? (int) n : params.batch_size;
   int d = x.cols();
   std::vector<int> classes = get_classes(y);
   cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
   cout << "size y: " << y.rows() << " rows and " << y.cols() << " columns.\n";
 
-  int noClasses = classes.size();
+  const int noClasses = classes.size();
   WeightVector w;
   VectorXd l(noClasses),u(noClasses);
   VectorXd means(noClasses); // used for initialization of the class order vector;
@@ -257,7 +256,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       order_changed = 1;
 
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,lambda,w.size(),x);
-
+      t = 1;
       // staring optimization
       for (int iter = 0; iter < params.max_reorder && order_changed == 1; iter++)
 	{
@@ -443,12 +442,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       lower_bounds.col(projection_dim) = l;
       upper_bounds.col(projection_dim) = u;
       
-      update_filtered(filtered, w, l, u, x, y, filter_class);
-      int no_filtered = (filtered.cast<int>()).sum();
-      cout << "Filtered " << no_filtered << "  out of " << n*noClasses - (1-filter_class)*n << endl;
-      int no_remaining = (n-1)*noClasses - no_filtered;
-      lambda = no_remaining*1.0/((n-1)*noClasses*C2_);
-
+      if (params.remove_constraints)
+	{
+	  update_filtered(filtered, w, l, u, x, y, params.remove_class_constraints );
+	  int no_filtered = (filtered.cast<int>()).sum();
+	  cout << "Filtered " << no_filtered << "  out of " << n*noClasses - (1-params.remove_class_constraints)*n << endl;
+	  int no_remaining = (n-1)*noClasses - no_filtered;
+	  lambda = no_remaining*1.0/((n-1)*noClasses*params.C2);
+	}
+      
       //      C2*=((n-1)*noClasses)*1.0/no_remaining;
       //C1*=((n-1)*noClasses)*1.0/no_remaining;
 
