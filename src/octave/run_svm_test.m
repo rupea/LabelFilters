@@ -1,5 +1,5 @@
 function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = run_svm_test(bestC, ...
-x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name,datadir, proj_params, restarts, resume, projected_svm=0)
+x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name, proj_exp_name, datadir, proj_params, restarts, resume, projected_svm=0)
 tic;
 
 iterations = length(proj_params);
@@ -34,7 +34,7 @@ endif
 for iter = 1 : iterations
     tic;
     fprintf(1,"performing the projection ... \n");
-    [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func, proj_params(iter), exp_name, restarts, resume);   
+    [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func, proj_params(iter), proj_exp_name, restarts, resume);   
     
     
     fprintf(1,"projection and label selection time: %f\n", toc);
@@ -61,8 +61,8 @@ for iter = 1 : iterations
              
     
     if (projected_svm)      
-      projectionfile=sprintf("wlu_%s_C1_%d_C2_%d",exp_name, proj_params(iter,1), proj_params(iter,2));
-      [out_proj] = perform_parallel_projected_svm(exp_name, bestC, "", datadir, projectionfile, "results/", sprintf("C1_%g_C2_%g",proj_params(iter,:)), false, tr_label);
+      projectionfile=sprintf("wlu_%s_C1_%d_C2_%d",proj_exp_name, proj_params(iter).C1, proj_params(iter).C2);
+      [out_proj] = perform_parallel_projected_svm(proj_exp_name, bestC, "", datadir, projectionfile, "results/", sprintf("C1_%g_C2_%g",proj_params(iter).C1,proj_params(iter),C2), false, tr_label);
       [class_acc_proj_svm(iter) class_F1_proj_svm(iter) acc_proj_svm(iter)] = ...
 	  evaluate_svm_model(tr_label,te_label, [], out_proj);
     endif 
