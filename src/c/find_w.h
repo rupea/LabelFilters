@@ -152,6 +152,30 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc, cons
     }
 }
 
+// ********************************
+// Initializes the lower and upper bound
+template<typename EigenType>
+void proj_means(VectorXd& means, const VectorXi& nc, const WeightVector& w,
+	     const EigenType& x, const VectorXd& y, const int noClasses)
+{
+  int n = x.rows();
+  int c,i,k;
+  means.resize(noClasses);
+  means.setZero();
+  VectorXd projection;
+  w.project(projection,x);
+  for (i=0;i<n;i++)
+    {
+      c = (int) y[i] - 1; // Assuming all the class labels start from 1
+      double pr = projection.coeff(i);
+      means(c)+=pr;      
+    }
+  for (k = 0; k < noClasses; k++)
+    {
+      means(k) /= nc(k);
+    }
+}
+
 template<typename EigenType>
 void update_filtered(MatrixXb& filtered, const WeightVector& w, const VectorXd& l, const VectorXd& u, const EigenType& x, const VectorXd& y, bool filter_class)
 {
@@ -165,6 +189,36 @@ void update_filtered(MatrixXb& filtered, const WeightVector& w, const VectorXd& 
 	  if (c != cp || filter_class)
 	    {
 	      filtered.coeffRef(i,cp) = filtered.coeffRef(i,cp) || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+	    }
+	}
+    }
+}
+
+// function to calculate the difference vector beween the mean vectors of two classes
+
+template<typename EigenType>
+void difference_means(VectorXd& difference, const EigenType& x, const VectorXd& y,  const int c1, const int c2)
+{
+  int d = x.cols();
+  int n = x.rows();
+  difference.resize(d);
+  difference.setZero();
+  for (int row=0;row<n;row++)
+    {
+      if ((int)y.coeff(row)==c1)
+	{
+	  typename EigenType::InnerIterator it(x,row);
+	  for (; it; ++it)
+	    {
+	      difference.coeffRef(it.col())+=it.value();
+	    }
+	}
+      if ((int)y.coeff(row)==c2)
+	{
+	  typename EigenType::InnerIterator it(x,row);
+	  for (; it; ++it)
+	    {
+	      difference.coeffRef(it.col())-=it.value();
 	    }
 	}
     }
@@ -220,7 +274,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   VectorXd proj(batch_size);
   VectorXi index(batch_size);
   double multiplier;
- 
+
+  bool rank_by_mean=true;
   unsigned int t = 1, i=0, k=0,idx=0;
   char iter_str[30];
   for(i=0; i<30; i++) iter_str[i]=' ';
@@ -233,11 +288,26 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   init_nc(nc, y, noClasses);
   MatrixXb filtered(n,noClasses);
   filtered.setZero(n,noClasses);
-  
+  VectorXd difference(d);
+
   for(int projection_dim=0; projection_dim < no_projections; projection_dim++)
     {
-	 
-      w = WeightVector(weights.col(projection_dim));
+      
+      if ( projection_dim == 0 )
+	{
+	  w = WeightVector(weights.col(projection_dim));
+	}
+      else
+	{
+	  int c1 = ((int) rand()) % noClasses;
+	  int c2 = ((int) rand()) % noClasses;
+	  if (c1 == c2)
+	    {
+	      c2=(c1+1)%noClasses;
+	    }
+	  difference_means(difference,x,y,c1,c2);
+	  w = WeightVector(difference);
+	}
       
       // w.setRandom(); // initialize to a random value
       if (!resumed)
@@ -288,7 +358,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
 	      if (params.reorder_epoch && (t % params.reorder_epoch == 0))
 		{
-		  rank_classes(class_order, l, u);// ranking classes				
+		  if (rank_by_mean)
+		    {
+		      proj_means(means, nc, w, x, y, noClasses);
+		      rank_classes(class_order, means, means);
+		    }
+		  else
+		    {
+		      rank_classes(class_order, l, u);// ranking classes			       
+		    }
 		}
 	      
 	      // find the number of samples from other classes
@@ -303,7 +381,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		{
 		  if(batch_size < n)
 		    {
-		      i = ((int) rand()) % ((int)n);
+		      i = ((int) rand()) % n;
 		    }
 		  else
 		    {
