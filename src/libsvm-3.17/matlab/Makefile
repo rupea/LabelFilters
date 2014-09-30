@@ -29,7 +29,7 @@ octave:
 	MEX_EXT="$(OCTAVE_MEX_EXT)" CFLAGS="$(OCTAVE_CFLAGS)" \
 	binary
 
-binary: svmpredict.$(MEX_EXT) svmtrain.$(MEX_EXT) libsvmread.$(MEX_EXT) libsvmwrite.$(MEX_EXT)
+binary: svmpredict.$(MEX_EXT) svmtrain.$(MEX_EXT) libsvmread.$(MEX_EXT) libsvmwrite.$(MEX_EXT) read_sparse_ml.$(MEX_EXT)
 
 svmpredict.$(MEX_EXT):     svmpredict.c ../svm.h ../svm.o svm_model_matlab.o
 	$(MEX) $(MEX_OPTION) svmpredict.c ../svm.o svm_model_matlab.o
@@ -45,6 +45,9 @@ libsvmwrite.$(MEX_EXT):	libsvmwrite.c
 
 svm_model_matlab.o:     svm_model_matlab.c ../svm.h
 	$(CXX) $(CFLAGS) -c svm_model_matlab.c
+
+read_sparse_ml.$(MEX_EXT): read_sparse_ml.c
+	$(MEX) $(MEX_OPTION) read_sparse_ml.c	
 
 ../svm.o: ../svm.cpp ../svm.h
 	make -C .. svm.o

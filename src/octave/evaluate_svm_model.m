@@ -1,6 +1,6 @@
-function [avg_class_acc avg_class_F1 acc top5 top10 pred out]= ...
-evaluate_svm_model(tr_label,te_label, projected_labels, out)
-
+function [macro_acc acc macro_F1 F1 top5 top10 pred out]= ...
+      evaluate_multilabel_svm_model(y_te, projected_labels, out)
+----------not done, work on it ----------
 %noties = out'; 
 noties = (out + 1e-9 * randn(size(out)))';
 
@@ -9,7 +9,7 @@ if exist('projected_labels', 'var') && ~isempty(projected_labels)
 end
 [ignore,pred] = max(noties, [],1);
 
-[class_acc,class_prec,class_rec,class_F1]=get_per_class_perf(te_label,pred);
+[class_acc,class_prec,class_rec,class_F1]=get_per_class_multilabel_perf(y_te, pred);
 
 avg_class_acc = mean(class_acc);
 avg_class_F1 = mean(class_F1);
@@ -20,7 +20,7 @@ else
     acc = mean(te_label==(pred'));
 end
 
-len_tr = length(unique(tr_label)) ;
+len_tr = size(out,2); 
 
 if len_tr >= 5, top5 = topacc(te_label, noties, 5); else top5 = 1; end;
 if len_tr >= 10, top10 = topacc(te_label, noties, 10); else top10 = 1; end;
