@@ -14,11 +14,11 @@ MEX_OPTION = CC\#$(CXX) CXX\#$(CXX) CFLAGS\#"$(CFLAGS)" CXXFLAGS\#"$(CFLAGS)"
 MEX_OPTION += -largeArrayDims
 #MEX_EXT = $(shell $(MATLABDIR)/bin/mexext)
 
-OCTAVEDIR ?= $(HOME)/Programs/octave-3.6.4
+OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile
 OCTAVE_MEX_OPTION = --mex
 OCTAVE_MEX_EXT = mex
-OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.6.4/octave/ -I..
+OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2/octave/ -I..
 
 all:	matlab
 

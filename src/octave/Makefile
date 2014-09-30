@@ -1,7 +1,7 @@
 CXX ?= g++
-OCTAVEDIR ?= $(HOME)/Programs/octave-3.6.4
+OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile
-OCTAVE_CFLAGS ?= -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.6.4 -I..
+OCTAVE_CFLAGS ?= -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I..
 
 VPATH = ../c
 
