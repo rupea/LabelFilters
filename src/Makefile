@@ -6,9 +6,9 @@ LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2/octa
 
 export
 
-.PHONY: all clean octave libsvm
+.PHONY: all clean octave libsvm liblinear
 
-all: octave libsvm
+all: octave libsvm liblinear
 
 octave:
 	cd octave && make
@@ -16,7 +16,11 @@ octave:
 libsvm:
 	cd libsvm-3.17/matlab && make OCTAVE_CFLAGS="$(LIBSVM_OCTAVE_CFLAGS)" octave
 
+liblinear:
+	cd liblinear-1.94/matlab && make OCTAVE_CFLAGS="$(LIBSVM_OCTAVE_CFLAGS)" octave
+
 clean:
+	cd liblinear-1.94/matlab && make clean
 	cd libsvm-3.17/matlab && make clean
 	cd octave && make clean
 	cd c && make clean
