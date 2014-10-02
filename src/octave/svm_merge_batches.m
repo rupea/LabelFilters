@@ -6,9 +6,16 @@ function [out_final, out_final_tr] = svm_merge_batches(filename, label_range, no
     end_range = label_range(lbl_idx+1)-1;
     load( cur_file(lbl_idx) );
     if ~exist('out_final', 'var')
-      out_final = zeros(size(out,1),noClasses);
-      if (nargout == 2)
-	out_final_tr = zeros(size(out_tr,1),noClasses);
+      if (issparse(out))
+	out_final = sparse(size(out,1),noClasses);
+	if (nargout == 2)
+	  out_final_tr = sparse(size(out_tr,1),noClasses);
+	end
+      else
+	out_final = zeros(size(out,1),noClasses);
+	if (nargout == 2)
+	  out_final_tr = zeros(size(out_tr,1),noClasses);
+	end
       end
     end            
     out_final(:,start_range:end_range)=out;
