@@ -35,15 +35,16 @@ sum_pred = sum(pred,1);
 sum_y = sum(y_te, 1);
 
 class_precision = sum_true_pos./sum_pred;
+class_precision(isnan(class_precision)) = 0; # precision of 0 when nothing was predicted positive
 class_recall = sum_true_pos./sum_y;
 class_F1 = 2*(class_precision .* class_recall)./(class_precision + class_recall);
-
-class_error = sum_pred + sum_y - 2.*sum_true_pos
-class_acc = 1 - class_error./n;
+class_F1(isnan(class_F1)) = 0; # F1 of 0 when nothing was predicted positive
+class_acc = true_pos./sum_y;
 
 macro_acc = mean(class_acc);
 macro_F1 = mean(class_F1);
 
+error = sum_pred + sum_y - 2.*sum_true_pos;
 acc = 1 - sum(class_error)./(n*k);
 
 precision = sum(sum_true_pos)/sum(sum_pred);

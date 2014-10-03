@@ -29,22 +29,31 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
       project_str = "full";
     end
   end
-
-
-  filename = ["svm_results/svm_" exp_name "_" num2str(C) "_projected_" project_str ".mat"];
+  
+  if (isempty(threshold))
+    thresh_str = "none";
+  else
+    thresh_str = num2str(threshold);
+  end
+  
+  filename = ["svm_results/svm_" exp_name "_C" num2str(C) "_threshold" thresh_str "_projected_" project_str ".mat"];
   disp(filename);
   
   retrain = true;
   
   if exist(filename,"file") && ~force_retrain
-    load(filename);
     retrain = false;
+    if (nargout == 2 )
+      load(filename, "out_final", "out_final_tr");
+      if ( ~exist("out_final_tr","var") )
+	clear(out_final);
+	retrain = true;
+      end
+    else
+      load(filename, "-v6", "out_final");
+    end
     if ( ~exist("out_final","var") )
       retrain = true
-    end
-    if (nargout == 2 && ~exist("out_final_tr","var"))
-      clear(out_final);
-      retrain = true;
     end
   end
 
@@ -60,13 +69,8 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
     label_range = 1 : batch_length : (noClasses+1);
     label_range(end) = noClasses+1;
     
-    if (isempty(threshold))
-      thresh_str = "none";
-    else
-      thresh_str = num2str(threshold);
-    end
 
-    file_expr = @(idx) [exp_name "_" num2str(C) "_" num2str(label_range(idx)) "_" num2str(label_range(idx+1)-1) "_threshold" thresh_str "_projected_" project_str];    
+    file_expr = @(idx) [exp_name "_C" num2str(C) "_" num2str(label_range(idx)) "_" num2str(label_range(idx+1)-1) "_threshold" thresh_str "_projected_" project_str];    
     
     cur_file = @(idx) ["svm_results/svm_" file_expr(idx) ".mat"];    
     
