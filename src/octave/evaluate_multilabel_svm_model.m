@@ -39,13 +39,17 @@ class_precision(isnan(class_precision)) = 0; # precision of 0 when nothing was p
 class_recall = sum_true_pos./sum_y;
 class_F1 = 2*(class_precision .* class_recall)./(class_precision + class_recall);
 class_F1(isnan(class_F1)) = 0; # F1 of 0 when nothing was predicted positive
-class_acc = true_pos./sum_y;
+class_acc = sum_true_pos./sum_y;
+
+##do not average over the classes that do not exist in the test set
+class_acc = class_acc(sum_y!=0);
+class_F1 = class_F1(sum_y!=0);
 
 macro_acc = mean(class_acc);
 macro_F1 = mean(class_F1);
 
 error = sum_pred + sum_y - 2.*sum_true_pos;
-acc = 1 - sum(class_error)./(n*k);
+acc = 1 - sum(error)./(n*k);
 
 precision = sum(sum_true_pos)/sum(sum_pred);
 recall = sum(sum_true_pos)/sum(sum_y);

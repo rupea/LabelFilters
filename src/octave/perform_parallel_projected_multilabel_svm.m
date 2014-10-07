@@ -113,9 +113,9 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
     end    
     
     if (nargout == 2)      
-      [out_final, out_final_tr] = svm_merge_batches(filename, label_range, noClasses, cur_file);    
+      [out_final, out_final_tr] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file);    
     else
-      [out_final] = svm_merge_batches(filename, label_range, noClasses, cur_file);    
+      [out_final] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file);    
     end
     
     disp('all done ...');                  

@@ -132,7 +132,7 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,projection_file
     
   end
   
-  filename = ["svm_results/svm_" exp_name "_" num2str(C) "_" num2str(class_idx_start) "_" num2str(class_idx_end) "_threshold" thresh_str "_projected_" project_str ".mat"];
+  filename = ["svm_results/svm_" exp_name "_C" num2str(C) "_" num2str(class_idx_start) "_" num2str(class_idx_end) "_threshold" thresh_str "_projected_" project_str ".mat"];
   save(filename, "-v6", "out", "out_tr", "svm_models", "class_idx_start", "class_idx_end", "solver", "solverparams");
   
   
