@@ -8,7 +8,7 @@ VPATH = ../c
 SRCS	= find_w.cpp EigenOctave.cpp 
 OBJS	= ${SRCS:.c=.o}
 
-OCTFILES = oct_find_w.oct oct_normalize_data.oct oct_calc_objective.oct
+OCTFILES = oct_find_w.oct oct_normalize_data.oct
 
 .PHONY: clean all octave
 
@@ -17,7 +17,7 @@ OCTFILES = oct_find_w.oct oct_normalize_data.oct oct_calc_objective.oct
 
 all: octave
 
-octave: oct_find_w oct_normalize_data oct_calc_objective
+octave: oct_find_w oct_normalize_data
 
 
 oct_find_w: find_w.o EigenOctave.o printing.o ../c/oct_find_w.cpp

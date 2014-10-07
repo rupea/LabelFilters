@@ -49,7 +49,8 @@ double calculate_objective_hinge(const VectorXd& w,
 
 // ********************************
 // Get unique values in the class vector -> classes
-std::vector<int> get_classes(VectorXd y)
+
+std::vector<int> get_classes(VectorXd& y)
 {
   std::vector<int> v;
   for (int i = 0; i < y.rows(); i++)
@@ -90,10 +91,9 @@ void sort_index(VectorXd& m, std::vector<int>& cranks)
 
 // *********************************
 // Ranks the classes to build the switches
-void rank_classes(std::vector<int>& cranks, VectorXd& l, VectorXd& u)
+void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, VectorXd& l, VectorXd& u)
 {
   VectorXd m = ((u + l) * .5);
-  std::vector<int> indices(m.size());
   sort_index(m, indices);
   for (int i = 0; i < m.size(); i++)
     {
@@ -105,25 +105,61 @@ void rank_classes(std::vector<int>& cranks, VectorXd& l, VectorXd& u)
 // *******************************
 // Get the number of exampls in each class
 
-void init_nc(VectorXi& nc, const VectorXd& y, const int noClasses)
+void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
 {  
-  int c;
-  if (nc.rows() != noClasses) 
+  int noClasses = y.cols();
+  if (nc.size() != noClasses) 
     {
       cerr << "init_nc has been called with vector nc of wrong size" << endl;
       exit(-1);
     }
-  int n = y.rows();
+  int n = y.rows();  
+  if (nclasses.size() != n) 
+    {
+      cerr << "init_nc has been called with vector nclasses of wrong size" << endl;
+      exit(-1);
+    }
   for (int k = 0; k < noClasses; k++)
     {
       nc(k)=0;
     }
   for (int i=0;i<n;i++)
     {
-      c = (int) y[i] - 1; // Assuming all the class labels start from 1
-      nc(c)++;
+      nclasses[i]=0;
+      for (SparseMb::InnerIterator it(y,i);it;++it)
+	{
+	  if (it.value())
+	    {
+	      nc(it.col())++;
+	      nclasses(it.row())++;
+	    }
+	}
     }
 }
+
+// ************************************
+// Convert a label vector to a label matrix
+// Assumes that the label vector contains labels from 1 to noClasses
+
+SparseMb labelVec2Mat (const VectorXd& yVec)
+{
+  long int n = yVec.size();
+  long int noClasses = yVec.maxCoeff();
+  std::vector< Eigen::Triplet<bool> > tripletList;
+  tripletList.reserve(n);
+  long int i;
+  for (i = 0; i<n; i++)
+    {
+      // label list starts from 1
+      tripletList.push_back(Eigen::Triplet<bool> (i, yVec.coeff(i)-1, true));
+    }
+  
+  SparseMb y(n,noClasses);
+  y.setFromTriplets(tripletList.begin(),tripletList.end());
+  return y;
+}
+
+
 
 // ********************************
 // Initializes the lower and upper bound
@@ -188,7 +224,7 @@ int main()
   //  VectorXd y(10000),objective_val;
 
   DenseM weights(467,1),lower_bounds(5,1),upper_bounds(5,1), x(281,467);
-  VectorXd y(281),objective_val;
+  VectorXd yVec(281),objective_val;
 
   param_struct params = set_default_params();
   weights.setRandom();
@@ -196,12 +232,13 @@ int main()
   upper_bounds.setZero();
   x.setRandom();
   SparseM xs = x.sparseView();
-  for (int i = 0; i < y.size(); i++)
+  for (int i = 0; i < yVec.size(); i++)
     {
       //      y(i) = (i%1000)+1;
-      y(i) = (i%5)+1;
+      yVec(i) = (i%5)+1;
     }
-
+  SparseMb y = labelVec2Mat(yVec);
+  
   // these calls are important so that the compiler instantiates the right templates
   solve_optimization(weights,lower_bounds,upper_bounds,objective_val,x,y,0,params);
   solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,0,params);

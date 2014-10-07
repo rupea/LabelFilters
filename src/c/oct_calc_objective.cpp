@@ -17,7 +17,6 @@ DEFUN_DLD (oct_calc_objective, args, nargout,
 	   "Calculates objective value of the optimization based on given w")
 {
 
-  FloatNDArray yArray = args(1).float_array_value();
   FloatNDArray wArray = args(2).float_array_value();
   FloatNDArray lArray = args(3).float_array_value();
   FloatNDArray uArray = args(4).float_array_value();
@@ -35,6 +34,21 @@ DEFUN_DLD (oct_calc_objective, args, nargout,
   VectorXd u = toEigenVec(uArray);
   
   double ret;
+
+  SparseMb y;
+  if (args(1).is_sparse_type())
+    {
+      Sparse<bool> yArray = args(1).sparse_bool_matrix_value(); 
+      y = toEigenMat(yArray);
+    }
+  else
+    {      
+      FloatNDArray yVector = args(1).float_array_value(); // the label vector
+      
+      VectorXd yVec = toEigenVec(yVector);
+  
+      y = labelVec2Mat(yVec);
+    }
 
   if (args(0).is_sparse_type())
     {

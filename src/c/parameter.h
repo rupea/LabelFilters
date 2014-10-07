@@ -15,6 +15,10 @@ typedef struct
   int report_epoch; //number of iterations between computation and report the objective value (can be expensive because obj is calculated on the entire training set). 0 for no reporting
   bool remove_constraints; // whether to remove the constraints for instances that fall outside the class boundaries in previous projections. 
   bool remove_class_constraints; // whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. 
+  bool rank_by_mean; // whether to rank the classes by the mean of the projected examples or by the midpoint of its [l,u] interval (i.e. (u-l)/2).
+  bool ml_wt_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering other class contraints. 
+  bool ml_wt_class_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering its class contraints. 
+  int seed; // the random seed. if 0 then ititialized from time.
 } param_struct;
 
 
@@ -33,6 +37,10 @@ inline param_struct set_default_params()
   def.reorder_epoch=1000;
   def.remove_constraints = false;
   def.remove_class_constraints=false;
+  def.rank_by_mean = true;
+  def.ml_wt_by_nclasses = false;
+  def.ml_wt_class_by_nclasses = false;
+  def.seed=0;
   return def;
 }
   

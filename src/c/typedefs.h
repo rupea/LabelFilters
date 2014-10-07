@@ -3,6 +3,7 @@
 
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> DenseM;
 typedef Eigen::Matrix< bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor > MatrixXb;
+typedef Eigen::SparseMatrix<bool, Eigen::RowMajor> SparseMb;
 typedef Eigen::SparseMatrix<double,Eigen::RowMajor>  SparseM;
 
 #endif
