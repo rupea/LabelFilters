@@ -86,7 +86,10 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
     "cd ${PBS_O_WORKDIR} \n" octave_cmd(idx)]; % .${PBS_JOBID}
      
     for lbl_idx = 1 : 1 : length(label_range) -1
-	if (~exist(cur_file(lbl_idx),'file') && ~force_retrain)
+	if (~exist(cur_file(lbl_idx),'file') || force_retrain)
+	  if (exist(cur_file(lbl_idx),'file'))
+	    unlink(cur_file(lbl_idx));
+	  endif
           f = ["svm_results/" file_expr(lbl_idx) ".pbs"];       
 	  display(f);
           fid = fopen(f, 'w');
