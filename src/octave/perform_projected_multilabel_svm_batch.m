@@ -15,14 +15,14 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,
     projection = false;
   else
     projection = true;
+    if (~exist(projection_file, "file"))
+      error("Projection file does not exist");
+      projection = false;      
+    else
+      load(projection_file, "w", "min_proj", "max_proj");
+    end
   end
   
-  if (projection && ~exist(projection_file, "file"))
-    error("Projection file does not exist");
-    projection = false;
-  else
-    load(projection_file, "w", "min_proj", "max_proj");
-  end
   
   if ( ~projection )
     if (~exist("project_str","var") || isempty(project_str)) || strcmp(project_str,"")
