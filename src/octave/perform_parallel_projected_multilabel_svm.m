@@ -1,9 +1,5 @@
-function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(exp_name, C, option, noClasses, exp_dir, force_retrain, projection_file = "", projection_dir = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10)
+function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(exp_name, C,noClasses, exp_dir, force_retrain, projection_file = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10)
 
-  if ~exist('option', 'var'),
-    option = '';
-  end      
-    
   if ~exist('exp_dir', 'var'),
     exp_dir = '';
   end      
@@ -19,7 +15,7 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
     projection = true;
   end
   
-  if (projection && ~exist([projection_dir projection_file ".mat"], "file"))
+  if (projection && ~exist(projection_file, "file"))
     error("Projection file does not exist");
     projection = false;
   end
@@ -74,8 +70,8 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
     
     cur_file = @(idx) ["svm_results/svm_" file_expr(idx) ".mat"];    
     
-    octave_cmd = @(idx) sprintf("octave -q --path %s --eval \"perform_projected_multilabel_svm_batch('%s','%s', '%s', '%s', '%s' ,%f,%d,%d, '%s', '%s', '%s')\"", ...
-    path(), exp_name,exp_dir,projection_file, projection_dir, project_str, C, label_range(idx),label_range(idx+1)-1, num2str(threshold), solver, solverparam);
+    octave_cmd = @(idx) sprintf("octave -q --path %s --eval \"perform_projected_multilabel_svm_batch('%s','%s', '%s', '%s' ,%f, %d, %d, '%s', '%s', '%s')\"", ...
+    path(), exp_name, exp_dir,projection_file, project_str, C, label_range(idx),label_range(idx+1)-1, num2str(threshold), solver, solverparam);
     
     pbs_command = @(idx) ["#!/bin/bash \n" ...
     "#PBS -l nodes=1:ppn=1,walltime=10:00:00 \n" ...

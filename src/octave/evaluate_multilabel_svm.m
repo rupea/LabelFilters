@@ -1,6 +1,5 @@
 function [macro_acc acc macro_F1 F1 top5 top10 pred out]= ...
-      evaluate_multilabel_svm_model(y_te, projected_labels, out, thresh=0)
-%noties = out'; 
+      evaluate_multilabel_svm(y_te, projected_labels, out, thresh=0)
 
 if (~isempty(projected_labels)&&~islogical(projected_labels))
   error("projected_labels is not an empty or a logical matrix");

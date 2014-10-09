@@ -2,7 +2,11 @@
 ### Project training points on a learned w and filter the instances before training the svm for each class. If project_file==[] no projection is done.
 
 
-function perform_projected_multilabel_svm_batch(exp_name,exp_dir,projection_file,projection_dir, project_str, C, class_idx_start,class_idx_end, threshold = [], solver="libsvm", solverparams = "-t 0")
+function perform_projected_multilabel_svm_batch(exp_name,exp_dir,
+						projection_file, project_str, ...
+						C, class_idx_start,class_idx_end, ...
+						threshold = [], ...
+						solver="libsvm", solverparams = "-t 0")
 
   %%loading data
   load([exp_dir exp_name ".mat"], "-v6");
@@ -13,9 +17,11 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,projection_file
     projection = true;
   end
   
-  if (projection && ~exist([projection_dir projection_file ".mat"], "file"))
+  if (projection && ~exist(projection_file, "file"))
     error("Projection file does not exist");
     projection = false;
+  else
+    load(projection_file, "w", "min_proj", "max_proj");
   end
   
   if ( ~projection )
@@ -24,7 +30,6 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,projection_file
     end
   end
 
-  nClasses = size(y_tr, 2);
   n = size(x_tr,1);
   m = size(x_te,1);
   svm_models = cell(class_idx_end-class_idx_start+1,1);
@@ -61,7 +66,15 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,projection_file
       end
     end
     tmpX=x_tr(in_range,:); 
-    tmpY=y_tr(in_range,class);
+    if (size(y_tr,2)==1)
+      %% multiclass problem with label vector
+      %% assumes that classes are 1:noClasses
+      tmpY=y_tr(in_range);
+      tmpY=double(tmpY==class); 
+    else
+      %% multiclass or multilabel problem with label indicator matrix
+      tmpY=y_tr(in_range,class);
+    end
     tmpY(tmpY==0) = -1;
     assert(numel(unique(tmpY))==2);
     
@@ -86,43 +99,52 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,projection_file
     end
     
     ## make predictions on the training set
+    ## make predictions on the entire set, do not filter according to the projection
     out_idx=class-class_idx_start+1;
     if (strcmp(solver,"libsvm"))
-      [foo, bar, preds_tr] = svmpredict(zeros(size(tmpX,1),1), tmpX, model, svmparams);
+      [foo, bar, preds_tr] = svmpredict(zeros(size(x_tr,1),1), x_tr, model, svmparams);
     elseif (strcmp(solver,"liblinear"))
-      [foo, bar, preds_tr] = predict(zeros(size(tmpX,1),1), tmpX, model, svmparams);      
+      [foo, bar, preds_tr] = predict(zeros(size(x_tr,1),1), x_tr, model, svmparams);      
     end
     if ( ~isempty(threshold))
       pos = preds_tr > threshold;
-      idx = ((1:n)(in_range))(pos);
-      out_tr(idx,out_idx) = preds_tr(pos); # could also make it 1
+      ## idx = ((1:n)(in_range))(pos);
+      ## out_tr(idx,out_idx) = preds_tr(pos); # could also make it 1
+      out_tr(:,out_idx) = preds_tr(pos); # could also make it 1
     else    
-      out_tr(in_range,out_idx) = preds_tr;
-      out_tr(~in_range,out_idx)=-inf;
+      out_tr(:,out_idx) = preds_tr;
+      ## out_tr(in_range,out_idx) = preds_tr;
+      ## out_tr(~in_range,out_idx)=-inf;
     end
 
     ## make prediction on the test set
-    in_range = logical(ones(m,1));
-    ## if projection is performed identify the examples that are in the range of the class
-    if (projection)
-      for j = 1 : size(xtestproj,2),
-	in_range  = and(in_range, xtestproj(:,j) >= min_proj(class,j) &  xtestproj(:,j) <= max_proj(class,j));
-      end
-    end
+    ## make predictions on the entire set, do not filter according to the projection
 
-    tmpXtest = x_te(in_range,:);
+
+    ## in_range = logical(ones(m,1));    
+    ## ## if projection is performed identify the examples that are in the range of the class
+    ## if (projection)
+    ##   for j = 1 : size(xtestproj,2),
+    ## 	in_range  = and(in_range, xtestproj(:,j) >= min_proj(class,j) &  xtestproj(:,j) <= max_proj(class,j));
+    ##   end
+    ## end
+
+    ## tmpXtest = x_te(in_range,:);
+
     if (strcmp(solver,"libsvm"))
-      [foo, bar, preds] = svmpredict(zeros(size(tmpXtest,1),1), tmpXtest, model, svmparams);
+      [foo, bar, preds] = svmpredict(zeros(size(x_te,1),1), x_te, model, svmparams);
     elseif (strcmp(solver,"liblinear"))
-      [foo, bar, preds] = predict(zeros(size(tmpXtest,1),1), tmpXtest, model, svmparams);
+      [foo, bar, preds] = predict(zeros(size(x_te,1),1), x_te, model, svmparams);
     end
     if ( ~isempty(threshold))
       pos = preds > threshold;
-      idx = ((1:m)(in_range))(pos);
-      out(idx,out_idx) = preds(pos); # could also make it 1
+      ## idx = ((1:m)(in_range))(pos);
+      ## out(idx,out_idx) = preds(pos); # could also make it 1
+      out(:,out_idx) = preds(pos); # could also make it 1
     else    
-      out(in_range,out_idx) = preds;
-      out(~in_range,out_idx)=-inf;
+      out(:,out_idx) = preds;
+      ## out(in_range,out_idx) = preds;
+      ## out(~in_range,out_idx)=-inf;
     end
     
     svm_models{out_idx} = model;

@@ -42,8 +42,8 @@ function [out_final, out_final_tr] = multilabel_svm_merge_batches(filename, labe
   end
 
   for lbl_idx = 1 : nfiles
-    start_range = label_range(lbl_idx)
-    end_range = label_range(lbl_idx+1)-1
+    start_range = label_range(lbl_idx);
+    end_range = label_range(lbl_idx+1)-1;
     out_final(:,start_range:end_range)=out_cell{lbl_idx};
     if (nargout == 2)
       out_final_tr(:,start_range:end_range)=out_tr_cell{lbl_idx};
