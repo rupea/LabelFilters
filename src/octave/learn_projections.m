@@ -22,7 +22,7 @@ function [w, min_proj, max_proj, obj_val] = \
       [w,min_proj,max_proj, obj_val]=oct_find_w(x,tr_label,parameters,w);
     endif    
     
-    if (best_obj > obj_val(length(obj_val)))
+    if (is.empty(obj_val) || (best_obj > obj_val(length(obj_val))))
       best_w = w;
       best_min_proj = min_proj;
       best_max_proj = max_proj;

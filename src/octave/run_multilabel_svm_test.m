@@ -111,12 +111,12 @@ function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = ..
 
   fprintf(1,"C1, C2: %g, %g \n", proj_params.C1,proj_params.C2);
   
-  for j=1:size(projected_labels_te,3)              
+  for j=1:size(projected_labels_te,1)              
     all_lbl_preds = size(x_te,1)*noClasses;
-    proj_lbl_ignore = all_lbl_preds - nnz(projected_labels_te(:,:,j));
+    proj_lbl_ignore = all_lbl_preds - nnz(projected_labels_te{j});
         
     [class_acc_proj acc_proj class_F1_proj F1_proj top5_proj top10_proj] = ...
-	evaluate_ova_model(y_te, projected_labels_te(:,:,j), out, ova_params.threshold);
+	evaluate_ova_model(y_te, projected_labels_te{j}, out, ova_params.threshold);
            
     proj_lbl_ignore_percent = proj_lbl_ignore * 100 / all_lbl_preds;
         
@@ -140,7 +140,7 @@ function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = ..
     
     
     [class_acc_proj_svm_proj acc_proj_svm_proj class_F1_proj_svm_proj F1_proj_svm_proj top5_proj_svm_proj top10_proj_svm_proj] = ...
-	evaluate_ova_model(y_te, projected_labels_te(:,:,end), out_proj_svm, ova_params.threshold);
+	evaluate_ova_model(y_te, projected_labels_te{end}, out_proj_svm, ova_params.threshold);
     
     fprintf(1,">> class_acc_proj_svm_proj: %f, class_F1_proj_svm_proj: %f, acc_proj_svm_proj: %f, F1_proj_svm_proj: %f, top5_proj_svm_proj: %f, top10_proj_svm_proj: %f\n", ...
 	    class_acc_proj_svm_proj, class_F1_proj_svm_proj, acc_proj_svm_proj, F1_proj_svm_proj, top5_proj_svm_proj, top10_proj_svm_proj);

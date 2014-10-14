@@ -1,5 +1,5 @@
 CXX ?= g++
-CPPFLAGS ?= -O3
+CPPFLAGS ?= -g -O3
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone

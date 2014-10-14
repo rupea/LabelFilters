@@ -83,15 +83,16 @@ int main(int argc, char * argv[])
   param_struct params = set_default_params();
   params.C1 = 2000000;
   params.C2 = 100;
-  params.max_iter = 1e+8;
+  params.max_iter = 1e+2;
   params.report_epoch = -1; 
   
   VectorXd objective_val;
   SparseMb y;
+  SparseMb smally;
   if (y_tr.is_sparse_type())
     {
       Sparse<bool> yArray = y_tr.sparse_bool_matrix_value(); 
-      y = toEigenMat(yArray);
+      y = toEigenMat(yArray);      
     }
   else
     {      
@@ -101,6 +102,10 @@ int main(int argc, char * argv[])
   
       y = labelVec2Mat(yVec);
     }
+
+  smally = y.topLeftCorner(100000,y.cols());
+
+
   if(x_tr.is_sparse_type())
     {
       // Sparse data
@@ -108,15 +113,19 @@ int main(int argc, char * argv[])
 
       SparseM x = toEigenMat(xArray);
 
+      xArray.~Sparse();
+
       size_t d = x.cols();
       size_t k = y.cols();
       
+      SparseM smallx = x.topLeftCorner(100000,d);
+
       DenseM w(d,1),l(k,1),u(k,1);
       w.setRandom();
       l.setZero();
       u.setZero();
       
-      solve_optimization(w, l, u, objective_val, x, y, 0, params);
+      solve_optimization(w, l, u, objective_val, smallx, smally, 0, params);
     }
   else
     {

@@ -30,8 +30,8 @@ profile:
 octave: oct_find_w oct_normalize_data
 
 
-oct_find_w: find_w.o EigenOctave.o printing.o ../c/oct_find_w.cpp
-	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) ../c/oct_find_w.cpp find_w.o EigenOctave.o printing.o
+oct_find_w: find_w.o EigenOctave.o printing.o boolmatrix.o ../c/oct_find_w.cpp
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) ../c/oct_find_w.cpp find_w.o EigenOctave.o printing.o boolmatrix.o
 
 oct_normalize_data: normalize.o EigenOctave.o printing.o ../c/oct_normalize_data.cpp
 	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) ../c/oct_normalize_data.cpp normalize.o EigenOctave.o printing.o 

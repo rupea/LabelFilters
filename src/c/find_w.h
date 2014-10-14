@@ -420,24 +420,25 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       order_changed = 1;
 
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,lambda,w.size(),x);
-      t = 1;
 
       // staring optimization
       for (int iter = 0; iter < params.max_reorder && order_changed == 1; iter++)
 	{
-	  if (t%10000)
-	    {
-	      snprintf(iter_str,30, "Iteration %d > ",iter+1);
-	      print_progress(iter_str, t, params.max_iter);
-	    }
 
 	  // init the optimization specific parameters
 	  std::copy(class_order.begin(),class_order.end(), prev_class_order.begin());
+	  t = 1;
 		    
 	  while (t < params.max_iter)
 	    {
 	      t++;
 			    
+	      if (t % 1000 == 0)
+		{
+		  snprintf(iter_str,30, "Iteration %d > ",iter+1);
+		  print_progress(iter_str, t, params.max_iter);
+		  fflush(stdout);
+		}
 	      // setting eta
 	      eta_t = params.eta / sqrt(t);
 	      if(eta_t < params.min_eta)
@@ -502,7 +503,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		  if(PRINT_I)
 		    {	
 		      cout << i << endl;
-		    }							       		    
+		    }
+
 		  ml_wt = 1.0;
 		  ml_wt_class = 1.0;
 		  if (params.ml_wt_by_nclasses)
@@ -529,7 +531,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			    {
 			      // if example i does not have class cp 
 			      //if (left_classes && hinge_loss(l.coeff(cp) - tmp) > 0) // I3 Condition
-			      if (left_classes && (1 - l.coeff(cp) - tmp) > 0) // I3 Condition
+			      if (left_classes && (1 - l.coeff(cp) + tmp) > 0) // I3 Condition
 				{
 				  #ifdef PRINTI
 				    {
@@ -541,7 +543,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 				}
 			      
 			      //if (right_classes && hinge_loss(tmp - u.coeff(cp)) > 0) //  I4 Condition
-			      if (right_classes && (1 - tmp - u.coeff(cp)) > 0) //  I4 Condition
+			      if (right_classes && (1 - tmp + u.coeff(cp)) > 0) //  I4 Condition
 				{
 				  #ifdef PRINTI
 				    {
@@ -556,7 +558,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			    {
 			      //this example has class cp
 			      //if (hinge_loss(tmp - l.coeff(cp)) > 0)// I1 Condition
-			      if ((1 - tmp - l.coeff(cp)) > 0)// I1 Condition
+			      if ((1 - tmp + l.coeff(cp)) > 0)// I1 Condition
 				{
 				  #ifdef PRINTI
 				    {
@@ -568,7 +570,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 				} // end if
 			      
 			      //if (hinge_loss(-tmp + u.coeff(cp)) > 0)//  I2 Condition
-			      if ((1 - tmp + u.coeff(cp)) > 0)//  I2 Condition
+			      if ((1 + tmp - u.coeff(cp)) > 0)//  I2 Condition
 				{
 				  #ifdef PRINTI
 				    {
