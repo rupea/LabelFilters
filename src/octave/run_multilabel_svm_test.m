@@ -80,7 +80,7 @@ function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = ..
   %% learn the projection
   projectionfile=sprintf("results/wlu_%s_C1_%d_C2_%d.mat",proj_exp_name, proj_params.C1, proj_params.C2);      
   if ( relearn_projection || ~exist(projectionfile, "file") )
-    [w, max_proj, min_proj] = learn_projections(x_tr_proj, y_tr_proj, proj_params, proj_exp_name, restarts, resume, proj_params.plot_objval);
+    [w, min_proj, max_proj] = learn_projections(x_tr_proj, y_tr_proj, proj_params, proj_exp_name, restarts, resume, proj_params.plot_objval);
     relearn_prjection = true;
   else
     load(projectionfile,"w","max_proj","min_proj");

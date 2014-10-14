@@ -15,24 +15,21 @@ void print_progress(string s, int t, int max_t)
   double p = ((double) ((double) t * 100.0)) / (double) max_t;
   int percent = (int) p;
 
-  if (t % 10 == 0 || t == 0)
+  string str = "\r" + s + "=";
+  for (int i = 0; i < (int) percent / 10; i++)
     {
-      string str = "\r" + s + "=";
-      for (int i = 0; i < (int) percent / 10; i++)
-	{
-	  str = str + "==";
-	}
-	    
-      int c = 60;
-      char buff[c];
-      sprintf(buff,
-	      " > (%d\%) @%d                                                 ",
-	      percent, t);
-      str = str + buff;
-	    	    
-      cout << str;
+      str = str + "==";
     }
-	
+  
+  int c = 60;
+  char buff[c];
+  sprintf(buff,
+	  " > (%d\%) @%d                                                 ",
+	  percent, t);
+  str = str + buff;
+  
+  cout << str;
+  
   if (percent == 100)
     {
       cout << std::endl;

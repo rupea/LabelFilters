@@ -1,20 +1,25 @@
 CXX ?= g++
 CPPFLAGS ?= -O3
-LDFLAGS ?= ""
+OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
+OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v
+OCTAVE_MEX_STANDALONE ?= --link-stand-alone
+OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
+
+LDFLAGS ?=
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O2 -DPROFILE -I$(PROFILEDIR)/include 
 PROFILE_LDFLAGS = -L$(PROFILEDIR)/lib -lprofiler
 
-all: find_w
+all: main
 
 profile: 
-	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" find_w
+	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" main
 
-find_w: find_w.o printing.o 
-	$(CXX) $(LDFLAGS) -o find_w find_w.o printing.o
+main: main.o find_w.o printing.o EigenOctave.o boolmatrix.o
+	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o main main.o boolmatrix.o EigenOctave.o find_w.o printing.o 
 
 .cpp.o:
-	$(CXX) $(CPPFLAGS) -c $<
+	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
 
 clean: 
-	rm -f *.o find_w find_w.profile
+	rm -f *.o main find_w.profile

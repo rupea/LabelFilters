@@ -10,6 +10,11 @@ export
 
 all: octave libsvm liblinear
 
+profile: octave.profile libsvm liblinear
+
+octave.profile:
+	cd octave && make profile
+
 octave:
 	cd octave && make
 

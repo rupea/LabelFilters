@@ -6,6 +6,7 @@
 #include "WeightVector.h"
 #include "printing.h"
 #include "parameter.h"
+#include "boolmatrix.h"
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
@@ -16,12 +17,13 @@ using Eigen::VectorXi;
 
 using namespace std;
 
+//#define hinge_loss(val) (val<1.0)?(1.0-val):0
 
 // *******************************
 // The hinge loss -- implemented here to get rid of compiler warnings
 inline double hinge_loss(double val)
 {
-  return 1 - ((val<1)?val:1.0);
+  return ((val<1)?(1-val):0);
 }
 
 
@@ -39,19 +41,21 @@ double calculate_objective_hinge(const WeightVector& w,
 				 const VectorXi& nclasses,
 				 const VectorXd& l, const VectorXd& u, 
                                  const std::vector<int>& sorted_class, 
-                                 const MatrixXb& filtered,
+                                 //const vector<bool> *filtered,
+				 const boolmatrix& filtered,
 				 bool ml_wt_by_nclasses, bool ml_wt_class_by_nclasses,
 				 double lambda, double C1, double C2)
 {
-  int noClasses = y.cols();
+  const int noClasses = y.cols();
   double obj_val = w.norm();
   obj_val = .5 * lambda * obj_val * obj_val;
   double ml_wt,ml_wt_class;
   int left_classes, right_classes;
   int sc,cp;
   VectorXd projection;
+  double tmp, class_weight, other_weight;
   w.project(projection,x);
-  for (int i = 0; i < x.rows(); i++)
+  for (size_t i = 0; i < x.rows(); i++)
     {
       //      c = (int) y.coeff(i) - 1; // again the label is started from 1
       
@@ -68,29 +72,31 @@ double calculate_objective_hinge(const WeightVector& w,
 	}		    
       left_classes = 0; //number of classes to the left of the current one
       right_classes = nclasses[i]; //number of classes to the right of the current one
+      tmp = projection.coeff(i);
+      class_weight = ml_wt_class * C1;
+      other_weight = ml_wt * C2;
       for (sc = 0; sc < noClasses; sc++)		    
 	{
 	  // traverse the classes in order of their desired ranks
-	  cp = sorted_class[sc]; 	  
-	  if (!filtered.coeff(i,cp))
+	  cp = sorted_class[sc];
+	  //if (!(filtered[i][cp]))
+	  if (!(filtered.get_val(i,cp)))
 	    {
 	      if(y.coeff(i,cp))
 		{
 		  //example has class cp
-		  obj_val += (ml_wt_class 
-			      * (C1 
-				 * (hinge_loss(projection.coeff(i) - l.coeff(cp)) 
-				    + hinge_loss(-projection.coeff(i) + u.coeff(cp)))));
+		  obj_val += (class_weight 
+			      * (hinge_loss(tmp - l.coeff(cp)) 
+				 + hinge_loss(u.coeff(cp) - tmp)));
 		  left_classes++;
 		  right_classes--;
 		}
 	      else
 		{
 		  //example does not have class cp
-		  obj_val += (ml_wt 
-			      * (C2
-				 * (left_classes * hinge_loss(-projection.coeff(i) + l.coeff(cp))
-				    + right_classes * hinge_loss(projection.coeff(i) - u.coeff(cp)))));
+		  obj_val += (other_weight
+			      * (left_classes * hinge_loss(l.coeff(cp) - tmp)
+				 + right_classes * hinge_loss(tmp - u.coeff(cp))));
 		}
 	    }		  
 	}
@@ -106,7 +112,14 @@ double calculate_objective_hinge(const WeightVector& w,
                                  const std::vector<int>& sorted_class, 
 				 double lambda, double C1, double C2)
 {
-  MatrixXb filtered = MatrixXb::Zero(x.rows(),sorted_class.size());
+  const int noClasses = y.cols();
+  const int n = x.rows();
+  boolmatrix filtered(n,noClasses);
+  /* vector<bool> *filtered = new vector<bool>[n]; */
+  /* for (size_t i=0; i<n ; i++) */
+  /*   { */
+  /*     filtered[i]=vector<bool>(noClasses, false); */
+  /*   } */
   return calculate_objective_hinge(w,x,y,nclass,l,u,sorted_class,filtered,lambda,C1,C2);
 }
 
@@ -166,8 +179,8 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc,
 	     EigenType& x, const SparseMb& y)
 {
   int noClasses = y.cols();
-  int n = x.rows();
-  int c,i,k;
+  size_t n = x.rows();
+  size_t c,i,k;
   double pr;
   means.resize(noClasses);
   means.setZero();
@@ -206,8 +219,8 @@ void proj_means(VectorXd& means, const VectorXi& nc, const WeightVector& w,
 	     const EigenType& x, const SparseMb& y)
 {
   int noClasses = y.cols();
-  int n = x.rows();
-  int c,i,k;
+  size_t n = x.rows();
+  size_t c,i,k;
   means.resize(noClasses);
   means.setZero();
   VectorXd projection;
@@ -232,21 +245,27 @@ void proj_means(VectorXd& means, const VectorXi& nc, const WeightVector& w,
 }
 
 template<typename EigenType>
-void update_filtered(MatrixXb& filtered, const WeightVector& w, const VectorXd& l, const VectorXd& u, const EigenType& x, const SparseMb& y, bool filter_class)
+size_t update_filtered(boolmatrix& filtered, const WeightVector& w, const VectorXd& l, const VectorXd& u, const EigenType& x, const SparseMb& y, bool filter_class)
+//size_t update_filtered(vector<bool> *filtered, const WeightVector& w, const VectorXd& l, const VectorXd& u, const EigenType& x, const SparseMb& y, bool filter_class)
 {
   VectorXd projection;
   int noClasses = y.cols();
   w.project(projection,x);
-  for (int i = 0; i < x.rows(); i++)
+  size_t no_filtered = 0;
+  for (size_t i = 0; i < x.rows(); i++)
     {      
       for (int cp = 0; cp < noClasses; cp++)
 	{
 	  if ( filter_class || !y.coeff(i,cp) )
 	    {
-	      filtered.coeffRef(i,cp) = filtered.coeffRef(i,cp) || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+	      bool val = filtered.get_val(i,cp) || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+	      filtered.set_val(i,cp,val);
+	      no_filtered += val;
+	      //no_filtered += filtered[i][cp] = filtered[i][cp] || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
 	    }
 	}
     }
+  return(no_filtered);
 }
 
 // function to calculate the difference vector beween the mean vectors of two classes
@@ -254,11 +273,11 @@ void update_filtered(MatrixXb& filtered, const WeightVector& w, const VectorXd& 
 template<typename EigenType>
   void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y, const VectorXi& nc, const int c1, const int c2)
 {
-  int d = x.cols();
-  int n = x.rows();
+  size_t d = x.cols();
+  size_t n = x.rows();
   difference.resize(d);
   difference.setZero();
-  for (int row=0;row<n;row++)
+  for (size_t row=0;row<n;row++)
     {
       if (y.coeff(row,c1))
 	{
@@ -288,7 +307,7 @@ template<typename EigenType>
 // we'll implement this when we get there
 
 // void project_orthogonal(VectorXd& w, const DenseM& weights,
-// 			const int& projection_dim);
+// 			const size_t& projection_dim);
 
 // *********************************
 // Solve the optimization using the gradient decent on hinge loss
@@ -309,9 +328,9 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   double C2 = 1.0;
   const	int no_projections = weights.cols();
   cout << "no_projections: " << no_projections << endl;
-  const int n = x.rows();  // number of samples in double
-  const int batch_size = (params.batch_size < 1 || params.batch_size > n) ? (int) n : params.batch_size;
-  int d = x.cols();
+  const size_t n = x.rows(); 
+  const size_t batch_size = (params.batch_size < 1 || params.batch_size > n) ? (size_t) n : params.batch_size;
+  const size_t d = x.cols();
   //std::vector<int> classes = get_classes(y);
   cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
   cout << "size y: " << y.rows() << " rows and " << y.cols() << " columns.\n";
@@ -324,7 +343,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   VectorXi nclasses(n); // the number of examples in each class 
   double eta_t, tmp, sj;
   int cp;// current class and the other classes
-  int obj_idx = 0;
+  size_t obj_idx = 0;
   bool order_changed = 1;
   VectorXd l_gradient(noClasses), u_gradient(noClasses);
   VectorXd proj(batch_size);
@@ -334,23 +353,36 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   // to the number of classes it belongs to. ml_wt and ml_wt_class
   // allows weighting that impact when updating params for the other classes
   // respectively its own class. 
-  double ml_wt, ml_wt_class;
+  double ml_wt, ml_wt_class, class_weight, other_weight;
   int sc;
   int left_classes, right_classes;
-  unsigned int t = 1, i=0, k=0,idx=0;
+  size_t  i=0, k=0,idx=0;
+  unsigned long t = 1;
   char iter_str[30];
   for(i=0; i<30; i++) iter_str[i]=' ';
   std::vector<int> sorted_class(noClasses), class_order(noClasses), prev_class_order(noClasses);// used as the switch
        
   lower_bounds.resize(noClasses, no_projections);
   upper_bounds.resize(noClasses, no_projections);
-  objective_val.resize(1000 + (no_projections * params.max_iter * params.max_reorder / params.report_epoch));
+  if (params.report_epoch > 0)
+    {
+      objective_val.resize(1000 + (no_projections * params.max_iter * params.max_reorder / params.report_epoch));
+    }
 
   init_nc(nc, nclasses, y);
-  MatrixXb filtered(n,noClasses);
-  filtered.setZero(n,noClasses);
+
+  //keep track of which classes have been elimninated for a particular example
+  boolmatrix filtered(n,noClasses);
+  /* vector<bool> *filtered = new vector<bool>[n]; */
+  /* for (size_t i=0; i<n ; i++) */
+  /*   { */
+  /*     filtered[i]=vector<bool>(noClasses, false); */
+  /*   } */
+  //MatrixXb filtered(n,noClasses);  
+  //filtered.setZero(n,noClasses);
   VectorXd difference(d);
   long int total_constraints = n*noClasses - (1-params.remove_class_constraints)*nc.sum();
+  size_t no_filtered=0;
 
   for(int projection_dim=0; projection_dim < no_projections; projection_dim++)
     {
@@ -389,10 +421,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,lambda,w.size(),x);
       t = 1;
+
       // staring optimization
       for (int iter = 0; iter < params.max_reorder && order_changed == 1; iter++)
 	{
-	  snprintf(iter_str,30, "Iteration %d > ",iter+1);
+	  if (t%10000)
+	    {
+	      snprintf(iter_str,30, "Iteration %d > ",iter+1);
+	      print_progress(iter_str, t, params.max_iter);
+	    }
 
 	  // init the optimization specific parameters
 	  std::copy(class_order.begin(),class_order.end(), prev_class_order.begin());
@@ -408,9 +445,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		  eta_t = params.min_eta;
 		}
 	      
-	      if( params.report_epoch && ((t-2) % params.report_epoch == 0) )
+	      if( params.report_epoch && params.report_epoch > 0 && (t % params.report_epoch == 0) )
 		{
-		  print_progress(iter_str, t, params.max_iter);
 		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, nclasses, l, u, sorted_class, filtered, params.ml_wt_by_nclasses, params.ml_wt_class_by_nclasses, lambda, C1, C2); // save the objective value
 		  if(PRINT_O)
 		    {
@@ -437,12 +473,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      
 
 	      // first compute all the projections so that we can update w directly
-
 	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
 		{
 		  if(batch_size < n)
 		    {
-		      i = ((int) rand()) % n;
+		      i = ((size_t) rand()) % n;
 		    }
 		  else
 		    {
@@ -456,7 +491,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      // now we can update w directly
 	      // update for the reglarizer
 	      w.scale(1.0-lambda*eta_t);
-	      
+
 	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
 		{		
 		  tmp = proj.coeff(idx);
@@ -477,59 +512,71 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		  if (params.ml_wt_class_by_nclasses)
 		    {
 		      ml_wt_class = 1/nclasses[i];
-		    }		    
+		    }		
+		  class_weight = ml_wt_class * C1;
+		  other_weight = ml_wt * C2;
+    
 		  left_classes = 0; //number of classes to the left of the current one
 		  right_classes = nclasses[i]; //number of classes to the right of the current one
 		  for (sc = 0; sc < noClasses; sc++)		    
 		    {
 		      // traverse the classes in order of their desired ranks
 		      cp = sorted_class[sc]; 
-		      if (!filtered.coeff(i,cp)) 
+		      // if (!(filtered[i][cp])) 
+		      if (!(filtered.get_val(i,cp))) 
 			{
 			  if (!y.coeff(i,cp))
 			    {
 			      // if example i does not have class cp 
-			      if (left_classes && hinge_loss(-tmp + l.coeff(cp)) > 0) // I3 Condition
+			      //if (left_classes && hinge_loss(l.coeff(cp) - tmp) > 0) // I3 Condition
+			      if (left_classes && (1 - l.coeff(cp) - tmp) > 0) // I3 Condition
 				{
-				  if(PRINT_I)
+				  #ifdef PRINTI
 				    {
 				      cout << "I3 : " << idx << ", " << i << endl;
 				    }
-				  multiplier += ml_wt*left_classes*C2;
-				  l_gradient.coeffRef(cp) -= ml_wt*left_classes*C2;
+                                   #endif
+				  multiplier += other_weight*left_classes;
+				  l_gradient.coeffRef(cp) -= other_weight*left_classes;
 				}
 			      
-			      if (right_classes && hinge_loss(tmp - u.coeff(cp)) > 0) //  I4 Condition
+			      //if (right_classes && hinge_loss(tmp - u.coeff(cp)) > 0) //  I4 Condition
+			      if (right_classes && (1 - tmp - u.coeff(cp)) > 0) //  I4 Condition
 				{
-				  if(PRINT_I)
+				  #ifdef PRINTI
 				    {
 				      cout << "I4 : " << idx << ", " << i<< endl;
 				    }
-				  multiplier -= ml_wt*right_classes*C2;
-				  u_gradient.coeffRef(cp) += ml_wt*right_classes*C2;
+				  #endif
+				  multiplier -= other_weight*right_classes;
+				  u_gradient.coeffRef(cp) += other_weight*right_classes;
 				}
 			    } // end if example does not have class cp
 			  else
 			    {
 			      //this example has class cp
-			      if (hinge_loss(tmp - l.coeff(cp)) > 0)// I1 Condition
+			      //if (hinge_loss(tmp - l.coeff(cp)) > 0)// I1 Condition
+			      if ((1 - tmp - l.coeff(cp)) > 0)// I1 Condition
 				{
-				  if(PRINT_I)
+				  #ifdef PRINTI
 				    {
 				      cout << "I1 : " << idx << ", " << i<< endl;
 				    }
-				  multiplier -= ml_wt_class*C1;
-				  l_gradient.coeffRef(cp) += ml_wt_class*C1;
+				  #endif
+				  multiplier -= class_weight;
+				  l_gradient.coeffRef(cp) += class_weight;
 				} // end if
 			      
-			      if (hinge_loss(-tmp + u.coeff(cp)) > 0)//  I2 Condition
+			      //if (hinge_loss(-tmp + u.coeff(cp)) > 0)//  I2 Condition
+			      if ((1 - tmp + u.coeff(cp)) > 0)//  I2 Condition
 				{
-				  if(PRINT_I)
+				  #ifdef PRINTI
 				    {
 				      cout << "I2 : " << idx << ", " << i << endl;
 				    }
-				  multiplier += ml_wt_class*C1;
-				  u_gradient.coeffRef(cp) -= ml_wt_class*C1;
+				  #endif
+				  multiplier += class_weight;
+				  u_gradient.coeffRef(cp) -= class_weight;
 				} // end if
 			      //update the left and right classes;
 			      left_classes++;
@@ -603,8 +650,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       
       if (params.remove_constraints)
 	{
-	  update_filtered(filtered, w, l, u, x, y, params.remove_class_constraints );
-	  long int no_filtered = (filtered.cast<int>()).sum();
+	  no_filtered = update_filtered(filtered, w, l, u, x, y, params.remove_class_constraints);
 	  cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
 	  // work on this. This is just a crude approximation.
 	  // now every example - class pair introduces nclass(example) constraints
@@ -623,11 +669,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     } // end for projection_dim
 	
   cout << "\n---------------\n" << endl;
-	
-  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, nclasses, l, u,
-						       sorted_class, filtered,
-						       params.ml_wt_by_nclasses, params.ml_wt_class_by_nclasses,
-						       lambda, C1, C2);// save the objective value
+  
+  if (params.report_epoch > 0)
+    {
+      objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, nclasses, l, u,
+							   sorted_class, filtered,
+							   params.ml_wt_by_nclasses, params.ml_wt_class_by_nclasses,
+							   lambda, C1, C2);// save the objective value
+    }
   objective_val.conservativeResize(obj_idx);
   
   #ifdef PROFILE
