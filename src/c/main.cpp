@@ -83,7 +83,8 @@ int main(int argc, char * argv[])
   param_struct params = set_default_params();
   params.C1 = 2000000;
   params.C2 = 100;
-  params.max_iter = 1e+2;
+  params.remove_constraints = true;
+  params.max_iter = 1e+3;
   params.report_epoch = -1; 
   
   VectorXd objective_val;
@@ -120,12 +121,12 @@ int main(int argc, char * argv[])
       
       SparseM smallx = x.topLeftCorner(100000,d);
 
-      DenseM w(d,1),l(k,1),u(k,1);
+      DenseM w(d,3),l(k,3),u(k,3);
       w.setRandom();
       l.setZero();
       u.setZero();
       
-      solve_optimization(w, l, u, objective_val, smallx, smally, 0, params);
+      solve_optimization(w, l, u, objective_val, x, y, 0, params);
     }
   else
     {

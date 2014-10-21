@@ -65,39 +65,42 @@ std::vector<int> get_classes(VectorXd& y)
 
 // *********************************
 // functions and structures for sorting and keeping indeces
+// Should implement bound checking but it is faster this way.
 struct IndexComparator
 {
-  VectorXd v;
-  IndexComparator(VectorXd& m)
+  const VectorXd* v;
+  IndexComparator(const VectorXd* m)
   {
     v = m;
   }
   bool operator()(int i, int j)
   {
-    return (v(i) < v(j));
+    return (v->coeff(i) < v->coeff(j));
   }
 };
 
-void sort_index(VectorXd& m, std::vector<int>& cranks)
+void sort_index(const VectorXd& m, std::vector<int>& cranks)
 {
   for (int i = 0; i < m.size(); i++)
     {
       cranks[i] = i;
     }
-  IndexComparator cmp(m);
+  IndexComparator cmp(&m);
   std::sort(cranks.begin(), cranks.end(), cmp);
 
 }
 
 // *********************************
 // Ranks the classes to build the switches
-void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, VectorXd& l, VectorXd& u)
+void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const VectorXd& sortkey, std::vector<double>& sortedLU, const VectorXd& l, const VectorXd& u)
 {
-  VectorXd m = ((u + l) * .5);
-  sort_index(m, indices);
-  for (int i = 0; i < m.size(); i++)
+  sort_index(sortkey, indices);
+  sortedLU.resize(0);
+  for (int i = 0; i < sortkey.size(); i++)
     {
       cranks[indices[i]] = i;
+      sortedLU.push_back(l.coeff(indices[i]));
+      sortedLU.push_back(u.coeff(indices[i]));
     }
 }
 

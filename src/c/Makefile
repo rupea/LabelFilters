@@ -1,5 +1,5 @@
 CXX ?= g++
-CPPFLAGS ?= -g -O3
+CPPFLAGS ?= -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone
@@ -7,7 +7,7 @@ OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/includ
 
 LDFLAGS ?=
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -g -O2 -DPROFILE -I$(PROFILEDIR)/include 
+PROFILE_CPPFLAGS = -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include 
 PROFILE_LDFLAGS = -L$(PROFILEDIR)/lib -lprofiler
 
 all: main
