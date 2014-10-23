@@ -1,5 +1,6 @@
 CXX ?= g++
-CPPFLAGS ?= -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG
+BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
+CPPFLAGS ?= -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone
@@ -7,7 +8,7 @@ OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/includ
 
 LDFLAGS ?=
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include 
+PROFILE_CPPFLAGS = -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = -L$(PROFILEDIR)/lib -lprofiler
 
 all: main
@@ -15,8 +16,8 @@ all: main
 profile: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" main
 
-main: main.o find_w.o printing.o EigenOctave.o boolmatrix.o
-	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o main main.o boolmatrix.o EigenOctave.o find_w.o printing.o 
+main: main.o find_w.o printing.o EigenOctave.o
+	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o main main.o EigenOctave.o find_w.o printing.o 
 
 .cpp.o:
 	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<

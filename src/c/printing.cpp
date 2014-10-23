@@ -21,10 +21,10 @@ void print_progress(string s, int t, int max_t)
       str = str + "==";
     }
   
-  int c = 60;
+  int c = 1000;
   char buff[c];
   sprintf(buff,
-	  " > (%d\%) @%d                                                 ",
+	  " > (%d\%) @%d                     ",
 	  percent, t);
   str = str + buff;
   

@@ -83,7 +83,7 @@ int main(int argc, char * argv[])
   param_struct params = set_default_params();
   params.C1 = 2000000;
   params.C2 = 100;
-  params.remove_constraints = true;
+  params.remove_constraints = false;
   params.max_iter = 1e+3;
   params.report_epoch = -1; 
   
@@ -121,7 +121,7 @@ int main(int argc, char * argv[])
       
       SparseM smallx = x.topLeftCorner(100000,d);
 
-      DenseM w(d,3),l(k,3),u(k,3);
+      DenseM w(d,1),l(k,1),u(k,1);
       w.setRandom();
       l.setZero();
       u.setZero();
