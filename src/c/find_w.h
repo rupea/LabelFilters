@@ -617,8 +617,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			{
 			  // while example is not of class cp
 			  cp = sorted_class[sc]; 			  
-			  //			  if (no_filtered == 0 || !(filtered.get(i,cp))) 
-			  if (!(filtered.get(i,cp))) 
+			  if (no_filtered == 0 || !(filtered.get(i,cp))) 
 			    {			      
 			      if (left_classes && ((1 - *sortedLU_iter + tmp) > 0)) // I3 Condition w*x > l(cp) - 1
 				{
@@ -659,8 +658,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			{
 			  // example has class cp
 			  cp = sorted_class[sc]; 			  
-			  //if (no_filtered == 0 || !(filtered.get(i,cp))) 
-			  if (!(filtered.get(i,cp))) 
+			  if (no_filtered == 0 || !(filtered.get(i,cp))) 
 			    {			      
 			      if ((1 - tmp + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
 				{
