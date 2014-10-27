@@ -47,6 +47,11 @@ DEFUN_DLD (oct_find_w, args, nargout,
 		"Interface to find_w; optimizes the objective to find w")
 {
 
+#ifdef _OPENMP
+  Eigen::initParallel();
+  cout << "initialized Eigen parallel"<<endl;
+#endif  
+
   int nargin = args.length();
   if (nargin == 0)
     {

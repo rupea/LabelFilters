@@ -1,14 +1,15 @@
 CXX ?= g++
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
-CPPFLAGS ?= -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
+OPENMP ?= -fopenmp
+CPPFLAGS ?= -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
-OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v
+OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
 
 LDFLAGS ?=
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -g -O3 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+PROFILE_CPPFLAGS = -g -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = -L$(PROFILEDIR)/lib -lprofiler
 
 all: main

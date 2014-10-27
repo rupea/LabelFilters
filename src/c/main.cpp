@@ -53,6 +53,11 @@ using namespace std;
 int main(int argc, char * argv[])
 {
 
+#ifdef _OPENMP
+  Eigen::initParallel();
+  cout << "initialized Eigen parallel"<<endl;
+#endif
+
   srand (42782);
  
   octave_value_list args; 
@@ -80,12 +85,6 @@ int main(int argc, char * argv[])
   //   exit (-1);
   // } 
 
-  param_struct params = set_default_params();
-  params.C1 = 2000000;
-  params.C2 = 100;
-  params.remove_constraints = false;
-  params.max_iter = 1e+3;
-  params.report_epoch = -1; 
   
   VectorXd objective_val;
   SparseMb y;
@@ -104,6 +103,15 @@ int main(int argc, char * argv[])
       y = labelVec2Mat(yVec);
     }
 
+
+  param_struct params = set_default_params();
+  params.C2 = 100;
+  params.C1 = y.cols() * 5 * params.C2;
+  params.remove_constraints = true;
+  params.max_iter = 1e+5;
+  params.report_epoch = 1e+3; 
+  
+
   smally = y.topLeftCorner(100000,y.cols());
 
 
@@ -121,7 +129,7 @@ int main(int argc, char * argv[])
       
       SparseM smallx = x.topLeftCorner(100000,d);
 
-      DenseM w(d,1),l(k,1),u(k,1);
+      DenseM w(d,5),l(k,5),u(k,5);
       w.setRandom();
       l.setZero();
       u.setZero();
@@ -137,7 +145,7 @@ int main(int argc, char * argv[])
       size_t d = x.cols();
       size_t k = y.cols();
       
-      DenseM w(d,1),l(k,1),u(k,1);
+      DenseM w(d,5),l(k,5),u(k,5);
       w.setRandom();
       l.setZero();
       u.setZero();

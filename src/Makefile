@@ -1,8 +1,9 @@
 CXX ?= g++
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
+OPENMP ?= -fopenmp
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
-OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v
-OCTAVE_CFLAGS ?= -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave -DNDEBUG -DEIGEN_NO_DEBUG  -I$(BOOSTDIR)
+OCTAVE_MEX ?= env CXXFLAGS=-fopenmp LDFLAGS=-fopenmp CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
+OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave -DNDEBUG -DEIGEN_NO_DEBUG  -I$(BOOSTDIR)
 LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2/octave -I..
 
 export

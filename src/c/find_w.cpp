@@ -92,18 +92,32 @@ void sort_index(const VectorXd& m, std::vector<int>& cranks)
 
 // *********************************
 // Ranks the classes to build the switches
-void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const VectorXd& sortkey, std::vector<double>& sortedLU, const VectorXd& l, const VectorXd& u)
+void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const VectorXd& sortkey, VectorXd& sortedLU, const VectorXd& l, const VectorXd& u)
 {
   sort_index(sortkey, indices);
-  sortedLU.resize(0);
   for (int i = 0; i < sortkey.size(); i++)
     {
       cranks[indices[i]] = i;
-      sortedLU.push_back(l.coeff(indices[i]));
-      sortedLU.push_back(u.coeff(indices[i]));
+      sortedLU.coeffRef(2*i) = l.coeff(indices[i]);
+      sortedLU.coeffRef(2*i+1) = u.coeff(indices[i]);
     }
 }
 
+// **********************************************
+// get l and u in the original class order
+
+void get_lu (VectorXd& l, VectorXd& u, const vector<int>& sorted_class, const VectorXd& sortedLU)
+{
+  vector<int>::const_iterator sorted_class_iter;
+  const double* sortedLU_iter;
+  int cp;
+  for (sorted_class_iter = sorted_class.begin(),sortedLU_iter=sortedLU.data(); sorted_class_iter != sorted_class.end(); sorted_class_iter++)
+    {
+      cp = *sorted_class_iter;
+      l.coeffRef(cp) = *(sortedLU_iter++);
+      u.coeffRef(cp) = *(sortedLU_iter++);
+    }      
+}
 
 // *******************************
 // Get the number of exampls in each class
@@ -162,6 +176,303 @@ SparseMb labelVec2Mat (const VectorXd& yVec)
   return y;
 }
 
+// ***********************************************
+// calculate the multipliers (for the w gradient update)
+// and the gradients for l and u updates 
+// on a subset of classes and instances
+
+void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient, 
+			size_t idx_start, size_t idx_end, 
+			int sc_start, int sc_end,
+			const VectorXd& proj, const VectorXsz& index,
+			const SparseMb& y, const VectorXi& nclasses, 
+			int maxclasses, 
+			const vector<int>& sorted_class,
+			const vector<int>& class_order, 
+			const VectorXd& sortedLU,
+			const boolmatrix& filtered,
+			double C1, double C2,
+			const param_struct& params )
+{  
+  int sc, cp;
+  int noClasses = y.cols();
+  size_t idx, i;
+  size_t no_filtered = filtered.count();
+  double ml_wt = 1.0;
+  double ml_wt_class = 1.0;
+  double class_weight, other_weight, left_update, right_update;
+  double tmp;
+  vector<int> classes;
+  vector<int>::iterator class_iter;
+  int left_classes, right_classes;
+  double *multipliers_iter, *sortedLU_gradient_iter;
+  const double *sortedLU_iter;
+
+  // initialize the multiplier and sortedLU_gradient arrays
+  multipliers.setZero(idx_end-idx_start);
+  sortedLU_gradient.setZero(2*(sc_end-sc_start));
+  classes.reserve(maxclasses+1);
+  
+  multipliers_iter = multipliers.data();
+  for (idx = idx_start; idx < idx_end; idx++)// batch_size will be equal to n for complete GD
+    {		
+      tmp = proj.coeff(idx);
+      i=index.coeff(idx);
+
+      #ifdef PRINTI
+      cout<< idx << "    " <<  i << endl;
+      #endif
+
+      if (params.ml_wt_by_nclasses)
+	{
+	  ml_wt = 1/nclasses[i];
+	}
+      if (params.ml_wt_class_by_nclasses)
+	{
+	  ml_wt_class = 1/nclasses[i];
+	}		
+      class_weight = ml_wt_class * C1;
+      other_weight = ml_wt * C2;
+      
+      left_classes = 0; //number of classes to the left of the current one
+      left_update = 0; // left_classes * other_weight
+      right_classes = nclasses[i]; //number of classes to the right of the current one		  
+      right_update = other_weight * right_classes;
+      
+      // calling y.coeff is expensive so get the classes here
+      classes.resize(0);
+      for (SparseMb::InnerIterator it(y,i); it; ++it)
+	{
+	  if (it.value())
+	    {
+	      int c = class_order[it.col()];
+	      if ( c < sc_start ) 
+		{
+		  left_classes++;
+		  left_update += other_weight;
+		  right_classes--;
+		  right_update -= other_weight;
+		}
+	      else if (c < sc_end)
+		{
+		  classes.push_back(c);
+		}
+	    }
+	}
+      classes.push_back(sc_end); // this will always be the last 
+      std::sort(classes.begin(),classes.end());
+
+      sc=sc_start;
+      class_iter = classes.begin();
+      sortedLU_iter = sortedLU.data() + 2*sc_start;
+      sortedLU_gradient_iter = sortedLU_gradient.data();
+      while (sc < sc_end)
+	{
+	  while(sc < *class_iter)
+	    {
+	      // while example is not of class cp
+	      cp = sorted_class[sc]; 			  
+	      if (no_filtered == 0 || !(filtered.get(i,cp))) 
+		{			      
+		  if (left_classes && ((1 - *sortedLU_iter + tmp) > 0)) // I3 Condition w*x > l(cp) - 1
+		    {
+#ifdef PRINTI
+		      {
+			cout << "I3 : " << idx << ", " << i << endl;
+		      }
+#endif
+		      *multipliers_iter += left_update; // use the iterator for multiplier too ?
+		      *sortedLU_gradient_iter += left_update;
+		      //l_gradient.coeffRef(cp) -= other_weight*left_classes;
+		    }
+		  sortedLU_iter++;
+		  sortedLU_gradient_iter++;
+		  //if (right_classes && hinge_loss(tmp - u.coeff(cp)) > 0) //  I4 Condition
+		  if (right_classes && ((1 - tmp + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
+		    {
+#ifdef PRINTI
+		      {
+			cout << "I4 : " << idx << ", " << i<< endl;
+		      }
+#endif
+		      *multipliers_iter -= right_update;
+		      *sortedLU_gradient_iter -= right_update;
+				  //u_gradient.coeffRef(cp) += other_weight*right_classes;
+		    }
+		  sortedLU_iter++;			      
+		  sortedLU_gradient_iter++;
+		}
+	      else
+		{
+		  sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+		  sortedLU_gradient_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+		}
+	      sc++;
+	    }
+	  if (sc < sc_end) // test if we are done
+	    {
+	      // example has class cp
+	      cp = sorted_class[sc]; 			  
+	      if (!params.remove_class_constraints || no_filtered == 0 || !(filtered.get(i,cp))) 
+		{			      
+		  if ((1 - tmp + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
+		    {
+#ifdef PRINTI
+		      {
+			cout << "I1 : " << idx << ", " << i<< endl;
+		      }
+#endif
+		      *multipliers_iter -= class_weight;
+		      *sortedLU_gradient_iter -= class_weight;
+		      //l_gradient.coeffRef(cp) += class_weight;
+		    } // end if
+		  
+		  //if (hinge_loss(-tmp + u.coeff(cp)) > 0)//  I2 Condition
+		  sortedLU_gradient_iter++;
+		  
+		  if ((1 + tmp - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
+		    {
+#ifdef PRINTI
+		      {
+			cout << "I2 : " << idx << ", " << i << endl;
+		      }
+#endif
+		      *multipliers_iter += class_weight;
+		      *sortedLU_gradient_iter += class_weight;
+		      //u_gradient.coeffRef(cp) -= class_weight;
+		    } // end if			      
+		  sortedLU_gradient_iter++;
+		}
+	      else
+		{
+		  sortedLU_iter +=2; //the iterator needs to be incremeted even if the class is filtered
+		  sortedLU_gradient_iter +=2; //the iterator needs to be incremeted even if the class is filtered
+		}
+	      //update the left and right classes;
+	      left_classes++;
+	      left_update += other_weight;
+	      right_classes--;
+	      right_update -= other_weight;
+	      ++class_iter;
+	      sc++;
+	    }
+	} // while(sc<noClasses)
+      multipliers_iter++;
+    }  // end for idx (second)
+}
+
+
+// ***********************************
+// calculates the objective value for a subset of instances and classes
+
+double compute_objective(const VectorXd& projection, const SparseMb& y,
+			 const VectorXi& nclasses, int maxclasses,
+			 size_t i_start, size_t i_end, 
+			 int sc_start, int sc_end, 
+			 const vector<int>& sorted_class, 
+			 const vector<int>& class_order,
+			 const VectorXd& sortedLU,
+			 const boolmatrix& filtered,
+			 double C1, double C2,
+			 const param_struct& params) 
+{
+  double tmp;
+  int sc, cp;
+  int left_classes, right_classes;
+  double left_weight, right_weight, other_weight, class_weight;
+  std::vector<int> classes;
+  std::vector<int>::iterator class_iter;
+  size_t no_filtered = filtered.count();
+  classes.reserve(maxclasses+1);
+  double obj_val = 0.0;
+  double ml_wt = 1.0;
+  double ml_wt_class = 1.0;
+  const double* sortedLU_iter;
+  for (size_t i = i_start; i < i_end; i++)
+    {
+      tmp = projection.coeff(i);
+     
+      if (params.ml_wt_by_nclasses)
+	{
+	  ml_wt = 1/nclasses[i];
+	}
+      if (params.ml_wt_class_by_nclasses)
+	{
+	  ml_wt_class = 1/nclasses[i];
+	}
+      class_weight = ml_wt_class * C1;
+      other_weight = ml_wt * C2;
+      
+      left_classes = 0; //number of classes to the left of the current one
+      left_weight = 0; // left_classes * other_weight
+      right_classes = nclasses[i]; //number of classes to the right of the current one
+      right_weight = other_weight * right_classes;
+      
+      // calling y.coeff is expensive so get the classes here
+      classes.resize(0);
+      for (SparseMb::InnerIterator it(y,i); it; ++it)
+	{
+	  int c = class_order[it.col()];
+	  if ( c < sc_start ) 
+	    {
+	      left_classes++;
+	      left_weight += other_weight;
+	      right_classes--;
+	      right_weight -= other_weight;
+	    }
+	  else if (c < sc_end)
+	    {
+	      classes.push_back(c);
+	    }
+	}
+      classes.push_back(sc_end); // this will always be the last
+      std::sort(classes.begin(),classes.end());
+      
+      sc=sc_start;
+      class_iter = classes.begin();
+      sortedLU_iter = sortedLU.data() + 2*sc_start;
+      while (sc < sc_end)
+	{
+	  while(sc < *class_iter)
+	    {
+	      // while example is not of class cp
+	      cp = sorted_class[sc];
+	      if (no_filtered == 0 || !(filtered.get(i,cp)))
+		{
+		  obj_val += left_classes?left_weight * hinge_loss(*sortedLU_iter - tmp):0
+		    + right_classes?right_weight * hinge_loss(tmp - *(sortedLU_iter+1)):0;
+
+		  //obj_val += left_classes?left_weight * hinge_loss(l.coeff(cp) - tmp):0
+		  //+ right_classes?right_weight * hinge_loss(tmp - u.coeff(cp)):0;
+		}
+	      sc++;
+	      sortedLU_iter+=2;
+	    }
+	  if (sc < sc_end) // test if we are done
+	    {
+	      // example has class cp
+	      cp = sorted_class[sc];
+	      if (!params.remove_class_constraints || no_filtered == 0 || !(filtered.get(i,cp)))
+		{
+		  obj_val += (class_weight
+			      * (hinge_loss(tmp - *sortedLU_iter)
+				 + hinge_loss(*(sortedLU_iter+1) - tmp)));
+		  //obj_val += (class_weight
+		  //* (hinge_loss(tmp - l.coeff(cp))
+		  //+ hinge_loss(u.coeff(cp) - tmp)));		  
+		}
+	      left_classes++;
+	      right_classes--;
+	      left_weight += other_weight;
+	      right_weight -= other_weight;
+	      ++class_iter;
+	      sc++;
+	      sortedLU_iter+=2;
+	    }
+	}
+    }
+  return obj_val;
+}
 
 
 // ********************************
