@@ -18,6 +18,7 @@ typedef struct
   bool rank_by_mean; // whether to rank the classes by the mean of the projected examples or by the midpoint of its [l,u] interval (i.e. (u-l)/2).
   bool ml_wt_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering other class contraints. 
   bool ml_wt_class_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering its class contraints. 
+  int num_threads; // number of threads to run on (negative number for max threads)
   int seed; // the random seed. if 0 then ititialized from time.
 } param_struct;
 
@@ -40,6 +41,7 @@ inline param_struct set_default_params()
   def.rank_by_mean = true;
   def.ml_wt_by_nclasses = false;
   def.ml_wt_class_by_nclasses = false;
+  def.num_threads = -1; 
   def.seed=0;
   return def;
 }

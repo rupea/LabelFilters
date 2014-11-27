@@ -9,13 +9,17 @@ class boolmatrix
 {
  public:
   boolmatrix(size_t n, size_t m);
+  ~boolmatrix();
   bool get(size_t i, size_t j) const;
   //set the i,j bit to true; more eficient
   void set(size_t i, size_t j);
-  // set teh i,j bit to val
+  // set the i,j bit to val
   void set(size_t i, size_t j, bool val);
+  void findFirst(size_t& i, size_t& j) const;
+  void findNext(size_t& i, size_t& j) const;  
   size_t count() const {return _count;}
-
+  size_t rows() const {return _nrow;}
+  size_t cols() const {return _ncol;}
  private:
   dynamic_bitset<>* _data;
   size_t _nrow;
@@ -29,6 +33,11 @@ inline boolmatrix::boolmatrix(size_t n, size_t m)
   _nrow = n;
   _ncol = m;
   _count = 0;
+}
+
+inline boolmatrix::~boolmatrix()
+{
+  delete(_data);
 }
 
 inline bool boolmatrix::get(size_t i, size_t j) const
@@ -47,4 +56,18 @@ inline void boolmatrix::set(size_t i, size_t j, bool val)
   _count += val?(!prev):-(prev);
 }
 
+inline void boolmatrix::findFirst(size_t& i, size_t& j) const
+{
+  size_t pos = _data->find_first();
+  i = pos/_ncol;
+  j = pos%_ncol;
+}
+
+inline void boolmatrix::findNext(size_t& i, size_t& j) const
+{
+  size_t pos = _data->find_next(i*_ncol + j);
+  i = pos/_ncol;
+  j = pos%_ncol;
+}
+  
 #endif // __BOOLMATRIX_H

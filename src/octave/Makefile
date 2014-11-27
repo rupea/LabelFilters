@@ -19,14 +19,23 @@ OCTFILES = oct_find_w.oct oct_normalize_data.oct
 
 all: octave
 
-octave: oct_find_w oct_normalize_data
+octave: oct_find_w oct_project_data oct_predict_data oct_evaluate_model oct_normalize_data
 
 
-oct_find_w: find_w.o EigenOctave.o printing.o oct_find_w.o
-	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) oct_find_w.o find_w.o EigenOctave.o printing.o 
+oct_find_w: find_w.o EigenOctave.o printing.o oct_find_w.o utils.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) oct_find_w.o find_w.o EigenOctave.o printing.o utils.o
 
 oct_normalize_data: normalize.o EigenOctave.o printing.o oct_normalize_data.o
 	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) oct_normalize_data.o normalize.o EigenOctave.o printing.o 
+
+oct_project_data: oct_project_data.o EigenOctave.o filter.o utils.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) oct_project_data.o EigenOctave.o filter.o utils.o 
+
+oct_predict_data: oct_predict_data.o EigenOctave.o filter.o utils.o PredictionSet.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) oct_predict_data.o EigenOctave.o filter.o utils.o PredictionSet.o
+
+oct_evaluate_model: oct_evaluate_model.o EigenOctave.o filter.o utils.o PredictionSet.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) oct_evaluate_model.o EigenOctave.o filter.o utils.o PredictionSet.o
 
 oct_calc_objective: find_w.o EigenOctave.o oct_calc_objective.o
 	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS)  oct_calc_objective.o find_w.o EigenOctave.o

@@ -9,6 +9,7 @@
 #include "parameter.h"
 #include "boolmatrix.h"
 #include "mutexlock.h" 
+#include "utils.h"
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
@@ -265,22 +266,11 @@ double calculate_objective_hinge(const WeightVector& w,
 /*   return d; */
 /* } */
 
-// ************************************
-// Convert a label vector to a label matrix
-// Assumes that the label vector contains labels from 1 to noClasses
-
-SparseMb labelVec2Mat (const VectorXd& yVec);
-
 
 // ********************************
 // Get unique values in the class vector -> classes
 std::vector<int> get_classes(VectorXd y);
 
-// *********************************
-// functions and structures for sorting and keeping indeces
-struct IndexComparator;
-
-void sort_index(VectorXd& m, std::vector<int>& cranks);
 
 // *********************************
 // Ranks the classes to build the switches
@@ -527,8 +517,10 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   int total_chunks = omp_get_max_threads();
   int sc_chunks = total_chunks;// floor(sqrt(total_chunks));
   int idx_chunks = total_chunks/sc_chunks;
-  sc_chunks = total_chunks/idx_chunks;
-  omp_set_num_threads(total_chunks);
+  if (params.num_threads < 1)
+    omp_set_num_threads(omp_get_max_threads());
+  else
+    omp_set_num_threads(params.num_threads);
 #else
   int idx_chunks = 1;
   int sc_chunks = 1;
@@ -837,50 +829,3 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 }
 
 #endif
-
-
-#if 0
-start parallel 
-
-initialize master_multipliers, master_sortedLU_gradient 
-
-figure out idx_start idx_end sc_start sc_end for each thread 
-
-execute compute_gradient , get multipliers, sortedLU_gradient for that thread
-
-  critical region (only for variables that share the same idx range) -- maybe can be implemented via locks but it might not matter
-  update shared variable master_multipliers
-  master_multipliers.segment(idx_start, idx_end-idx_start) += multipliers.segment(idx_start,idx_end-idx_start) // or just use multipliers
-  flush master_multipliers
-end critical
-
-  critical region (only for threads that share the same sc range) -- maybe can be implemented via locks but it might not matter 
-  update shared variable master_sortedLU_gradient 
-  master_sortedLU_gradient(sc_start, sc_end-sc_start) += sortedLU_gradient.segment(sc_start, sc_end-sc_start) // or just sortedLU_gradient
-  flush master_sortedLU_gradient
-
-  can not update sortedLU directly because other threads might still use the old value
-  unless we have nested parallel loops (split by sc then split by idx) in which case we are guaranteed that all threads taht work on the same sc range are done 
-end critical
-
-end parallel 
-
-if !openmp 
-  compute_gradient(0,batch_size, 0, noClasses, master_multipliers, master_sortedLU_gradient)
-end 
-
-// update sortedLU
-// could be done in parallel but might not need the complication
-update sortedLU += master_sortedLU_gradient
-
-  //update w
-  // can't be done in parallel without some work because it modifies the same w
-for idx = 0 to batch_size-1
-  if (master_multipliers.coeffRef(idx) != 0)
-    {
-      w.gradient_update(x,i,master_multipliers.coeffRef(idx));
-    }
-  }
-
-
-#endif 

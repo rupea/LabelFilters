@@ -12,8 +12,7 @@ DEFUN_DLD (oct_normalize_data, args, nargout,
   {
     octave_value_list retval(1);
 
-    FloatNDArray optArray = args(1).float_array_value();
-    DenseM opt = toEigenMat(optArray);
+    DenseM opt = toEigenMat<DenseM>(args(1).float_array_value());
 
     if(args(0).is_sparse_type())
       {
@@ -36,7 +35,7 @@ DEFUN_DLD (oct_normalize_data, args, nargout,
     else
       {
         FloatNDArray xArray = args(0).float_array_value();
-        DenseM x = toEigenMat(xArray);
+        DenseM x = toEigenMat<DenseM>(xArray);
         normalize_col(x);
         retval(0) = toMatrix(x);
       }

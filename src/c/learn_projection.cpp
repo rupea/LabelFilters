@@ -15,6 +15,7 @@
 #include "typedefs.h"
 #include "WeightVector.h"
 #include "printing.h"
+#include "utils.h"
 #include "find_w.h"
 #include "EigenOctave.h"
 
@@ -140,7 +141,7 @@ int main(int argc, char * argv[])
     {
       // Dense data
       FloatNDArray xArray = x_tr.float_array_value();
-      DenseM x = toEigenMat(xArray);
+      DenseM x = toEigenMat<DenseM>(xArray);
 
       size_t d = x.cols();
       size_t k = y.cols();

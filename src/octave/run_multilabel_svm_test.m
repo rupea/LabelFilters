@@ -4,8 +4,7 @@ function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = ..
 			      proj_exp_name, ...
 			      ova_params, proj_params, restarts, resume, ...
 			      cluster_params, ...
-			      full_svm = 1, projected_svm=0, onlycorrect=0, ...
-			      relearn_projection = 1)
+			      full_svm = 1, projected_svm=0 )
   
 
   probs = 0;
@@ -54,7 +53,7 @@ function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = ..
 	evaluate_ova_model(y_te, [], out, ova_params.threshold);
   endif
 
-  if (onlycorrect && full_svm && size(y_tr,2)==1)
+  if (proj_params.onlycorrect && full_svm && size(y_tr,2)==1)
     %% onlycorrect makes sense only if the full_svm has been trained
  
     %% currently the ability to eliminate the mistakes from the training of 
@@ -78,10 +77,11 @@ function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = ..
   fprintf(1,"performing the projection ... \n");
 
   %% learn the projection
+  relearned_projections = false;
   projectionfile=sprintf("results/wlu_%s_C1_%d_C2_%d.mat",proj_exp_name, proj_params.C1, proj_params.C2);      
-  if ( relearn_projection || ~exist(projectionfile, "file") )
-    [w, min_proj, max_proj] = learn_projections(x_tr_proj, y_tr_proj, proj_params, proj_exp_name, restarts, resume, proj_params.plot_objval);
-    relearn_prjection = true;
+  if ( proj_params.relearn_projection || ~exist(projectionfile, "file") )
+    [w, min_proj, max_proj] = learn_projections(proj_params, x_tr_proj, y_tr_proj);
+    relearned_prjection = true;
   else
     load(projectionfile,"w","max_proj","min_proj");
   end
@@ -129,7 +129,7 @@ function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = ..
   end
   
   if (projected_svm)      
-    force_retrain = relearn_projection; #if the projection has changed then retrain the svms
+    force_retrain = relearned_projection; #if the projection has changed then retrain the svms
     [out_proj_svm] = perform_parallel_projected_multilabel_svm(exp_name, ova_params.C, noClasses, datadir, force_retrain, projectionfile, sprintf("C1_%g_C2_%g",proj_params.C1,proj_params.C2), ova_params.threshold, ova_params.solver, ova_params.solverparam, cluster_params.n_batches, cluster_params.min_batch_size);
 
     [class_acc_proj_svm acc_proj_svm class_F1_proj_svm F1_proj_svm top5_proj_svm top10_proj_svm] = ...
