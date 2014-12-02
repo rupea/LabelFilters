@@ -8,7 +8,22 @@ using Eigen::VectorXi;
 using namespace std;
 
 
-DenseM toEigenMat(const FloatNDArray& data);
+void toEigenMat(DenseColMf& m, const Cell& data);
+
+// templetize this and maybe use MatrixBase to avoid code dupplication
+template<typename DenseMatType>
+DenseMatType toEigenMat(const FloatNDArray& data) {
+  dim_vector datasize = data.dims();
+
+  DenseMatType m(datasize(0), datasize(1));
+  for (int i = 0; i < datasize(0); i++) {
+    for (int j = 0; j < datasize(1); j++) {
+      m(i, j) = data(i, j);
+    }
+  }
+  return m;
+}
+
 
 template<typename Scalar>
 Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data) {
@@ -41,9 +56,9 @@ Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& da
 
 
 
-VectorXd toEigenVec(FloatNDArray data);
+VectorXd toEigenVec(const FloatNDArray& data);
 
-Matrix toMatrix(DenseM data);
+Matrix toMatrix(const DenseM& data);
 
 SparseMatrix toMatrix(const SparseM &mat);
 

@@ -33,6 +33,11 @@ void print_usage()
   cout << "           rank_by_mean - whether to rank the classes by the mean of the projected examples or by the midpoint of its [l,u] interval (i.e. (u-l)/2). [true]" << endl;
   cout << "           ml_wt_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering other class contraints. [false]" << endl;
   cout << "           ml_wt_class_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering its class contraints.[false]" << endl;
+  cout << "           seed - random seed. 0 for time dependent seed. [0]" << endl;
+  cout << "           num_threads - number of threads to run on. Negative value for architecture dependent maximum number of threads. [-1]" << endl;
+  cout << "           finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [0]" << endl;
+  cout << "           no_finite_diff_tests - number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. [1]" << endl;
+  cout << "           finite_diff_test_delta - the size of the finite difference. [1e-2]" << endl;
   cout << "     w_init - initial w vector" << endl;
   cout << "     l_init - initial lower bounds (optional)" << endl;
   cout << "     u_init - initial upper bounds (optional)" << endl;
@@ -46,6 +51,11 @@ void print_usage()
 DEFUN_DLD (oct_find_w, args, nargout,
 		"Interface to find_w; optimizes the objective to find w")
 {
+
+#ifdef _OPENMP
+  Eigen::initParallel();
+  cout << "initialized Eigen parallel"<<endl;
+#endif  
 
   int nargin = args.length();
   if (nargin == 0)
@@ -135,6 +145,31 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	{
 	  params.ml_wt_class_by_nclasses=tmp.bool_value();
 	}
+      tmp = parameters.contents("seed");
+      if (tmp.is_defined())
+	{
+	  params.seed=tmp.int_value();
+	}
+      tmp = parameters.contents("num_threads");
+      if (tmp.is_defined())
+	{
+	  params.num_threads=tmp.int_value();
+	}
+      tmp = parameters.contents("finite_diff_test_epoch");
+      if (tmp.is_defined())
+	{
+	  params.finite_diff_test_epoch=tmp.int_value();
+	}
+      tmp = parameters.contents("no_finite_diff_tests");
+      if (tmp.is_defined())
+	{
+	  params.no_finite_diff_tests=tmp.int_value();
+	}
+      tmp = parameters.contents("finite_diff_test_delta");
+      if (tmp.is_defined())
+	{
+	  params.finite_diff_test_delta=tmp.double_value();
+	}
     }
 
   FloatNDArray wArray = args(3).float_array_value(); // The initial weights
@@ -150,12 +185,12 @@ DEFUN_DLD (oct_find_w, args, nargout,
 
   cout << "copying data starts ...\n";
 
-  DenseM w = toEigenMat(wArray);
+  DenseM w = toEigenMat<DenseM>(wArray);
   DenseM l,u;
   if (resumed)
     {
-      l = toEigenMat(lArray);
-      u = toEigenMat(uArray);
+      l = toEigenMat<DenseM>(lArray);
+      u = toEigenMat<DenseM>(uArray);
     }
   
   VectorXd objective_vals;
@@ -188,9 +223,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
   if(args(0).is_sparse_type())
     {
       // Sparse data
-      Sparse<double> xArray = args(0).sparse_matrix_value();
-
-      SparseM x = toEigenMat(xArray);
+      SparseM x = toEigenMat(args(0).sparse_matrix_value());
 
       solve_optimization(w, l, u, objective_vals, x, y, resumed, params);
     }
@@ -198,7 +231,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
     {
       // Dense data
       FloatNDArray xArray = args(0).float_array_value();
-      DenseM x = toEigenMat(xArray);
+      DenseM x = toEigenMat<DenseM>(xArray);
 
       solve_optimization(w, l, u, objective_vals, x, y, resumed, params);
     }

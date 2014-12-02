@@ -1,4 +1,4 @@
-function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(exp_name, C,noClasses, exp_dir, force_retrain, projection_file = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10)
+function [out_final, out_final_tr, svm_models_final] = perform_parallel_projected_multilabel_svm(exp_name, C,noClasses, exp_dir, force_retrain, projection_file = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10)
 
   if ~exist('exp_dir', 'var'),
     exp_dir = '';
@@ -39,16 +39,14 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
   
   if exist(filename,"file") && ~force_retrain
     retrain = false;
-    if (nargout == 2 )
-      load(filename, "out_final", "out_final_tr");
-      if ( ~exist("out_final_tr","var") )
-	clear(out_final);
-	retrain = true;
-      end
-    else
-      load(filename, "-v6", "out_final");
+    load(filename, "out_final", "out_final_tr", "svm_models_final");
+    if ( ~exist("out_final_tr","var") )
+      retrain = true;
     end
     if ( ~exist("out_final","var") )
+      retrain = true
+    end
+    if ( ~exist("svm_models_final", "var") )
       retrain = true
     end
   end
@@ -101,8 +99,8 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
     
     all_exist = false;
     while ~all_exist
+        all_exist = true;            
         for lbl_idx = 1 : length(label_range) - 1
-            all_exist = true;            
             if ~exist( cur_file(lbl_idx) )
                 all_exist = false;
                 break;
@@ -111,11 +109,7 @@ function [out_final, out_final_tr] = perform_parallel_projected_multilabel_svm(e
         pause(10);
     end    
     
-    if (nargout == 2)      
-      [out_final, out_final_tr] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file);    
-    else
-      [out_final] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file);    
-    end
+    [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file);    
     
     disp('all done ...');                  
 

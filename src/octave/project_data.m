@@ -2,12 +2,15 @@ function [projected_labels, projected] = project_data(x, noLabels,w, min_proj, m
   
   %%project the instances and eliminate the filtered out classes
   projected = x * w;
-  
+  display(size(projected))
   projected_labels = cell(size(projected,2),1);
   for j = 1:size(projected,2)
     in_range_lbls = logical(sparse(size(projected,1),noLabels));
+    display(j)
     for c = 1:noLabels
       in_range_lbls(:,c) = projected(:,j)>= min_proj(c,j) & projected(:,j) <= max_proj(c,j);
+      display(c)
+      display(nnz(in_range_lbls(:,c)))
     end
     if (j>1)
       in_range_lbls = projected_labels{j-1} & in_range_lbls;

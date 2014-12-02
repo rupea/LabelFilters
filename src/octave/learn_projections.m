@@ -1,25 +1,71 @@
-function [w, min_proj, max_proj, obj_val] = \
-      project_tests(x,tr_label, parameters, exp_name,restarts, resume, plot_objval= true)
+function [w, min_proj, max_proj, obj_val] = ...
+      learn_projections(parameters, x_tr=[],y_tr=[])
   
   %% if we have multiple restarts we can't resume the computation
-  if (restarts != 1)
-    resume = 0
+  if (!parameters.relearn_projection && exist(parameters.projection_file,"file"))
+    load(parameters.projection_file, "w", "min_proj", "max_proj", "obj_val");
+    return;
+  endif
+
+  if (parameters.restarts != 1)
+    parameters.resume = 0
   end
-  
-  
-  C1 = parameters.C1;
-  C2 = parameters.C2;
+
+  if (isempty(x_tr))
+    if (!isfield(parameters, "data_file") || !exist(parameters.data_file,"file"))
+      error("Learn_projections is called without a dataset and without a data file");
+    endif
+    load(parameters.data_file, "x_tr","y_tr")
+  endif
+
+  if (parameters.onlycorrect)
+    if (!isfield(parameters, "ova_preds_file") || !exist(parameters.ova_preds_file,"file"))
+      warning("Learn_projections is called with onlycorrect byt without without a ova predictions file. Disabling onlycorrect.");
+      parameters.onlycorrect=false;
+    endif
+    if (size(y_tr,2)!=1)
+      %% currently the ability to eliminate the mistakes from the training of 
+      %% the projection only works for the multiclass problems.
+      warning("Learn_projections: onlycorrect is not implemented with multilabl problems. Disabling onlycorrect");
+      parameters.onlycorrect=false;
+    endif
+  endif
+
+  if (parameters.onlycorrect)
+    load(parameters.ova_preds_file, "out_tr");
+    noties = (out_tr + 1e-9 * randn(size(out_tr)))';
+    [ignore,pred] = max(noties, [],1);
+    if size(y_tr,1) == size(pred,1)
+      correct=(y_tr == pred);
+    else
+      correct=(y_tr == (pred'));
+    endif
+    x_tr_proj=x_tr(correct,:);
+    y_tr_proj=y_tr(correct);
+  else    
+    x_tr_proj=x_tr;
+    y_tr_proj=y_tr;  
+  endif
+
+  if (parameters.C1multiplier)
+    if (size(y_tr_proj,2) == 1)
+      noClasses = max(y_tr_proj);
+    else
+      noClasses = size(y_tr_proj,2);
+    endif
+    parameters.C1 = parameters.C2*parameters.C1*noClasses;
+  endif  
   
   disp("-----------------------------------------------------");
   best_obj=Inf;
-  for r=1:restarts
+  for r=1:parameters.restarts
     disp(sprintf("restart %d\n", r));
-    if ( resume && exist(sprintf("results/wlu_%s_C1_%d_C2_%d.mat",exp_name, C1, C2), "file"))
-      load(sprintf("results/wlu_%s_C1_%d_C2_%d.mat",exp_name, C1, C2))
-      [w,min_proj,max_proj, obj_val]=oct_find_w(x,tr_label,parameters,w,min_proj, max_proj);
+    if ( parameters.resume && exist(parameters.projection_file, "file"))
+      load(parameters.projection_file)
+      [w,min_proj,max_proj, obj_val]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj);
     else 
-      w=init_w(2, x, tr_label, size(x,2), parameters.no_projections);
-      [w,min_proj,max_proj, obj_val]=oct_find_w(x,tr_label,parameters,w);
+      w=init_w(2, x_tr_proj, y_tr_proj, size(x_tr_proj,2), parameters.no_projections);
+      [w,min_proj,max_proj, obj_val]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w);
     endif    
     
     if (isempty(obj_val) || (best_obj > obj_val(length(obj_val))))
@@ -41,13 +87,14 @@ function [w, min_proj, max_proj, obj_val] = \
   obj_val = best_obj_val;
   
   %% plot the objective value vs iteration 	   
-  if (plot_objval)
+  if (parameters.plot_objval)
     figure("visible","off");
     plot(obj_val, "b", "LineWidth", 3);
     
-    print("-dpdf", sprintf("objective_plot_%s_C1_%d_C2_%d.pdf", exp_name,C1, C2))
+    print("-dpdf", parameters.obj_plot_file)
   end
   
-  save(sprintf("results/wlu_%s_C1_%d_C2_%d.mat",exp_name, C1, C2), "w", "min_proj", "max_proj" , "obj_val");
-  
+  save(parameters.projection_file, "w", "min_proj", "max_proj" , "obj_val");
+
+  return; 
 end
