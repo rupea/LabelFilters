@@ -129,6 +129,7 @@ void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
     }
 }
 
+  
 
 // ***********************************************
 // calculate the multipliers (for the w gradient update)
@@ -315,6 +316,108 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
     }  // end for idx (second)
 }
 
+// *****************************************
+// Function to calculate the objective for one example
+// this almost duplicates the function compute_objective
+// the two functions should be unified
+// this functions is easier to use with the finite_diff_test because
+// it does not require the entire projection vector 
+double calculate_ex_objective_hinge(size_t i, double proj, const SparseMb& y,
+				    const VectorXi& nclasses,
+				    const std::vector<int>& sorted_class,
+				    const std::vector<int>& class_order,
+				    const VectorXd& sortedLU,
+				    const boolmatrix& filtered,
+				    bool none_filtered,
+				    double C1, double C2,
+				    const param_struct& params)
+{
+  double obj_val=0;
+  int noClasses = y.cols();
+  double ml_wt,ml_wt_class;
+  double class_weight, other_weight;
+  std::vector<int> classes;
+  std::vector<int>::iterator class_iter;
+  classes.reserve(nclasses.coeff(i)+1);
+  ml_wt = 1.0;
+  ml_wt_class = 1.0;
+  int left_classes, right_classes;
+  double left_weight, right_weight;
+  int sc,cp;
+  const double* sortedLU_iter;
+  
+  if (params.ml_wt_by_nclasses)
+    {
+      ml_wt = 1/nclasses[i];
+    }
+  if (params.ml_wt_class_by_nclasses)
+    {
+      ml_wt_class = 1/nclasses[i];
+    }
+  class_weight = ml_wt_class * C1;
+  other_weight = ml_wt * C2;
+  
+  left_classes = 0; //number of classes to the left of the current one
+  left_weight = 0; // left_classes * other_weight
+  right_classes = nclasses[i]; //number of classes to the right of the current one
+  right_weight = other_weight * right_classes;
+  
+  // calling y.coeff is expensive so get the classes here
+  classes.resize(0);
+  for (SparseMb::InnerIterator it(y,i); it; ++it)
+    {
+      if (it.value())
+	{
+	  classes.push_back(class_order[it.col()]);
+	}
+    }
+  classes.push_back(noClasses); // this will always be the last
+  std::sort(classes.begin(),classes.end());
+  
+  sc=0;
+  class_iter = classes.begin();
+  sortedLU_iter=sortedLU.data();
+  while (sc < noClasses)
+    {
+      while(sc < *class_iter)
+	{
+	  // while example is not of class cp
+	  cp = sorted_class[sc];
+	  if (none_filtered || !(filtered.get(i,cp)))
+	    {
+	      obj_val += left_classes?left_weight * hinge_loss(*sortedLU_iter - proj):0
+		+ right_classes?right_weight * hinge_loss(proj - *(sortedLU_iter+1)):0;
+	      
+	      //obj_val += left_classes?left_weight * hinge_loss(l.coeff(cp) - proj):0
+	      //+ right_classes?right_weight * hinge_loss(proj - u.coeff(cp)):0;
+	    }
+	  sc++;
+	  sortedLU_iter+=2;
+	}
+      if (sc < noClasses) // test if we are done
+	{
+	  // example has class cp
+	  cp = sorted_class[sc];
+	  if (none_filtered == 1 || !(filtered.get(i,cp)))
+	    {
+	      obj_val += (class_weight
+			  * (hinge_loss(proj - *sortedLU_iter)
+			     + hinge_loss(*(sortedLU_iter+1) - proj)));
+	      //obj_val += (class_weight
+	      //* (hinge_loss(proj - l.coeff(cp))
+	      //+ hinge_loss(u.coeff(cp) - proj)));		  		  
+	    }
+	  left_classes++;
+	  right_classes--;
+	  left_weight += other_weight;
+	  right_weight -= other_weight;
+	  ++class_iter;
+	  sc++;
+	  sortedLU_iter+=2;
+	}
+    }
+  return obj_val;
+}
 
 // ***********************************
 // calculates the objective value for a subset of instances and classes

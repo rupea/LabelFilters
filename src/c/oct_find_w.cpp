@@ -35,6 +35,9 @@ void print_usage()
   cout << "           ml_wt_class_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering its class contraints.[false]" << endl;
   cout << "           seed - random seed. 0 for time dependent seed. [0]" << endl;
   cout << "           num_threads - number of threads to run on. Negative value for architecture dependent maximum number of threads. [-1]" << endl;
+  cout << "           finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [0]" << endl;
+  cout << "           no_finite_diff_tests - number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. [1]" << endl;
+  cout << "           finite_diff_test_delta - the size of the finite difference. [1e-2]" << endl;
   cout << "     w_init - initial w vector" << endl;
   cout << "     l_init - initial lower bounds (optional)" << endl;
   cout << "     u_init - initial upper bounds (optional)" << endl;
@@ -151,6 +154,21 @@ DEFUN_DLD (oct_find_w, args, nargout,
       if (tmp.is_defined())
 	{
 	  params.num_threads=tmp.int_value();
+	}
+      tmp = parameters.contents("finite_diff_test_epoch");
+      if (tmp.is_defined())
+	{
+	  params.finite_diff_test_epoch=tmp.int_value();
+	}
+      tmp = parameters.contents("no_finite_diff_tests");
+      if (tmp.is_defined())
+	{
+	  params.no_finite_diff_tests=tmp.int_value();
+	}
+      tmp = parameters.contents("finite_diff_test_delta");
+      if (tmp.is_defined())
+	{
+	  params.finite_diff_test_delta=tmp.double_value();
 	}
     }
 

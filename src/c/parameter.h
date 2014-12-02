@@ -5,12 +5,12 @@ typedef struct
 {
   double C1;   // the penalty for an example being outside it's class bounary
   double C2;   // the penalty for an example being inside other class' boundary
-  unsigned long max_iter;  // maximum number of iterations
+  size_t max_iter;  // maximum number of iterations
   int batch_size; // size of the minibatch
   double eps; // not used
   double eta; // the initial learning rate. The leraning rate is eta/sqrt(t) where t is the number of iterations
   double min_eta; //the minimum value of the lerarning rate (i.e. lr will be max (eta/sqrt(t), min_eta)
-  unsigned long reorder_epoch; //number of iterations between class reorderings. 0 for no reordering of classes
+  size_t reorder_epoch; //number of iterations between class reorderings. 0 for no reordering of classes
   int max_reorder; // maxumum number of class reorderings. Each reordering runs until convergence or for Max_Iter iterations and after each reordering the learning rate is reset
   long int report_epoch; //number of iterations between computation and report the objective value (can be expensive because obj is calculated on the entire training set). 0 for no reporting
   bool remove_constraints; // whether to remove the constraints for instances that fall outside the class boundaries in previous projections. 
@@ -20,6 +20,9 @@ typedef struct
   bool ml_wt_class_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering its class contraints. 
   int num_threads; // number of threads to run on (negative number for max threads)
   int seed; // the random seed. if 0 then ititialized from time.
+  size_t finite_diff_test_epoch; // number of iterations between testing the gradient with finite differences. 0 for no testing.
+  size_t no_finite_diff_tests; // number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. 
+  double finite_diff_test_delta; // the size of the finite differene
 } param_struct;
 
 
@@ -42,7 +45,10 @@ inline param_struct set_default_params()
   def.ml_wt_by_nclasses = false;
   def.ml_wt_class_by_nclasses = false;
   def.num_threads = -1; 
-  def.seed=0;
+  def.seed=0; 
+  def.finite_diff_test_epoch=0;
+  def.no_finite_diff_tests=1;
+  def.finite_diff_test_delta=1e-2;
   return def;
 }
   

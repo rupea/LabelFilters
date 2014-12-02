@@ -33,119 +33,21 @@ inline double hinge_loss(double val)
 void toVector(std::vector<int>& to, const VectorXd& from);
 
 
-// *******************************
-// Calculates the objective function
-#if 1
-template<typename EigenType>
-double calculate_objective_hinge(const WeightVector& w,
-				 const EigenType& x, const SparseMb& y,
-				 const VectorXi& nclasses,
-                                 const std::vector<int>& sorted_class,
-                                 const std::vector<int>& class_order,
-				 const VectorXd& sortedLU,
-                                 //const vector<bool> *filtered,
-				 const boolmatrix& filtered,
-				 bool ml_wt_by_nclasses, bool ml_wt_class_by_nclasses,
-				 double lambda, double C1, double C2,
-				 const param_struct& params)
-{
-  const int noClasses = y.cols();
-  double obj_val = 0;
-  VectorXd projection;
-  size_t no_filtered = filtered.count();
-  int maxclasses = nclasses.maxCoeff();
-  w.project(projection,x);
-#pragma omp parallel for default(shared) reduction(+:obj_val)
-  for (size_t i = 0; i < x.rows(); i++)
-    {
-      double ml_wt,ml_wt_class;
-      double tmp, class_weight, other_weight;
-      std::vector<int> classes;
-      std::vector<int>::iterator class_iter;
-      classes.reserve(maxclasses+1);
-      ml_wt = 1.0;
-      ml_wt_class = 1.0;
-      int left_classes, right_classes;
-      double left_weight, right_weight;
-      int sc,cp;
-      const double* sortedLU_iter;
-      tmp = projection.coeff(i);
-     
-      if (ml_wt_by_nclasses)
-	{
-	  ml_wt = 1/nclasses[i];
-	}
-      if (ml_wt_class_by_nclasses)
-	{
-	  ml_wt_class = 1/nclasses[i];
-	}
-      class_weight = ml_wt_class * C1;
-      other_weight = ml_wt * C2;
-      
-      left_classes = 0; //number of classes to the left of the current one
-      left_weight = 0; // left_classes * other_weight
-      right_classes = nclasses[i]; //number of classes to the right of the current one
-      right_weight = other_weight * right_classes;
-      
-      // calling y.coeff is expensive so get the classes here
-      classes.resize(0);
-      for (SparseMb::InnerIterator it(y,i); it; ++it)
-	{
-	  if (it.value())
-	    {
-	      classes.push_back(class_order[it.col()]);
-	    }
-	}
-      classes.push_back(noClasses); // this will always be the last
-      std::sort(classes.begin(),classes.end());
-      
-      sc=0;
-      class_iter = classes.begin();
-      sortedLU_iter=sortedLU.data();
-      while (sc < noClasses)
-	{
-	  while(sc < *class_iter)
-	    {
-	      // while example is not of class cp
-	      cp = sorted_class[sc];
-	      if (no_filtered == 0 || !(filtered.get(i,cp)))
-		{
-		  obj_val += left_classes?left_weight * hinge_loss(*sortedLU_iter - tmp):0
-		    + right_classes?right_weight * hinge_loss(tmp - *(sortedLU_iter+1)):0;
-
-		  //obj_val += left_classes?left_weight * hinge_loss(l.coeff(cp) - tmp):0
-		  //+ right_classes?right_weight * hinge_loss(tmp - u.coeff(cp)):0;
-		}
-	      sc++;
-	      sortedLU_iter+=2;
-	    }
-	  if (sc < noClasses) // test if we are done
-	    {
-	      // example has class cp
-	      cp = sorted_class[sc];
-	      if (no_filtered == 0 || !(filtered.get(i,cp)))
-		{
-		  obj_val += (class_weight
-			      * (hinge_loss(tmp - *sortedLU_iter)
-				 + hinge_loss(*(sortedLU_iter+1) - tmp)));
-		  //obj_val += (class_weight
-		  //* (hinge_loss(tmp - l.coeff(cp))
-		  //+ hinge_loss(u.coeff(cp) - tmp)));		  		  
-		}
-	      left_classes++;
-	      right_classes--;
-	      left_weight += other_weight;
-	      right_weight -= other_weight;
-	      ++class_iter;
-	      sc++;
-	      sortedLU_iter+=2;
-	    }
-	}
-    }
-  obj_val += .5 * lambda * w.norm() * w.norm();
-  return obj_val;
-}
-#endif 
+// *****************************************
+// Function to calculate the objective for one example
+// this almost duplicates the function compute_objective
+// the two functions should be unified
+// this functions is easier to use with the finite_diff_test because
+// it does not require the entire projection vector 
+double calculate_ex_objective_hinge(size_t i, double proj, const SparseMb& y,
+				    const VectorXi& nclasses,
+				    const std::vector<int>& sorted_class,
+				    const std::vector<int>& class_order,
+				    const VectorXd& sortedLU,
+				    const boolmatrix& filtered,
+				    bool any_filtered,
+				    double C1, double C2,
+				    const param_struct& params);
 
 // ***********************************
 // calculates the objective value for a subset of instances and classes
@@ -162,6 +64,126 @@ double compute_objective(const VectorXd& projection, const SparseMb& y,
 			 const param_struct& params);
 
 
+// *******************************
+// Calculates the objective function
+#if 1
+template<typename EigenType>
+double calculate_objective_hinge(const WeightVector& w,
+				 const EigenType& x, const SparseMb& y,
+				 const VectorXi& nclasses,
+                                 const std::vector<int>& sorted_class,
+                                 const std::vector<int>& class_order,
+				 const VectorXd& sortedLU,
+				 const boolmatrix& filtered,
+				 double lambda, double C1, double C2,
+				 const param_struct& params)
+{
+  const int noClasses = y.cols();
+  double obj_val = 0;
+  VectorXd projection;
+  //  size_t no_filtered = filtered.count();
+  bool any_filtered = filtered.count()==0;
+  int maxclasses = nclasses.maxCoeff();
+  w.project(projection,x);
+#pragma omp parallel for default(shared) reduction(+:obj_val)
+  for (size_t i = 0; i < x.rows(); i++)
+    {
+      obj_val += calculate_ex_objective_hinge(i, projection.coeff(i),  y,
+					      nclasses,
+					      sorted_class,class_order,
+					      sortedLU, filtered,
+					      any_filtered,
+					      C1, C2, params);      
+      /* double ml_wt,ml_wt_class; */
+      /* double tmp, class_weight, other_weight; */
+      /* std::vector<int> classes; */
+      /* std::vector<int>::iterator class_iter; */
+      /* classes.reserve(maxclasses+1); */
+      /* ml_wt = 1.0; */
+      /* ml_wt_class = 1.0; */
+      /* int left_classes, right_classes; */
+      /* double left_weight, right_weight; */
+      /* int sc,cp; */
+      /* const double* sortedLU_iter; */
+      /* tmp = projection.coeff(i); */
+     
+      /* if (params.ml_wt_by_nclasses) */
+      /* 	{ */
+      /* 	  ml_wt = 1/nclasses[i]; */
+      /* 	} */
+      /* if (params.ml_wt_class_by_nclasses) */
+      /* 	{ */
+      /* 	  ml_wt_class = 1/nclasses[i]; */
+      /* 	} */
+      /* class_weight = ml_wt_class * C1; */
+      /* other_weight = ml_wt * C2; */
+      
+      /* left_classes = 0; //number of classes to the left of the current one */
+      /* left_weight = 0; // left_classes * other_weight */
+      /* right_classes = nclasses[i]; //number of classes to the right of the current one */
+      /* right_weight = other_weight * right_classes; */
+      
+      /* // calling y.coeff is expensive so get the classes here */
+      /* classes.resize(0); */
+      /* for (SparseMb::InnerIterator it(y,i); it; ++it) */
+      /* 	{ */
+      /* 	  if (it.value()) */
+      /* 	    { */
+      /* 	      classes.push_back(class_order[it.col()]); */
+      /* 	    } */
+      /* 	} */
+      /* classes.push_back(noClasses); // this will always be the last */
+      /* std::sort(classes.begin(),classes.end()); */
+      
+      /* sc=0; */
+      /* class_iter = classes.begin(); */
+      /* sortedLU_iter=sortedLU.data(); */
+      /* while (sc < noClasses) */
+      /* 	{ */
+      /* 	  while(sc < *class_iter) */
+      /* 	    { */
+      /* 	      // while example is not of class cp */
+      /* 	      cp = sorted_class[sc]; */
+      /* 	      if (no_filtered == 0 || !(filtered.get(i,cp))) */
+      /* 		{ */
+      /* 		  obj_val += left_classes?left_weight * hinge_loss(*sortedLU_iter - tmp):0 */
+      /* 		    + right_classes?right_weight * hinge_loss(tmp - *(sortedLU_iter+1)):0; */
+
+      /* 		  //obj_val += left_classes?left_weight * hinge_loss(l.coeff(cp) - tmp):0 */
+      /* 		  //+ right_classes?right_weight * hinge_loss(tmp - u.coeff(cp)):0; */
+      /* 		} */
+      /* 	      sc++; */
+      /* 	      sortedLU_iter+=2; */
+      /* 	    } */
+      /* 	  if (sc < noClasses) // test if we are done */
+      /* 	    { */
+      /* 	      // example has class cp */
+      /* 	      cp = sorted_class[sc]; */
+      /* 	      if (no_filtered == 0 || !(filtered.get(i,cp))) */
+      /* 		{ */
+      /* 		  obj_val += (class_weight */
+      /* 			      * (hinge_loss(tmp - *sortedLU_iter) */
+      /* 				 + hinge_loss(*(sortedLU_iter+1) - tmp)));*/
+      /* 		  //obj_val += (class_weight */
+      /* 		  //\* (hinge_loss(tmp - l.coeff(cp)) */
+      /* 		  //+ hinge_loss(u.coeff(cp) - tmp)));		      */
+      /* 		} */
+      /* 	      left_classes++; */
+      /* 	      right_classes--; */
+      /* 	      left_weight += other_weight; */
+      /* 	      right_weight -= other_weight; */
+      /* 	      ++class_iter; */
+      /* 	      sc++; */
+      /* 	      sortedLU_iter+=2; */
+      /* 	    } */
+      /* 	} */
+    }
+  obj_val += .5 * lambda * w.norm() * w.norm();
+  return obj_val;
+}
+#endif 
+
+
 
 #if 0
 template<typename EigenType>
@@ -173,7 +195,6 @@ double calculate_objective_hinge(const WeightVector& w,
 				 const VectorXd& sortedLU,
                                  //const vector<bool> *filtered,
 				 const boolmatrix& filtered,
-				 bool ml_wt_by_nclasses, bool ml_wt_class_by_nclasses,
 				 double lambda, double C1, double C2,
 				 const param_struct& params)
 {
@@ -456,6 +477,74 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 			const param_struct& params );
 
 
+// ****************************************************
+// check the gradient calculation using finite differences
+
+template<typename EigenType>
+void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx, const SparseMb& y, const VectorXi& nclasses, int maxclasses, const vector<int>& sorted_class, const vector<int>& class_order, const VectorXd& sortedLU, const boolmatrix& filtered, double C1, double C2, const param_struct& params)
+{
+  double delta = params.finite_diff_test_delta;
+  VectorXd proj(1);
+  proj.coeffRef(0) = w.project_row(x,idx);
+  bool none_filtered = filtered.count()==0;
+  double obj = calculate_ex_objective_hinge(idx, proj.coeff(0), y, nclasses, sorted_class, class_order, sortedLU, filtered, none_filtered, C1, C2, params);
+
+  VectorXsz index(1);
+  index.coeffRef(0) = idx;
+  size_t idx_start = 0;
+  size_t idx_end = 1;
+  int sc_start = 0;
+  int sc_end = y.cols();
+  VectorXd multipliers;
+  VectorXd sortedLU_gradient;
+
+  compute_gradients(multipliers, sortedLU_gradient, 
+		    idx_start, idx_end, sc_start, sc_end,
+		    proj, index, y, nclasses, maxclasses,
+		    sorted_class, class_order, sortedLU,
+		    filtered, C1, C2, params);
+  
+  WeightVector w_new(w);
+  double xnorm = x.row(idx).norm();
+  double multsign;
+  if (multipliers.coeff(0) > 0)
+    multsign = 1.0;
+  if (multipliers.coeff(0) < 0)
+    multsign = -1.0;
+
+  w_new.gradient_update(x, idx, multsign*delta/xnorm);// divide delta by multipliers.coeff(0)*xnorm . the true gradient is multpliers.coeff(0)*x.
+
+  double obj_w_grad = calculate_ex_objective_hinge(idx, w_new.project_row(x,idx), y, nclasses, sorted_class, class_order, sortedLU, filtered, none_filtered, C1, C2, params);
+  double w_grad_error = fabs(obj_w_grad - obj + multsign*delta*multipliers.coeff(0)*xnorm);
+  
+  VectorXd sortedLU_new(sortedLU);
+  sortedLU_new += sortedLU_gradient * delta / sortedLU_gradient.norm();  // have some delta that is inversely proportional to the norm of the gradient 
+
+  double obj_LU_grad = calculate_ex_objective_hinge(idx, proj.coeff(0), y, nclasses, sorted_class, class_order, sortedLU_new, filtered, none_filtered, C1, C2, params);
+  double LU_grad_error = fabs(obj_LU_grad - obj + delta*sortedLU_gradient.norm());
+  
+  cerr << "w_grad_error:  " << w_grad_error << "   " << obj_w_grad - obj << "  " << obj_w_grad << "  " << obj << "  " << multsign*delta*multipliers.coeff(0)*xnorm << "   " << xnorm << "  " << idx << "   " << proj.coeff(0) << "  " << w_new.project_row(x,idx)  << "  ";
+      
+  for (SparseMb::InnerIterator it(y,idx); it; ++it)
+    {
+      int order = class_order[it.col()];
+      cerr << it.col() << ":" << it.value() << ":" << order << ":" <<sortedLU.coeff(2*order) + 1 << ":" << sortedLU.coeff(2*order+1) - 1  << "  ";
+    }
+  cerr << endl;
+  /* if (idx == 9022) */
+  /*   {						 */
+  /*     cerr << sortedLU.transpose() - VectorXd::Ones(sortedLU.size()).transpose() << endl; */
+  /*     cerr << sortedLU.transpose() +  VectorXd::Ones(sortedLU.size()).transpose() << endl; */
+  /*   } */
+  cerr << "LU_grad_error: " << LU_grad_error << "  " << obj_LU_grad - obj << "  " << "  " << obj_LU_grad << "  " << obj << "  " << delta*sortedLU_gradient.norm() << "  " << "  " << idx << "  " << proj.coeff(0) << "  ";
+  for (SparseMb::InnerIterator it(y,idx); it; ++it)
+    {
+      int order = class_order[it.col()];
+      cerr << it.col() << ":" << it.value() << ":" << order << ":" << sortedLU.coeff(2*order) + 1 << ":" << sortedLU.coeff(2*order+1) - 1  << " - " << sortedLU_new.coeff(2*order) + 1 << ":" << sortedLU_new.coeff(2*order+1) - 1  << "  ";
+    }
+  cerr << endl;
+}       
+
 
 // *********************************
 // Solve the optimization using the gradient decent on hinge loss
@@ -605,25 +694,25 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	    {
 	      t++;
 			    
-	      if (t % 1000 == 0)
+	      if (!params.report_epoch && t % 1000 == 0)
 		{
 		  snprintf(iter_str,30, "Iteration %d > ",iter+1);
 		  print_progress(iter_str, t, params.max_iter);
 		  fflush(stdout);
 		}
-	      // setting eta
-	      eta_t = params.eta / sqrt(t);
-	      if(eta_t < params.min_eta)
-		{
-		  eta_t = params.min_eta;
-		}
 	      
-	      if( params.report_epoch && params.report_epoch > 0 && (t % params.report_epoch == 0) )
+	      if ( params.finite_diff_test_epoch && (t % params.finite_diff_test_epoch == 0) ) 
 		{
-		  // get the current l and u in the original class order
-		  // could just pass sortedLU to calculate_objective
-		  //get_lu(l, u, sorted_class, sortedLU);		  
-		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, nclasses, sorted_class, class_order, sortedLU, filtered, params.ml_wt_by_nclasses, params.ml_wt_class_by_nclasses, lambda, C1, C2, params); // save the objective value
+		  for (size_t fdtest=0; fdtest<params.no_finite_diff_tests; fdtest++)
+		    {
+		      idx = ((size_t) rand()) % n;
+		      finite_diff_test(w, x, idx, y, nclasses, maxclasses, sorted_class, class_order, sortedLU, filtered, C1, C2, params);
+		    }
+		}
+
+	      if( params.report_epoch && (t % params.report_epoch == 0) )
+		{
+		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, nclasses, sorted_class, class_order, sortedLU, filtered, lambda, C1, C2, params); // save the objective value
 		  if(PRINT_O)
 		    {
 		      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
@@ -645,6 +734,17 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		      rank_classes(sorted_class, class_order, (l+u)*.5, sortedLU, l, u);// ranking classes			       
 		    }
 		}	     	      
+
+	      // look at the obj after reordering 
+	      if( params.report_epoch && (t % params.report_epoch == 0) )
+		{
+		  objective_val[obj_idx++] = calculate_objective_hinge(w, x, y, nclasses, sorted_class, class_order, sortedLU, filtered, lambda, C1, C2, params); // save the objective value
+		  if(PRINT_O)
+		    {
+		      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
+		    }
+		}
+
 
 	      // first compute all the projections so that we can update w directly
 	      for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
@@ -699,6 +799,13 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		      }
 #pragma omp taskwait 
 		  }
+	      
+	      // setting eta
+	      eta_t = params.eta / sqrt(t);
+	      if(eta_t < params.min_eta)
+		{
+		  eta_t = params.min_eta;
+		}
 	      
 	      //update w
 	      // update for the reglarizer
@@ -813,7 +920,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 							   sorted_class, class_order,
 							   sortedLU,
 							   filtered,
-							   params.ml_wt_by_nclasses, params.ml_wt_class_by_nclasses,
 							   lambda, C1, C2, params);// save the objective value
     }
   get_lu(l,u,sorted_class,sortedLU);

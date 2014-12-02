@@ -26,5 +26,8 @@ function [ proj_params ] = default_proj_params()
   proj_params.C1multiplier = false;
   proj_params.seed = 0;
   proj_params.num_threads = 0;
+  proj_params.finite_diff_test_epoch = 0;
+  proj_params.no_finite_diff_tests = 1000;
+  proj_params.finite_diff_test_delta = 1e-4;
   return;
 end
