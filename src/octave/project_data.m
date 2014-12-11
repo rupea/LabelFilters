@@ -9,8 +9,6 @@ function [projected_labels, projected] = project_data(x, noLabels,w, min_proj, m
     display(j)
     for c = 1:noLabels
       in_range_lbls(:,c) = projected(:,j)>= min_proj(c,j) & projected(:,j) <= max_proj(c,j);
-      display(c)
-      display(nnz(in_range_lbls(:,c)))
     end
     if (j>1)
       in_range_lbls = projected_labels{j-1} & in_range_lbls;

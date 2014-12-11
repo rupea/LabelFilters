@@ -31,23 +31,6 @@ void toVector(std::vector<int>& to, const VectorXd& from)
 }
 
 
-// *******************************
-// Calculates the objective function
-
-/********* template functions are implemented in the header
-template<typename EigenType>
-double calculate_objective_hinge(const VectorXd& w,
-				 const EigenType& x, const VectorXd& y,
-				 const VectorXd& l, const VectorXd& u, const std::vector<int>& class_order,
-				 double C1, double C2);
-
-template<typename EigenType>
-double calculate_objective_hinge(const VectorXd& w,
-				 const EigenType& x, const VectorXd& y,
-				 const VectorXd& l, const VectorXd& u, const VectorXd& class_order,
-                                 double C1, double C2);
-**********/
-
 // ********************************
 // Get unique values in the class vector -> classes
 
@@ -67,21 +50,19 @@ std::vector<int> get_classes(VectorXd& y)
 
 // *********************************
 // Ranks the classes to build the switches
-void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const VectorXd& sortkey, VectorXd& sortedLU, const VectorXd& l, const VectorXd& u)
+void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const VectorXd& sortkey)
 {
   sort_index(sortkey, indices);
   for (int i = 0; i < sortkey.size(); i++)
     {
       cranks[indices[i]] = i;
-      sortedLU.coeffRef(2*i) = l.coeff(indices[i]);
-      sortedLU.coeffRef(2*i+1) = u.coeff(indices[i]);
     }
 }
 
 // **********************************************
 // get l and u in the original class order
 
-void get_lu (VectorXd& l, VectorXd& u, const vector<int>& sorted_class, const VectorXd& sortedLU)
+void get_lu (VectorXd& l, VectorXd& u, const VectorXd& sortedLU, const vector<int>& sorted_class)
 {
   vector<int>::const_iterator sorted_class_iter;
   const double* sortedLU_iter;
@@ -92,6 +73,18 @@ void get_lu (VectorXd& l, VectorXd& u, const vector<int>& sorted_class, const Ve
       l.coeffRef(cp) = *(sortedLU_iter++);
       u.coeffRef(cp) = *(sortedLU_iter++);
     }      
+}
+
+// **********************************
+// sort l and u in the new class order
+
+void get_sortedLU(VectorXd& sortedLU, const VectorXd& l, const VectorXd& u, const vector<int>& sorted_class)
+{
+  for (int i = 0; i < sorted_class.size(); i++)
+    {
+      sortedLU.coeffRef(2*i) = l.coeff(sorted_class[i]);
+      sortedLU.coeffRef(2*i+1) = u.coeff(sorted_class[i]);
+    }
 }
 
 // *******************************
@@ -126,6 +119,42 @@ void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
 	      nclasses(it.row())++;
 	    }
 	}
+    }
+}
+
+//*****************************************
+// Update the filtered constraints
+
+void update_filtered(boolmatrix& filtered, const VectorXd& projection,  
+		     const VectorXd& l, const VectorXd& u, const SparseMb& y, 
+		     const bool filter_class)
+{
+  int noClasses = y.cols();			
+  int c;
+  for (size_t i = 0; i < projection.size(); i++)
+    {      
+      double proj = projection.coeff(i);
+      SparseMb::InnerIterator it(y,i);
+      while ( it && !it.value() ) ++it;
+      c=it?it.col():noClasses;
+      for (int cp = 0; cp < noClasses; cp++)
+	{
+	  if ( filter_class || cp != c )
+	    {
+	      bool val = (proj<l.coeff(cp))||(proj>u.coeff(cp))?true:false;
+	      if (val) 
+		{
+		  filtered.set(i,cp); 
+		}
+	      //no_filtered += filtered[i][cp] = filtered[i][cp] || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+	    }
+	  if ( cp == c )
+	    {
+	      ++it;
+	      while ( it && !it.value() ) ++it;      
+	      c=it?it.col():noClasses;
+	    }
+	} 
     }
 }
 
@@ -530,6 +559,172 @@ double compute_objective(const VectorXd& projection, const SparseMb& y,
     }
   return obj_val;
 }
+
+// *******************************
+// Calculates the objective function
+#if 1
+double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
+				 const VectorXi& nclasses,
+                                 const std::vector<int>& sorted_class,
+                                 const std::vector<int>& class_order,
+				 const double norm, const VectorXd& sortedLU,
+				 const boolmatrix& filtered,
+				 double lambda, double C1, double C2,
+				 const param_struct& params)
+{
+  const int noClasses = y.cols();
+  double obj_val = 0;
+  //  size_t no_filtered = filtered.count();
+  bool any_filtered = filtered.count()==0;
+  int maxclasses = nclasses.maxCoeff();
+#pragma omp parallel for default(shared) reduction(+:obj_val)
+  for (size_t i = 0; i < projection.size(); i++)
+    {
+      obj_val += calculate_ex_objective_hinge(i, projection.coeff(i),  y,
+					      nclasses,
+					      sorted_class,class_order,
+					      sortedLU, filtered,
+					      any_filtered,
+					      C1, C2, params);      
+    }
+  obj_val += .5 * lambda * norm * norm;
+  return obj_val;
+}
+#endif 
+
+
+
+#if 0
+double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
+				 const VectorXi& nclasses,
+                                 const std::vector<int>& sorted_class,
+                                 const std::vector<int>& class_order,
+				 const double norm, const VectorXd& sortedLU,
+                                 //const vector<bool> *filtered,
+				 const boolmatrix& filtered,
+				 double lambda, double C1, double C2,
+				 const param_struct& params)
+{
+  const int noClasses = y.cols();
+  double obj_val;
+  int maxclasses = nclasses.maxCoeff(); 
+  // how to split the work for gradient update iterations
+
+#ifdef _OPENMP
+  int total_chunks = 32*10;//omp_get_max_threads();
+  int sc_chunks = total_chunks;// floor(sqrt(total_chunks));
+  int i_chunks = total_chunks/sc_chunks;
+  sc_chunks = total_chunks/i_chunks;
+  //  omp_set_num_threads(total_chunks);
+#else
+  int i_chunks = 1;
+  int sc_chunks = 1;
+#endif 
+  int sc_chunk_size = noClasses/sc_chunks;
+  int sc_remaining = noClasses % sc_chunks;
+  size_t i_chunk_size = projection.size()/i_chunks;
+  size_t i_remaining = projection.size() % i_chunks;
+
+# pragma omp parallel for  default(shared) collapse(2) reduction(+:obj_val)
+  for (int i_chunk = 0; i_chunk < i_chunks; i_chunk++)
+    for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
+      {
+	// the first chunks will have an extra iteration 
+	size_t i_start = i_chunk*i_chunk_size + (i_chunk<i_remaining?i_chunk:i_remaining);
+	size_t i_incr = i_chunk_size + (i_chunk<i_remaining);
+	// the first chunks will have an extra iteration 
+	int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+	int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+	obj_val += compute_objective(projection,y,nclasses,maxclasses,
+				     i_start, i_start+i_incr,
+				     sc_start, sc_start+sc_incr,
+				     sorted_class,class_order,
+				     sortedLU,
+				     filtered,
+				     C1,C2,params);
+      }
+  obj_val += .5 * lambda * norm*norm;
+  return obj_val;
+}
+
+#endif
+
+double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
+				 const VectorXi& nclasses,
+                                 const std::vector<int>& sorted_class, 
+                                 const std::vector<int>& class_order, 
+				 const double norm, const VectorXd& sortedLU, 
+				 double lambda, double C1, double C2,
+				 const param_struct& params)
+{
+  const int noClasses = y.cols();
+  const int n = projection.size();
+  boolmatrix filtered(n,noClasses);
+  return calculate_objective_hinge(projection, y,nclasses, sorted_class, class_order, norm, sortedLU, filtered, lambda, C1, C2, params);
+}
+
+
+
+
+// ************************
+// function to set eta for each iteration
+
+double set_eta(const param_struct& params, size_t t, double lambda)
+{
+  double eta_t;
+  switch (params.eta_type)
+    {
+    case ETA_CONST: 
+      eta_t = params.eta;
+    case ETA_SQRT:
+      eta_t = params.eta/sqrt(t);
+      break;
+    case ETA_LIN:
+      eta_t = params.eta/(1+params.eta*lambda*t);
+      break;
+    case ETA_3_4:
+      eta_t = params.eta/pow(1+params.eta*lambda*t,3*1.0/4);
+      break;
+    default:
+      cerr << "Eta option unknown" << endl;
+      exit(-3);
+    }
+  if (eta_t < params.min_eta)
+    {
+      eta_t = params.min_eta;
+    }
+  return eta_t;
+}
+
+// ********************************
+// Compute the means of the classes of the projected data
+void proj_means(VectorXd& means, const VectorXi& nc,
+		const VectorXd& projection, const SparseMb& y)
+{
+  int noClasses = y.cols();
+  size_t n = projection.size();
+  size_t c,i,k;
+  means.resize(noClasses);
+  means.setZero();
+  for (i=0;i<n;i++)
+    {
+      for (SparseMb::InnerIterator it(y,i);it;++it)
+	{	
+	  if (it.value())
+	    {
+	      c = it.col();
+	      means(c)+=projection.coeff(i);
+	    }
+	}
+    }
+  for (k = 0; k < noClasses; k++)
+    {
+      means(k) /= nc(k);
+    }
+}
+
+
+
 
 
 // ********************************
