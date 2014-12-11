@@ -13,19 +13,28 @@ using Eigen::VectorXd;
 
 void print_usage()
 {
-  cout << "oct_find_w x y parameters w_init [l_init u_init]" << endl;
+  cout << "[w l u obj_val w_last l_last u_last] = oct_find_w x y parameters w_init [l_init u_init]" << endl;
+  cout << "     w - the projection matrix" << endl;
+  cout << "     l - the lower bound for each class and each projection" << endl;
+  cout << "     u - the upper bound for each class and each projection" << endl;
+  cout << "     obj_val - vector of objective values during learning" << endl;
+  cout << "     w_last - the projection matrix from the last iteration (same as w if averaging is turned off)" << endl;
+  cout << "     l_last - the lower bound for each class and each projection (same as l if averaging is turned off)" << endl;
+  cout << "     u_last - the upper bound for each class and each projection (same as u if averaging is turned off)" << endl;
   cout << "     x - the data matrix (can be dense or sparse)" << endl;
   cout << "     y - a label vector (same size as rows(x)) with elements 1:noClasses" << endl;
   cout << "          or a sparse label matrix of size rows(x)*noClasses with y(i,j)=1 meaning that example i has class j" << endl;
   cout << "     parameters - a structure with the optimization parameters. If a parmeter is not present the default is used" << endl;
   cout << "         Parameters (structure field names) are:" << endl;
+  cout << "           no_projections - nubmer of projections to be learned [5]" << endl;
   cout << "           C1 - the penalty for an example being outside it's class bounary" << endl;
   cout << "           C2 - the penalty for an example being inside other class' boundary" << endl;
   cout << "           max_iter - maximum number of iterations [1e^6]" << endl;
   cout << "           batch_size - size of the minibatch [1000]" << endl;
+  cout << "           avg_epoch - iteration to start averaging at. 0 for no averaging [0]" << endl;
   cout << "           reorder_epoch - number of iterations between class reorderings. 0 for no reordering of classes [1000]" << endl;
-  cout << "           max_reorder - maxumum number of class reorderings. Each reordering runs until convergence or for Max_Iter iterations and after each reordering the learning rate is reset" << endl;
   cout << "           report_epochs - number of iterations between computation and report the objective value (can be expensive because obj is calculated on the entire training set). 0 for no reporting [1000]." << endl;
+  cout << "           eta_type - the type of learning rate decay. One of: \"const\" (eta) \"sqrt\" (eta/sqrt(t)), \"lin\" (eta/(1+eta*lambda*t)), \"3_4\" (eta*(1+eta*lambda*t)^(-3/4)" << endl;
   cout << "           eta - the initial learning rate. The leraning rate is eta/sqrt(t) where t is the number of iterations [1]" << endl;
   cout << "           min_eta - the minimum value of the lerarning rate (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]" << endl;
   cout << "           remove_constraints - whether to remove the constraints for instances that fall outside the class boundaries in previous projections. [false] " << endl;
@@ -70,6 +79,11 @@ DEFUN_DLD (oct_find_w, args, nargout,
   octave_value tmp;
   if (! error_state)
     {
+      tmp = parameters.contents("no_projections");
+      if (tmp.is_defined())
+	{
+	  params.no_projections=tmp.int_value();
+	}
       tmp = parameters.contents("C1");
       if (tmp.is_defined())
 	{
@@ -85,15 +99,32 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	{
 	  params.max_iter=tmp.int_value();
 	}
-      tmp = parameters.contents("max_reorder");
+      tmp = parameters.contents("avg_epoch");
       if (tmp.is_defined())
 	{
-	  params.max_reorder=tmp.int_value();
+	  params.avg_epoch=tmp.int_value();
 	}
       tmp = parameters.contents("eps");
       if (tmp.is_defined())
 	{
 	  params.eps=tmp.double_value();
+	}
+      tmp = parameters.contents("eta_type");
+      if (tmp.is_defined())
+	{
+	  if (tmp.string_value() == "const")
+	    params.eta_type = ETA_CONST;
+	  else if (tmp.string_value() == "sqrt") 
+	    params.eta_type = ETA_SQRT;
+	  else if (tmp.string_value() == "lin") 
+	    params.eta_type = ETA_LIN;
+	  else if (tmp.string_value() == "3/4")
+	    params.eta_type = ETA_3_4;
+	  else 
+	    {
+	      cerr << "ERROR: eta_type value unrecognized" << endl;
+	      exit(-4);
+	    }
 	}
       tmp = parameters.contents("eta");
       if (tmp.is_defined())
@@ -186,7 +217,8 @@ DEFUN_DLD (oct_find_w, args, nargout,
   cout << "copying data starts ...\n";
 
   DenseM w = toEigenMat<DenseM>(wArray);
-  DenseM l,u;
+  DenseM l,u, w_avg, l_avg, u_avg;
+  
   if (resumed)
     {
       l = toEigenMat<DenseM>(lArray);
@@ -225,7 +257,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
       // Sparse data
       SparseM x = toEigenMat(args(0).sparse_matrix_value());
 
-      solve_optimization(w, l, u, objective_vals, x, y, resumed, params);
+      solve_optimization(w, l, u, w_avg, l_avg, u_avg, objective_vals, x, y, resumed, params);
     }
   else
     {
@@ -233,13 +265,16 @@ DEFUN_DLD (oct_find_w, args, nargout,
       FloatNDArray xArray = args(0).float_array_value();
       DenseM x = toEigenMat<DenseM>(xArray);
 
-      solve_optimization(w, l, u, objective_vals, x, y, resumed, params);
+      solve_optimization(w, l, u, w_avg, l_avg, u_avg, objective_vals, x, y, resumed, params);
     }
 
-  octave_value_list retval(4);// return value
-  retval(0) = toMatrix(w);
-  retval(1) = toMatrix(l);
-  retval(2) = toMatrix(u);
+  octave_value_list retval(7);// return value
+  retval(0) = toMatrix(w_avg);
+  retval(1) = toMatrix(l_avg);
+  retval(2) = toMatrix(u_avg);
   retval(3) = toMatrix(objective_vals);
+  retval(4) = toMatrix(w);
+  retval(5) = toMatrix(l);
+  retval(6) = toMatrix(u);
   return retval;
 }
