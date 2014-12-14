@@ -87,10 +87,45 @@ void get_sortedLU(VectorXd& sortedLU, const VectorXd& l, const VectorXd& u, cons
     }
 }
 
-// *******************************
-// Get the number of exampls in each class
+// ************************************
+// Get the number of examples in each class
 
 void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
+{  
+  int noClasses = y.cols();
+  if (nc.size() != noClasses) 
+    {
+      cerr << "init_nc has been called with vector nc of wrong size" << endl;
+      exit(-1);
+    }
+  int n = y.rows();  
+  if (nclasses.size() != n) 
+    {
+      cerr << "init_nc has been called with vector nclasses of wrong size" << endl;
+      exit(-1);
+    }
+  for (int k = 0; k < noClasses; k++)
+    {
+      nc(k)=0;
+    }
+  for (int i=0;i<n;i++)
+    {
+      nclasses[i]=0;
+      for (SparseMb::InnerIterator it(y,i);it;++it)
+	{
+	  if (it.value())
+	    {
+	      nc(it.col())++;
+	      nclasses(it.row())++;
+	    }
+	}
+    }
+}
+
+// ************************************
+// Get the sum of the weights of examples in each class
+
+void init_nc(VectorXi& weight, const VectorXi& nclasses, const SparseMb& y, const param_struct& params)
 {  
   int noClasses = y.cols();
   if (nc.size() != noClasses) 
@@ -724,7 +759,103 @@ void proj_means(VectorXd& means, const VectorXi& nc,
 }
 
 
-
+// *****************************************************
+// get the optimal values for lower and upper bounds given 
+// a projection and the class order
+// computationally expensive so it should be done sparingly 
+void optimizeLU(VectorXd&l, VectorXd&u, 
+		const VectorXd& projection, const SparseMb& y, 
+		const vector<int>& sorted_class,const vector<int>& class_order,
+		const double C1, const double C2)
+{
+  size_t n = projection.size();
+  VectorXd allproj(2*n);
+  allproj << (projection-1),(projection+1);
+  std::vector<size_t> indices;
+  sort_index(allproj, indices);
+  int cs, cs2;
+  size_t i;
+  for (cs = 0; cs < y.cols(); cs++)
+    {     
+      grad = ;
+      for (i = 0; i<2*n; i++)
+	{
+	  bool plus = false;
+	  size_t idx = indices[n];
+	  if (idx >= n)
+	    {
+	      plus = true;
+	      idx -= n;
+	    }
+	  for (SparseMb::Iterator it(y,idx); it; ++it)
+	    {
+	      if (it.value())
+		{
+		  cs2 = it.col();
+		  if (cs2 == cs && plus)
+		    {
+		      grad -= C1;
+		    }
+		  else
+		    {
+		      if (class_order[cs2] > class_order[cs] && !plus)
+			{
+			  grad += C2;
+			}
+		    }
+	       	}	      
+	    }
+	  if (grad < 0)
+	    {
+	      u.coeffRef(c) = allproj.coeff(indices[i]);
+	      break;
+	    }
+	}
+      
+      gradL = ;
+      for (i = 2*n-1; i>=0; i--)
+	{
+	  bool plus = false;
+	  size_t idx = indices[n];
+	  if (idx >= n)
+	    {
+	      plus = true;
+	      idx -= n;
+	    }
+	  for (SparseMb::Iterator it(y,idx); it; ++it)
+	    {
+	      if (it.value())
+		{
+		  cs2 = it.col();
+		  if (cs2 == cs && !plus)
+			  gradU -= C1;
+			}
+		      else
+			{
+			  gradL += C1;
+			}
+		    }
+		  else
+		    {
+		      if (class_order[cs2] < class_order[cs] && plus)
+			{
+			  gradL -= C2;
+			}
+		      if (class_order[cs2] > class_order[cs] && !plus)
+			{
+			  gradU += C2;
+			}
+		    }
+	       	}	      
+	    }
+	  if (gradU > 0)
+	    {
+	      l.coeffRef(c) = allproj.coeff(indices[i]);
+	      break;
+	    }
+	}
+    }
+}
 
 
 // ********************************
