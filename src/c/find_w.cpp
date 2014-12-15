@@ -414,11 +414,8 @@ double calculate_ex_objective_hinge(size_t i, double proj, const SparseMb& y,
 	  cp = sorted_class[sc];
 	  if (none_filtered || !(filtered.get(i,cp)))
 	    {
-	      obj_val += left_classes?left_weight * hinge_loss(*sortedLU_iter - proj):0
-		+ right_classes?right_weight * hinge_loss(proj - *(sortedLU_iter+1)):0;
-	      
-	      //obj_val += left_classes?left_weight * hinge_loss(l.coeff(cp) - proj):0
-	      //+ right_classes?right_weight * hinge_loss(proj - u.coeff(cp)):0;
+	      obj_val += (left_classes?(left_weight * hinge_loss(*sortedLU_iter - proj)):0)
+		+ (right_classes?(right_weight * hinge_loss(proj - *(sortedLU_iter+1))):0);
 	    }
 	  sc++;
 	  sortedLU_iter+=2;
@@ -427,14 +424,13 @@ double calculate_ex_objective_hinge(size_t i, double proj, const SparseMb& y,
 	{
 	  // example has class cp
 	  cp = sorted_class[sc];
+	  // compute the loss incured by the example no being withing the bounds 
+	  //    of class cp
 	  if (none_filtered == 1 || !(filtered.get(i,cp)))
 	    {
 	      obj_val += (class_weight
 			  * (hinge_loss(proj - *sortedLU_iter)
 			     + hinge_loss(*(sortedLU_iter+1) - proj)));
-	      //obj_val += (class_weight
-	      //* (hinge_loss(proj - l.coeff(cp))
-	      //+ hinge_loss(u.coeff(cp) - proj)));		  		  
 	    }
 	  left_classes++;
 	  right_classes--;
@@ -525,11 +521,9 @@ double compute_objective(const VectorXd& projection, const SparseMb& y,
 	      cp = sorted_class[sc];
 	      if (no_filtered == 0 || !(filtered.get(i,cp)))
 		{
-		  obj_val += left_classes?left_weight * hinge_loss(*sortedLU_iter - tmp):0
-		    + right_classes?right_weight * hinge_loss(tmp - *(sortedLU_iter+1)):0;
+		  obj_val += (left_classes?(left_weight * hinge_loss(*sortedLU_iter - tmp)):0)
+		    + (right_classes?(right_weight * hinge_loss(tmp - *(sortedLU_iter+1))):0);
 
-		  //obj_val += left_classes?left_weight * hinge_loss(l.coeff(cp) - tmp):0
-		  //+ right_classes?right_weight * hinge_loss(tmp - u.coeff(cp)):0;
 		}
 	      sc++;
 	      sortedLU_iter+=2;
@@ -543,9 +537,6 @@ double compute_objective(const VectorXd& projection, const SparseMb& y,
 		  obj_val += (class_weight
 			      * (hinge_loss(tmp - *sortedLU_iter)
 				 + hinge_loss(*(sortedLU_iter+1) - tmp)));
-		  //obj_val += (class_weight
-		  //* (hinge_loss(tmp - l.coeff(cp))
-		  //+ hinge_loss(u.coeff(cp) - tmp)));		  
 		}
 	      left_classes++;
 	      right_classes--;
