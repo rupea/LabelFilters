@@ -15,8 +15,16 @@ function [proj_params] = process_proj_params_args(arg_list, nargs, proj_params)
     endif
     arg = arg+1;
     if (islogical(proj_params.(argname)))
-      ## this doesn not handle "true" or "false" as a value. Only 0 and non0    
-      proj_params.(argname) = logical(str2num(arg_list{arg}));       
+      if (strcmp(arg_list{arg},"true"))
+	proj_params.(argname) = true;
+      elseif (strcmp(arg_list{arg},"false"))
+	proj_params.(argname) = false;
+      elseif (arg_list{arg}(1) == "-")
+	proj_params.(argname) = true;	
+	arg = arg - 1;
+      else
+	proj_params.(argname) = logical(str2num(arg_list{arg}));       
+      endif
     elseif (isnumeric(proj_params.(argname)))
       proj_params.(argname) = str2num(arg_list{arg});
     elseif (ischar(proj_params.(argname)))

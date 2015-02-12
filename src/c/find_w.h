@@ -2,6 +2,8 @@
 #define __FIND_W_H
 
 #include <omp.h>
+#include <boost/numeric/conversion/bounds.hpp>
+#include <boost/limits.hpp>
 #include "constants.h"
 #include "typedefs.h"
 #include "WeightVector.h"
@@ -50,7 +52,7 @@ double calculate_ex_objective_hinge(size_t i, double proj, const SparseMb& y,
 				    const std::vector<int>& class_order,
 				    const VectorXd& sortedLU,
 				    const boolmatrix& filtered,
-				    bool any_filtered,
+				    bool none_filtered,
 				    double C1, double C2,
 				    const param_struct& params);
 
@@ -108,12 +110,33 @@ void get_lu (VectorXd& l, VectorXd& u, const VectorXd& sortedLU, const vector<in
 // **********************************
 // sort l and u in the new class order
 
-void get_sortedLU(VectorXd& sortedLU, const VectorXd& l, const VectorXd& u, const vector<int>& sorted_class);
+void get_sortedLU(VectorXd& sortedLU, const VectorXd& l, const VectorXd& u, 
+		  const vector<int>& sorted_class);
 
 // *******************************
 // Get the number of exampls in each class
 
 void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y);
+
+// ************************************
+// Get the sum of the weight of all examples in each class
+
+void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const param_struct& params);
+
+
+// *****************************************************
+// get the optimal values for lower and upper bounds given 
+// a projection and the class order
+// computationally expensive so it should be done sparingly 
+void optimizeLU(VectorXd&l, VectorXd&u, 
+		const VectorXd& projection, const SparseMb& y, 
+		const vector<int>& class_order, const vector<int>& sorted_class,
+		const VectorXd& wc, const VectorXi& nclasses,
+		const boolmatrix& filtered, 
+		const double C1, const double C2,
+		const param_struct& params,
+		bool print = false);
+
 
 // ********************************
 // Initializes the lower and upper bound
@@ -130,8 +153,8 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc,
   means.setZero();
   for (k = 0; k < noClasses; k++)
     {
-      l(k)=std::numeric_limits<double>::max();
-      u(k)=std::numeric_limits<double>::min();	      
+      l(k)=boost::numeric::bounds<double>::highest();
+      u(k)=boost::numeric::bounds<double>::lowest();	      
     }
   VectorXd projection;
   w.project(projection,x);
@@ -307,11 +330,12 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx, con
 template<typename EigenType>
 void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			DenseM& upper_bounds,
+			VectorXd& objective_val,
 			DenseM& weights_avg, DenseM& lower_bounds_avg,
 			DenseM& upper_bounds_avg,
-			VectorXd& objective_val,
-			EigenType& x, const SparseMb& y,
-			bool resumed, const param_struct& params)
+			VectorXd& objective_val_avg,
+			const EigenType& x, const SparseMb& y,
+			const param_struct& params)
 
 {
   #ifdef PROFILE
@@ -332,7 +356,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
   const int noClasses = y.cols();
   WeightVector w;
-  VectorXd projection;
+  VectorXd projection, projection_avg;
   VectorXd l(noClasses),u(noClasses);
   VectorXd sortedLU(2*noClasses); // holds l and u interleaved in the curent class sorting order (i.e. l,u,l,u,l,u)
   VectorXd sortedLU_gradient(2*noClasses); // used to improve cache performance
@@ -340,12 +364,13 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   VectorXd l_avg(noClasses),u_avg(noClasses); // the lower and upper bounds for the averaged gradient
   VectorXd sortedLU_avg(2*noClasses); // holds l_avg and u_avg interleaved in the curent class sorting order (i.e. l_avg,u_avg,l_avg,u_avg,l_avg,u_avg)
   VectorXd means(noClasses); // used for initialization of the class order vector;
-  VectorXi nc(noClasses); // the number of examples in each class 
-  VectorXi nclasses(n); // the number of examples in each class 
+  VectorXi nc; // the number of examples in each class 
+  VectorXd wc; // the number of examples in each class 
+  VectorXi nclasses; // the number of examples in each class 
   int maxclasses; // the maximum number of classes an example might have
   double eta_t, tmp, sj;
   int cp;// current class and the other classes
-  size_t obj_idx = 0;
+  size_t obj_idx = 0, obj_idx_avg = 0;
   //  bool order_changed = 1;
   VectorXd proj(batch_size);
   VectorXsz index(batch_size);
@@ -380,83 +405,127 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   int idx_chunk_size = batch_size/idx_chunks;
   int idx_remaining = batch_size % idx_chunks;
   
-  weights.conservativeResize(d, no_projections);
-  weights_avg.conservativeResize(d, no_projections);
-  lower_bounds.conservativeResize(noClasses, no_projections);
-  upper_bounds.conservativeResize(noClasses, no_projections);
-  lower_bounds_avg.conservativeResize(noClasses, no_projections);
-  upper_bounds_avg.conservativeResize(noClasses, no_projections);
 
   if (params.report_epoch > 0)
     {
       objective_val.resize(1000 + (no_projections * params.max_iter / params.report_epoch));
     }
-  
+
+  if (params.report_avg_epoch > 0)
+    {
+      objective_val_avg.resize(1000 + (no_projections * params.max_iter / params.report_avg_epoch));
+    }
+
   init_nc(nc, nclasses, y);
-  
+  if (params.optimizeLU_epoch > 0)
+    {
+      init_wc(wc, nclasses, y, params);
+    }
+
   maxclasses = nclasses.maxCoeff();
   //keep track of which classes have been elimninated for a particular example
   boolmatrix filtered(n,noClasses);
   VectorXd difference(d);
   unsigned long total_constraints = n*noClasses - (1-params.remove_class_constraints)*nc.sum();
   size_t no_filtered=0;
-  
-  for(int projection_dim=0; projection_dim < no_projections; projection_dim++)
-    {
-      
-      if ( projection_dim == -1 )
-	{
-	  w = WeightVector(weights.col(projection_dim));
-	}
-      else
-	{
-	  int c1 = ((int) rand()) % noClasses;
-	  int c2 = ((int) rand()) % noClasses;
-	  if (c1 == c2)
-	    {
-	      c2=(c1+1)%noClasses;
-	    }
-	  difference_means(difference,x,y,nc,c1,c2);
-	  w = WeightVector(difference*10/difference.norm());  // get a better value than 10 .. somethign that would match the margins
-	}
-      
-      // w.setRandom(); // initialize to a random value
-      if (!resumed)
-	{
-	  //initialize the class_order vector by sorting the means of the projections of each class. Use l to store the means.
-	  init_lu(l,u,means,nc,w,x,y);
-	  rank_classes(sorted_class, class_order, means);
-	  get_sortedLU(sortedLU, l, u, sorted_class);
-	}
-      else 
-	{	  
-	  // should not use this  this. The w is not initialized 
-	  l = lower_bounds.col(projection_dim);
-	  u = upper_bounds.col(projection_dim);
-	  if (params.rank_by_mean)
-	    {
-	      w.project(projection,x);
-	      proj_means(means, nc, projection, y);
-	    }
-	  else
-	    {
-	      means = l+u;
-	    }
-	  rank_classes(sorted_class, class_order, means);
-	  get_sortedLU(sortedLU, l, u, sorted_class);
-	}
-      sortedLU_avg.setZero();
+  int projection_dim = 0;
 
-      //      order_changed = 1;
+  if (params.resume && params.remove_constraints)
+    {
+      for (projection_dim = 0; projection_dim < weights.cols(); projection_dim++)
+	{
+	  // use weights_avg since they will hold the correct weights regardless if 
+	  // averaging was performed on a prior run or not
+	  w = WeightVector(weights_avg.col(projection_dim));
+	  l = lower_bounds_avg.col(projection_dim);
+	  u = upper_bounds_avg.col(projection_dim);
+	  
+	  // should we do this in parallel? 
+	  // the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
+	  // should update to use the filter class 
+	  // things will not work correctly with remove_class_constrains on. We need to update wc, nclass 
+	  //       and maybe nc
+	  // check if nclass and nc are used for anything else than weighting examples belonging
+	  //       to multiple classes
+	  if (params.remove_constraints && projection_dim < no_projections-1)
+	    {
+
+	      w.project(projection,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
+	      update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
+	    }
+	      
+	  no_filtered = filtered.count();
+	  cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
+	  // work on this. This is just a crude approximation.
+	  // now every example - class pair introduces nclass(example) constraints
+	  // if weighting is done, the number is different
+	  // eliminating one example -class pair removes nclass(exmple) potential
+	  // if the class not among the classes of the example
+	  long int no_remaining = total_constraints - no_filtered;
+	  lambda = no_remaining*1.0/(total_constraints*params.C2);
+	}
+    }
+
+  weights.conservativeResize(d, no_projections);
+  weights_avg.conservativeResize(d, no_projections);
+  lower_bounds.conservativeResize(noClasses, no_projections);
+  upper_bounds.conservativeResize(noClasses, no_projections);
+  lower_bounds_avg.conservativeResize(noClasses, no_projections);
+  upper_bounds_avg.conservativeResize(noClasses, no_projections);
+  
+  for(; projection_dim < no_projections; projection_dim++)
+    {
+            
+      // initialize w as vector between the means of two random classes.
+      // should find clevered initialization schemes
+      int c1 = ((int) rand()) % noClasses;
+      int c2 = ((int) rand()) % noClasses;
+      if (c1 == c2)
+	{
+	  c2=(c1+1)%noClasses;
+	}
+      difference_means(difference,x,y,nc,c1,c2);
+      w = WeightVector(difference*10/difference.norm());  // get a better value than 10 .. somethign that would match the margins
+      // w.setRandom(); // initialize to a random value
+      
+      // initialize the l an u  
+      init_lu(l,u,means,nc,w,x,y); // use the projection, remove the template, no need to initialize the means
+            
+      w.project(projection,x);
+      switch (params.reorder_type)
+	{
+	case REORDER_AVG_PROJ_MEANS:
+	  // use the current w since averaging has not started yet 
+	case REORDER_PROJ_MEANS:	       
+	  proj_means(means, nc, projection, y);
+	  break;
+	case REORDER_RANGE_MIDPOINTS: 
+	  means = l+u; //no need to divide by 2 since it is only used for ordering
+	  break;
+	default:
+	  cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
+	  exit(-1);	      
+	}	  
+      rank_classes(sorted_class, class_order, means);
+      
+      
+      if (params.optimizeLU_epoch > 0)
+	{
+	  optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+	}	  
+
+      get_sortedLU(sortedLU, l, u, sorted_class);
+
+      if (params.optimizeLU_epoch <= 0)
+	{
+	  // we do not need the average sortedLU since we will
+	  // optimize the bounds at the end based on the 
+	  // average w 
+	  sortedLU_avg.setZero();      
+	}
 
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,lambda,w.size(),x);
 
-      /* // staring optimization */
-      /* for (int iter = 0; iter < params.max_reorder && order_changed == 1; iter++) */
-      /* 	{ */
-
-      /* 	  // init the optimization specific parameters */
-      /* 	  std::copy(class_order.begin(),class_order.end(), prev_class_order.begin()); */
 
       t = 0;		    
       while (t < params.max_iter)
@@ -544,20 +613,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	  //update w
 	  if (params.avg_epoch && t >= params.avg_epoch)
 	    {
+	      // updates both the curent w and the average w
 	      w.batch_gradient_update_avg(x, index, multipliers, lambda, eta_t);
 	    }
 	  else
 	    {
+	      // update only the current w
 	      w.batch_gradient_update(x, index, multipliers, lambda, eta_t);
 	    }
-	  /* w.scale(1.0-lambda*eta_t); */
-	  /* for (idx = 0; idx < batch_size; idx++) */
-	  /* 	{ */
-	  /* 	  if (multipliers.coeff(idx) != 0) */
-	  /* 	    { */
-	  /* 	      w.gradient_update(x,index.coeff(idx),multipliers.coeff(idx) * (eta_t / batch_size)); */
-	  /* 	    } */
-	  /* 	} */
 	  
 	  // update the lower and upper bounds
 	  // divide by batch_size here because the gradients have 
@@ -565,46 +628,35 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	  // should be done above
 	  sortedLU += sortedLU_gradient * (eta_t / batch_size); 
 	  // update the average version
-	  // shoudl do in parallel (maybe Eigen already does it?)
+	  // should do in parallel (maybe Eigen already does it?)
 	  // especially for small batch sizes. 
-	  if (params.avg_epoch && t >= params.avg_epoch)
+	  if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
 	    {
+	      // if we optimize the LU, we do not need to
+	      // keep track of the averaged lower and upper bounds 
+	      // We optimize the bounds at the end based on the 
+	      // average w 	      
+
 	      // do not divide by t-params.avg_epoch + 1 here 
 	      // do it when using sortedLU_avg
-	      // it might become too big!, but through division it might
-	      // become too small 
+	      // it might become too big!, but through division it 
+              //might become too small 
 	      sortedLU_avg += sortedLU;
 	    }
-	 	  
-	  // calculate the objective
-	  if( params.report_epoch && (t % params.report_epoch == 0) )
+
+	  if ((params.reorder_epoch > 0 && (t % params.reorder_epoch == 0)
+	       && params.reorder_type == REORDER_AVG_PROJ_MEANS) 
+	      || (params.report_avg_epoch && (t % params.report_avg_epoch == 0)))
 	    {
-	      VectorXd projection;
-	      if ( params.avg_epoch && t >= params.avg_epoch)
-		{
-		  // use the average to calculate objective
-		  w.project_avg(projection,x);		      
-		  objective_val[obj_idx++] = 
-		    calculate_objective_hinge( projection, y, nclasses, 
-					       sorted_class, class_order, 
-					       w.norm_avg(), sortedLU_avg/(t-params.avg_epoch+1), 
-					       filtered, 
-					       lambda, C1, C2, params); // save the objective value
-		}
-	      else
-		{
-		  // use the current w to calculate objective
-		  w.project(projection,x);		      
-		  objective_val[obj_idx++] = 
-		    calculate_objective_hinge( projection, y, nclasses, 
-					       sorted_class, class_order, 
-					       w.norm(), sortedLU, filtered, 
-					       lambda, C1, C2, params); // save the objective value
-		}
-	      if(PRINT_O)
-		{
-		  cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
-		}
+	      w.project_avg(projection_avg,x);		      
+	    }
+	  
+	  if ((params.reorder_epoch > 0 && (t % params.reorder_epoch == 0)
+	       && params.reorder_type == REORDER_PROJ_MEANS)
+	      || (params.report_epoch > 0 && (t % params.report_epoch == 0))
+	      || (params.optimizeLU_epoch > 0 && ( t % params.optimizeLU_epoch == 0)))
+	    {
+	      w.project(projection,x);		      
 	    }
 	  
 	  // reorder the classes
@@ -613,142 +665,253 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      // do this in a function?
 	      // get the current l and u in the original class order
 	      get_lu(l,u,sortedLU,sorted_class);		  
-	      if ( params.avg_epoch &&  t > params.avg_epoch)
+	      if ( params.optimizeLU_epoch <= 0 && params.avg_epoch &&  t >= params.avg_epoch)
 		{
-		  get_lu(l_avg,u_avg,sortedLU_avg,sorted_class);		  
-		  if (params.rank_by_mean)
-		    {		      
-		      w.project_avg(projection,x);
-		      proj_means(means, nc, projection, y);
-		    }
-		  else 
-		    {
-		      means = l_avg+u_avg; //no need to divide by 2 since it is only used for ordering
-		    }
+		  get_lu(l_avg,u_avg,sortedLU_avg,sorted_class);  
 		}
-	      else
+	      switch (params.reorder_type)
 		{
-		  if (params.rank_by_mean)
-		    {		      
-		      w.project(projection,x); 
-		      proj_means(means, nc, projection, y);
-		    }
-		  else 
-		    {
-		      means = l+u; //no need to divide by 2 since it is only used for ordering
-		    }
+		case REORDER_AVG_PROJ_MEANS:
+		  // if averaging has not started yet, this defaults projecting 
+		  // using the current w 
+		  proj_means(means, nc, projection_avg, y);
+		  break;
+		case REORDER_PROJ_MEANS:	       
+		  proj_means(means, nc, projection, y);
+		  break;
+		case REORDER_RANGE_MIDPOINTS: 
+		  means = l+u; //no need to divide by 2 since it is only used for ordering
+		  break;
+		default:
+		  cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
+		  exit(-1);	      
 		}
 	      // calculate the new class order
 	      rank_classes(sorted_class, class_order, means);
 	      // sort the l and u in the order of the classes
 	      get_sortedLU(sortedLU, l, u, sorted_class);
-	      if ( params.avg_epoch &&  t >= params.avg_epoch)
+	      if ( params.optimizeLU_epoch <= 0 && params.avg_epoch &&  t >= params.avg_epoch)
 		{
+		  // if we optimize the LU, we do not need to
+		  // keep track of the averaged lower and upper bounds 
+		  // We optimize the bounds at the end based on the 
+		  // average w 	      
 		  get_sortedLU(sortedLU_avg, l_avg, u_avg, sorted_class);
 		}		  
 	    }	     	      
-	  	  
+	  
+	  // optimize the lower and upper bounds (done after class ranking)
+	  // since it depends on the ranks 
+	  // if ranking type is REORDER_RANGE_MIDPOINTS, then class ranking depends on this
+	  // but shoul still be done before since it is less expensive
+	  // (could also be done after the LU optimization
+	  if (params.optimizeLU_epoch > 0 && ( t % params.optimizeLU_epoch == 0) )
+	    {
+	      optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+	      get_sortedLU(sortedLU, l, u, sorted_class);
+	    }
+
+	  
+	  // calculate the objective functions with respect to the current w and bounds
+	  if( params.report_epoch && (t % params.report_epoch == 0) )
+	    {
+	      // use the current w to calculate objective
+	      objective_val[obj_idx++] = 
+		calculate_objective_hinge( projection, y, nclasses, 
+					   sorted_class, class_order, 
+					   w.norm(), sortedLU, filtered, 
+					   lambda, C1, C2, params); // save the objective value
+	      if(PRINT_O)
+		{
+		  cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
+		}
+	    }
+	  
+	 	  
+	  // calculate the objective for the averaged w 
+	  // if optimizing LU then this is expensive since 
+	  // it runs the optimizaion
+	  if( params.report_avg_epoch && (t % params.report_avg_epoch == 0) )
+	    {
+	      if ( params.avg_epoch && t >= params.avg_epoch)
+		{
+		  // use the average to calculate objective
+		  VectorXd sortedLU_test;
+		  if (params.optimizeLU_epoch > 0)
+		    {
+		      optimizeLU(l_avg, u_avg, projection_avg, y, class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+		      get_sortedLU(sortedLU_test, l_avg, u_avg, sorted_class);
+		    }
+		  else
+		    {
+		      sortedLU_test = sortedLU_avg/(t - params.avg_epoch + 1);
+		    }
+		  objective_val_avg[obj_idx_avg++] = 
+		    calculate_objective_hinge( projection_avg, y, nclasses, 
+					       sorted_class, class_order, 
+					       w.norm_avg(), sortedLU_test, 
+					       filtered, 
+					       lambda, C1, C2, params); // save the objective value
+		}
+	      else
+		{
+		  if (params.report_epoch > 0 && (t % params.report_epoch==0))
+		    {
+		      // the objective has just been computed for the current w, use it. 
+		      objective_val_avg[obj_idx_avg++] = objective_val[obj_idx - 1];
+		    }
+		  else
+		    {	
+		      // since averaging has not started yet, compute the objective for
+		      // the current w.
+		      // we can use projection_avg because if averaging has not started
+		      // this is just the projection using the current w
+		      objective_val_avg[obj_idx_avg++] = 
+			calculate_objective_hinge( projection_avg, y, nclasses, 
+						   sorted_class, class_order, 
+						   w.norm(), sortedLU, filtered, 
+						   lambda, C1, C2, params); // save the objective value
+		    }
+		}		    
+	      if(PRINT_O)
+		{
+		  cout << "objective_val_avg[" << t << "]: " << objective_val_avg[obj_idx_avg-1] << " "<< w.norm_avg() << endl;
+		}
+	    }	  
+       
+	  
 	} // end while t
       
-      if (params.report_epoch > 0)
+      // define these here just in case I got some of the conditons wrong
+      VectorXd projection, projection_avg;
+	
+      // get l and u if needed 
+      // have to do this here because class order might change 
+      if ( params.optimizeLU_epoch <= 0 || params.reorder_type == REORDER_RANGE_MIDPOINTS )
 	{
-	  // save the objective value of the last iteration
-	  VectorXd projection;
-	  if ( params.avg_epoch &&  t >= params.avg_epoch)
+	  get_lu(l,u,sortedLU,sorted_class);		  
+	}
+      
+      // optimize LU and compute objective for averaging if it is turned on
+      // if t = params.avg_epoch, everything is exactly the same as 
+      // just using the current w
+      if ( params.avg_epoch && t > params.avg_epoch ) 
+	{
+	  // get the current l_avg and u_avg if needed
+	  if ( params.optimizeLU_epoch <= 0)
 	    {
-	      w.project_avg(projection,x);
-	      objective_val[obj_idx++] = 
-		calculate_objective_hinge(projection, y, nclasses,
-					  sorted_class, class_order,
-					  w.norm_avg(), sortedLU_avg/(t-params.avg_epoch+1),
-					  filtered,
-					  lambda, C1, C2, params);
+	      get_lu(l_avg,u_avg,sortedLU_avg/(t - params.avg_epoch + 1),sorted_class);
 	    }
-	  else
+
+	  // project all the data on the average w if needed
+	  if (params.report_avg_epoch > 0 || params.optimizeLU_epoch > 0)
 	    {
-	      w.project(projection,x);
-	      objective_val[obj_idx++] = 
-		calculate_objective_hinge(projection, y, nclasses,
-					  sorted_class, class_order,
-					  w.norm(), sortedLU,
-					  filtered,
-					  lambda, C1, C2, params);
-	    }		  
-	}
-      // Let's check if s changed
-      // check if the orders are the same
-      //      order_changed = 0;
-      // check if the class_order are still the same
+	      w.project_avg(projection_avg,x);
+	    }
+	  // only need to reorder the classes if optimizing LU
+	  // or if we are interested in the last obj value
+	  // do the reordering based on the averaged w 
+	  if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_avg_epoch > 0))	
+	    {
+	      proj_means(means, nc, projection_avg, y);
+	      // calculate the new class order
+	      rank_classes(sorted_class, class_order, means);
+	    }	     	      
+	  
+	  // optimize the lower and upper bounds (done after class ranking)
+	  // since it depends on the ranks 
+	  if (params.optimizeLU_epoch > 0)
+	    {	     
+	      optimizeLU(l_avg,u_avg,projection_avg,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+	    }
+	  
+	  // calculate the objective for the averaged w 
+	  if( params.report_avg_epoch>0 )
+	    {
+	      // get the current sortedLU in case bounds or order changed
+	      // could test for changes!
+	      get_sortedLU(sortedLU_avg, l_avg, u_avg, sorted_class);
+	      objective_val_avg[obj_idx_avg++] = 
+		calculate_objective_hinge( projection_avg, y, nclasses, 
+					   sorted_class, class_order, 
+					   w.norm_avg(), sortedLU_avg, 
+					   filtered, 
+					   lambda, C1, C2, params); // save the objective value
+	      if(PRINT_O)
+		{
+		  cout << "objective_val_avg[" << t << "]: " << objective_val_avg[obj_idx_avg-1] << " "<< w.norm_avg() << endl;
+		}
+	    }
+	}	  
       
-      // get the current l and u in the original class order
-      get_lu(l,u,sortedLU,sorted_class);		  
-      if ( params.avg_epoch &&  t >= params.avg_epoch)
+	
+
+      // do everything for the current w .
+      // it might be wasteful if we are not interested in the current w      
+      if (params.report_epoch > 0 || params.optimizeLU_epoch > 0)
 	{
-	  //divide sortedLU_avg to get the average
-	  get_lu(l_avg, u_avg,sortedLU_avg/(t-params.avg_epoch+1),sorted_class);
+	  w.project(projection,x);
 	}
-      /* 	  // order classes using  the average weights */
-      /* 	  if (params.rank_by_mean) */
-      /* 	    {		       */
-      /* 	      w.project_avg(projection,x); */
-      /* 	      proj_means(means, nc, projection, y); */
-      /* 	    } */
-      /* 	  else  */
-      /* 	    { */
-      /* 	      means = l_avg+u_avg; //no need to divide by 2 since it is only used for ordering */
-      /* 	    } */
-      /* 	} */
-      /* else */
-      /* 	{ */
-      /* 	  // rank classes using the current weights */
-      /* 	  if (params.rank_by_mean) */
-      /* 	    {		       */
-      /* 	      w.project(projection,x);  */
-      /* 	      proj_means(means, nc, projection, y); */
-      /* 	    } */
-      /* 	  else  */
-      /* 	    { */
-      /* 	      means = l+u; //no need to divide by 2 since it is only used for ordering */
-      /* 	    } */
-      /* 	} */
-      /* // calculate the new class order */
-      /* rank_classes(sorted_class, class_order, means); */
-      /* // sort the l and u in the order of the classes */
-      /* get_sortedLU(sortedLU, l, u, sorted_class); */
-      /* if ( params.avg_epoch &&  t >= params.avg_epoch) */
-      /* 	{ */
-      /* 	  get_sortedLU(sortedLU_avg, l_avg, u_avg, sorted_class); */
-      /* 	}		   */
+      // only need to reorder the classes if optimizing LU
+      // or if we are interested in the last obj value
+      // do the reordering based on the averaged w 
+      if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_epoch > 0))	
+	{
+	  switch (params.reorder_type)
+	    {
+	    case REORDER_AVG_PROJ_MEANS:
+	      // even if reordering is based on the averaged w
+	      // do it here based on the w to get the optimal LU and 
+	      // the best objective with respect to w
+	    case REORDER_PROJ_MEANS:
+	      proj_means(means, nc, projection, y);
+	      break;
+	    case REORDER_RANGE_MIDPOINTS:
+	      means = l+u; //no need to divide by 2 since it is only used for ordering
+	      break;
+	    default:
+	      cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
+	      exit(-1);	      
+	    }	 	  
+	  // calculate the new class order
+	  rank_classes(sorted_class, class_order, means);
+	}		  
       
-    /*   // check that the ranks are the same  */
-    /*   for(int c = 0; c < noClasses; c++) */
-    /* 	{ */
-    /* 	  if (class_order[c] != prev_class_order[c]) */
-    /* 	    { */
-    /* 	      order_changed = 1; */
-    /* 	      break; */
-    /* 	    } */
-    /* 	} */
+      // optimize the lower and upper bounds (done after class ranking)
+      // since it depends on the ranks 
+      // if ranking type is REORDER_RANGE_MIDPOINTS, then class ranking depends on this
+      // but shoul still be done before since it is less expensive
+      // (could also be done after the LU optimization
+      // do this for the average class
+      if (params.optimizeLU_epoch > 0)
+	{	     
+	  optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+	}
       
-    /*   if(PRINT_T==1) */
-    /* 	{ */
-    /* 	  double obj = obj_idx >= 1 ? objective_val[obj_idx-1] : 0; */
-    /* 	  cout << "\nt: " << t << ", obj:" << obj */
-    /* 	       << ", l:" << l.transpose() << ", u:" << u.transpose() */
-    /* 	       << ", cur_norm: " << w.norm() << endl; */
-    /* 	} // end if print */
+      // calculate the objective for the current w
+      if( params.report_epoch>0 )
+	{
+	  // get the current sortedLU in case bounds or order changed
+	  get_sortedLU(sortedLU, l, u, sorted_class);	  
+	  objective_val[obj_idx++] = 
+	    calculate_objective_hinge( projection, y, nclasses, 
+				       sorted_class, class_order, 
+				       w.norm(), sortedLU, 
+				       filtered, 
+				       lambda, C1, C2, params); // save the objective value
+	  if(PRINT_O)
+	    {
+	      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
+	    }
+	}
       
-    /*   cout << "\r>> " << iter+1 << ": Done in " << t */
-    /* 	   << " iterations ... with w.norm(): " << w.norm() << endl; */
-    
-    /* } // end for iter */
       
       VectorXd vect;
       w.toVectorXd(vect);
       weights.col(projection_dim) = vect;
       lower_bounds.col(projection_dim) = l;
       upper_bounds.col(projection_dim) = u;
-      if ( params.avg_epoch && t >= params.avg_epoch )
+      if ( params.avg_epoch && t > params.avg_epoch )
 	{
 	  w.toVectorXd_avg(vect);
 	  weights_avg.col(projection_dim) = vect;
@@ -757,7 +920,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	}
       else 
 	{
-	  w.toVectorXd(vect);
 	  weights_avg.col(projection_dim) = vect;
 	  lower_bounds_avg.col(projection_dim) = l;
 	  upper_bounds_avg.col(projection_dim) = u;
@@ -765,16 +927,21 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       
       // should we do this in parallel? 
       // the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
+      // should update to use the filter class 
+      // things will not work correctly with remove_class_constrains on. We need to update wc, nclass 
+      //       and maybe nc
+      // check if nclass and nc are used for anything else than weighting examples belonging
+      //       to multiple classes
       if (params.remove_constraints && projection_dim < no_projections-1)
 	{
-	  if (params.avg_epoch && t >= params.avg_epoch )
+	  if (params.avg_epoch && t > params.avg_epoch )
 	    {
-	      w.project_avg(projection,x);
-	      update_filtered(filtered, projection, l_avg, u_avg, y, params.remove_class_constraints);
+	      w.project_avg(projection_avg,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
+	      update_filtered(filtered, projection_avg, l_avg, u_avg, y, params.remove_class_constraints);
 	    }
 	  else
 	    {
-	      w.project(projection,x);
+	      w.project(projection,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
 	      update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
 	    }
 	  
@@ -791,14 +958,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       
       //      C2*=((n-1)*noClasses)*1.0/no_remaining;
       //C1*=((n-1)*noClasses)*1.0/no_remaining;
-
       
       
+        
     } // end for projection_dim
   
   cout << "\n---------------\n" << endl;
   
   objective_val.conservativeResize(obj_idx);
+  objective_val_avg.conservativeResize(obj_idx_avg);
   
   
   delete[] sc_locks;
@@ -807,6 +975,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   #ifdef PROFILE
   ProfilerStop();
   #endif
-}
+};
 
 #endif

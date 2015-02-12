@@ -1,16 +1,20 @@
-function [w, min_proj, max_proj, obj_val] = ...
+function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg] = ...
       learn_projections(parameters, x_tr=[],y_tr=[])
+
   
   %% if we have multiple restarts we can't resume the computation
-  if (!parameters.relearn_projection && exist(parameters.projection_file,"file"))
-    load(parameters.projection_file, "w", "min_proj", "max_proj", "obj_val");
-    return;
-  endif
-
   if (parameters.restarts != 1)
     parameters.resume = 0
   end
 
+
+  if (!parameters.relearn_projection && exist(parameters.projection_file,"file"))
+    load(parameters.projection_file, "w", "min_proj", "max_proj", "obj_val", "w_noavg", "min_proj_noavg", "max_proj_noavg", "obj_val_noavg");
+    if (!parameters.resume || parameters.no_projections <= size(w,2))
+      return;
+    endif    
+  endif
+  
   if (isempty(x_tr))
     if (!isfield(parameters, "data_file") || !exist(parameters.data_file,"file"))
       error("Learn_projections is called without a dataset and without a data file");
@@ -60,12 +64,15 @@ function [w, min_proj, max_proj, obj_val] = ...
   best_obj=Inf;
   for r=1:parameters.restarts
     disp(sprintf("restart %d\n", r));
-    if ( parameters.resume && exist(parameters.projection_file, "file"))
-      load(parameters.projection_file)
-      [w,min_proj,max_proj, obj_val]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj);
+    if ( parameters.resume )
+      if (exist("w_noavg","var"))
+	[w,min_proj,max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj,w_noavg, min_proj_noavg, max_proj_noavg);
+      elseif (exist("w","var"))
+	[w,min_proj,max_proj, obj_val,w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj);
+      endif
     else 
-      w=init_w(2, x_tr_proj, y_tr_proj, size(x_tr_proj,2), parameters.no_projections);
-      [w,min_proj,max_proj, obj_val]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w);
+      #w=init_w(2, x_tr_proj, y_tr_proj, size(x_tr_proj,2), parameters.no_projections);
+      [w,min_proj,max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters);
     endif    
     
     if (isempty(obj_val) || (best_obj > obj_val(length(obj_val))))
@@ -73,6 +80,11 @@ function [w, min_proj, max_proj, obj_val] = ...
       best_min_proj = min_proj;
       best_max_proj = max_proj;
       best_obj_val = obj_val;
+      ##  store the noavg values for the best run. This is not the best noavg run
+      best_w_noavg = w_noavg;
+      best_min_proj_noavg = min_proj_noavg;
+      best_max_proj_noavg = max_proj_noavg;
+      best_obj_val_noavg = obj_val_noavg;
       if (isempty(obj_val))
 	best_obj=-1;
       else
@@ -85,6 +97,10 @@ function [w, min_proj, max_proj, obj_val] = ...
   min_proj = best_min_proj;
   max_proj = best_max_proj;
   obj_val = best_obj_val;
+  w_noavg = best_w_noavg;
+  min_proj_noavg = best_min_proj_noavg;
+  max_proj_noavg = best_max_proj_noavg;
+  obj_val_noavg = best_obj_val_noavg;
   
   %% plot the objective value vs iteration 	   
   if (parameters.plot_objval)
@@ -94,7 +110,7 @@ function [w, min_proj, max_proj, obj_val] = ...
     print("-dpdf", parameters.obj_plot_file)
   end
   
-  save(parameters.projection_file, "w", "min_proj", "max_proj" , "obj_val");
+  save(parameters.projection_file, "w", "min_proj", "max_proj" , "obj_val", "w_noavg", "min_proj_noavg", "max_proj_noavg", "obj_val_noavg");
 
   return; 
 end

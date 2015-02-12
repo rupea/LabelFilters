@@ -15,7 +15,7 @@ double PredictionSet::PrecK(const SparseMb& y, int k)
   double ret=0;
   for ( predit = _preddata->begin(), i=0; predit != _preddata->end(); predit++,i++)
     {
-      (*predit)->predict(preds, std::numeric_limits<predtype>::max(), k);
+      (*predit)->predict(preds, boost::numeric::bounds<predtype>::highest(), k);
       // it would be more efficitent to look or the true classes in preds using find	
       size_t tp = 0;
       for (std::vector<int>::iterator it = preds.begin(); it !=preds.end();it++)
@@ -42,7 +42,7 @@ double PredictionSet::TopK(const SparseMb& y, int k)
     double ret=0;
     for ( predit = _preddata->begin(), i=0; predit != _preddata->end(); predit++,i++)
       {
-	(*predit)->predict(preds, std::numeric_limits<predtype>::max(), k);
+	(*predit)->predict(preds, boost::numeric::bounds<predtype>::highest(), k);
 	// it would be more efficitent to look or the true classes in preds using find	
 	for (std::vector<int>::iterator it = preds.begin(); it !=preds.end();it++)
 	  {
@@ -333,7 +333,7 @@ void PredictionSet::TopMetrics(double& Prec1, double& Top1,
     Top1 = 0; Prec1 = 0; Top5 = 0; Prec5 = 0; Top10 = 0; Prec10 = 0;
     for ( predit = _preddata->begin(), i=0; predit != _preddata->end(); predit++,i++)
       {
-	(*predit)->predict(preds, std::numeric_limits<predtype>::max(), maxtop);
+	(*predit)->predict(preds, boost::numeric::bounds<predtype>::highest(), maxtop);
 	if (preds.size()==0)
 	  {
 	    // no predictions were made for this case.

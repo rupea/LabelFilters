@@ -87,7 +87,7 @@ int main(int argc, char * argv[])
   // } 
 
   
-  VectorXd objective_val;
+  VectorXd objective_val, objective_val_avg;
   SparseMb y;
   SparseMb smally;
   if (y_tr.is_sparse_type())
@@ -134,8 +134,12 @@ int main(int argc, char * argv[])
       w.setRandom();
       l.setZero();
       u.setZero();
+      DenseM w_avg(d,5),l_avg(k,5),u_avg(k,5);
+      w_avg.setRandom();
+      l_avg.setZero();
+      u_avg.setZero();
       
-      solve_optimization(w, l, u, objective_val, x, y, 0, params);
+      solve_optimization(w, l, u, objective_val, w_avg, l_avg, u_avg, objective_val_avg, x, y, params);
     }
   else
     {
@@ -150,9 +154,12 @@ int main(int argc, char * argv[])
       w.setRandom();
       l.setZero();
       u.setZero();
+      DenseM w_avg(d,5),l_avg(k,5),u_avg(k,5);
+      w_avg.setRandom();
+      l_avg.setZero();
+      u_avg.setZero();
       
-      solve_optimization(w, l, u, objective_val, x, y, 0, params);
-      
+      solve_optimization(w, l, u, objective_val, w_avg, l_avg, u_avg, objective_val_avg, x, y, params);      
     }
   
   
@@ -184,14 +191,14 @@ int main()
   SparseMb y = labelVec2Mat(yVec);
   
   // these calls are important so that the compiler instantiates the right templates
-  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,x,y,0,params);
-  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,0,params);
+  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,x,y,params);
+  solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,params);
   
   
   xs.conservativeResize(281,1123497);
   DenseM sweights (1123497,1);
   sweights.setRandom();
-  solve_optimization(sweights,lower_bounds,upper_bounds,objective_val,xs,y,0,params);
+  solve_optimization(sweights,lower_bounds,upper_bounds,objective_val,xs,y,params);
   
 }
 
