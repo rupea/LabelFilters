@@ -1,4 +1,6 @@
 #include <octave/oct.h>
+#include <octave/Cell.h>
+#include <octave/ov-struct.h>
 #include <iostream>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -7,48 +9,33 @@
 
 using Eigen::VectorXd;
 
-DenseM toEigenMat(const FloatNDArray& data) {
-  dim_vector datasize = data.dims();
+// converts data from a cell array of vectors of the same length to
+// a eigen dense matrix, with each vector representing a column of the
+// matrix. Assumes the vectors are row vectors (maybe this can be relaxed)
+// to do: include checks to make sure data is in the right format
+// The result will be very large so we might want to avoid copying it. 
 
-  DenseM m(datasize(0), datasize(1));
-  for (int i = 0; i < datasize(0); i++) {
-    for (int j = 0; j < datasize(1); j++) {
-      m(i, j) = data(i, j);
+void toEigenMat(DenseColMf& m, const Cell& data){
+  cout << "Reading Cell data into Eigen.." << endl;
+  octave_idx_type cols = data.numel();
+  assert(cols > 0);
+  FloatNDArray coldata;
+  octave_idx_type rows = data(0).scalar_map_value().contents("w").float_array_value().length();
+  m.resize(rows, cols);
+  for (size_t j = 0; j<cols; j++)
+    {
+      coldata = data(j).scalar_map_value().contents("w").float_array_value();
+      assert(coldata.ndims() == 1);
+      assert(coldata.length() == rows);
+      for (size_t i = 0; i<rows; i++)
+	{
+	  m(i,j) = coldata(i);
+	}
     }
-  }
-
-  return m;
+  cout << "Done reading ..." << endl;
 }
 
-SparseM toEigenMat(const Sparse<double>& data) {
-  dim_vector datasize = data.dims();
-  
-  std::cout << data.rows() << ", " << data.cols() << std::endl;
-  
-  int nr = data.rows();
-  int nc = data.cols();
-  int nnz = data.nnz();
-  double d;
-
-  std::vector< Eigen::Triplet<double> > tripletList;
-  tripletList.reserve(nnz);
-  
-  for (octave_idx_type j = 0; j < nc; j++) {
-    for (octave_idx_type i = data.cidx(j); i < data.cidx(j + 1); i++) {
-      d = data.data(i);
-      if (d != 0) {
-	tripletList.push_back(Eigen::Triplet<double> ((int) data.ridx(i), (int) j, d));
-      }
-    }
-  }
-
-  SparseM m(nr, nc);
-  m.setFromTriplets(tripletList.begin(), tripletList.end());
-  cout << "data is read to Eigen ... \n";
-  return m;
-}
-
-VectorXd toEigenVec(FloatNDArray data) {
+VectorXd toEigenVec(const FloatNDArray& data) {
   dim_vector datasize = data.dims();
   int dim = datasize(0);
   int idx = 0;
@@ -67,7 +54,7 @@ VectorXd toEigenVec(FloatNDArray data) {
   return v;
 }
 
-Matrix toMatrix(DenseM data) 
+Matrix toMatrix(const DenseM& data) 
 {
   Matrix m(data.rows(), data.cols());
   for (int i = 0; i < data.rows(); i++) {
@@ -79,6 +66,7 @@ Matrix toMatrix(DenseM data)
 }
 
 SparseMatrix toMatrix(const SparseM &mat) {
+  assert(mat.nonZeros() <= dim_vector::dim_max());
   Array<octave_idx_type> rows(dim_vector(mat.nonZeros(),1)),cols(dim_vector(mat.nonZeros(),1));
   Array<double> vals(dim_vector(mat.nonZeros(),1));
 	
@@ -91,7 +79,6 @@ SparseMatrix toMatrix(const SparseM &mat) {
       i++;
     }
   }
-  
   SparseMatrix m(vals,rows,cols,mat.rows(),mat.cols(),true,mat.nonZeros());
   return m;
 

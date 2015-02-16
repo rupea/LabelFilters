@@ -1,5 +1,5 @@
 function [class_acc,class_acc_proj,proj_lbl_ignore,proj_lbl_ignore_percent] = run_svm_test(bestC, ...
-x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name, proj_exp_name, datadir, proj_params, restarts, resume, projected_svm=0)
+x_orig, tr_label, xtest_orig, te_label, do_random_projection, projection_func,exp_name, proj_exp_name, datadir, proj_params, restarts, resume, full_svm = 1, projected_svm=0, onlycorrect=0)
 tic;
 
 iterations = length(proj_params);
@@ -25,20 +25,36 @@ else
     clear xtest_orig;
 end    
 
-if( ~projected_svm ) 
+if( full_svm ) 
   %% performing svm in parallel: if exists uses previously trained models. Otherwise, trains the svm on cluster
   %% perform_parallel_svm(exp_name, C, option, exp_dir, force_retrain, tr_label)
-  [out] = perform_parallel_svm(exp_name,bestC,"",datadir,false,tr_label);
+  [out, out_tr] = perform_parallel_svm(exp_name,bestC,"",datadir,false,tr_label);
+  [class_acc class_F1 acc top5 top10] = ...
+      evaluate_svm_model(tr_label,te_label, [], out);
+endif
+
+if (onlycorrect&full_svm)
+  noties = (out_tr + 1e-9 * randn(size(out_tr)))';
+  [ignore,pred] = max(noties, [],1);
+  if size(tr_label,1) == size(pred,1)
+    correct=(tr_label==pred);
+  else
+    correct=(tr_label==(pred'));
+  endif
+  x_proj=x(correct,:);
+  tr_label_proj=tr_label(correct);
+else 
+  x_proj=x;
+  tr_label_proj=tr_label;  
 endif
 
 for iter = 1 : iterations
-    tic;
-    fprintf(1,"performing the projection ... \n");
-    [projected_labels,projected] = project_tests(x,tr_label,xtest,te_label, projection_func, proj_params(iter), proj_exp_name, restarts, resume);   
-    
-    
-    fprintf(1,"projection and label selection time: %f\n", toc);
-    tic;
+  tic;
+  fprintf(1,"performing the projection ... \n");
+  [projected_labels,projected] = project_tests(x_proj,tr_label_proj,xtest,te_label, projection_func, proj_params(iter), proj_exp_name, restarts, resume);
+  
+  fprintf(1,"projection and label selection time: %f\n", toc);
+  tic;
     
     disp(size(projected_labels));
     
@@ -47,7 +63,7 @@ for iter = 1 : iterations
       all_lbl_preds = size(projected_labels,1)*size(projected_labels,2);
       
       
-      [class_acc_proj(iter) class_F1_proj(iter) acc_proj(iter)] = ...
+      [class_acc_proj(iter) class_F1_proj(iter) acc_proj(iter) top5_proj(iter) top10_proj(iter)] = ...
 	  evaluate_svm_model(tr_label,te_label, projected_labels(:,:,j), out);
 	    
       fprintf(1,"time to train/predict in svm: %f\n", toc);
@@ -55,16 +71,12 @@ for iter = 1 : iterations
 	      	    
 	
       proj_lbl_ignore_percent(iter) = proj_lbl_ignore(iter) * 100 / all_lbl_preds;
-    
-    [class_acc(iter) class_F1(iter) acc(iter)] = ...
-    evaluate_svm_model(tr_label,te_label, [], out);
-             
-    
-    if (projected_svm)      
-      projectionfile=sprintf("wlu_%s_C1_%d_C2_%d",proj_exp_name, proj_params(iter).C1, proj_params(iter).C2);
-      [out_proj] = perform_parallel_projected_svm(proj_exp_name, bestC, "", datadir, projectionfile, "results/", sprintf("C1_%g_C2_%g",proj_params(iter).C1,proj_params(iter),C2), false, tr_label);
-      [class_acc_proj_svm(iter) class_F1_proj_svm(iter) acc_proj_svm(iter)] = ...
-	  evaluate_svm_model(tr_label,te_label, [], out_proj);
+        
+      if (projected_svm)      
+	projectionfile=sprintf("wlu_%s_C1_%d_C2_%d",proj_exp_name, proj_params(iter).C1, proj_params(iter).C2);
+	[out_proj] = perform_parallel_projected_svm(exp_name, bestC, "", datadir, projectionfile, "results/", sprintf("C1_%g_C2_%g",proj_params(iter).C1,proj_params(iter).C2), true, tr_label);
+	[class_acc_proj_svm(iter) class_F1_proj_svm(iter) acc_proj_svm(iter) top5_proj_svm(iter) top10_proj_svm(iter)] = ...
+	    evaluate_svm_model(tr_label,te_label, [], out_proj);
     endif 
     
     fprintf(1,"**************************************************************************\n");
@@ -72,14 +84,16 @@ for iter = 1 : iterations
     fprintf(1,"number of predications to ignore is (%d) out of (%d): %f\n", ...
     proj_lbl_ignore(iter), all_lbl_preds, proj_lbl_ignore_percent(iter));
   
-    fprintf(1,">> class_acc_proj: %f, class_F1_proj: %f, acc_proj: %f\n", ...
-    class_acc_proj(iter), class_F1_proj(iter), acc_proj(iter));
+    fprintf(1,">> class_acc_proj: %f, class_F1_proj: %f, acc_proj: %f, top5_proj: %f, top10_proj: %f\n", ...
+    class_acc_proj(iter), class_F1_proj(iter), acc_proj(iter), top5_proj(iter), top10_proj(iter));
     
-    fprintf(1,">> class_acc: %f, class_F1: %f, acc: %f\n", class_acc(iter), class_F1(iter), acc(iter));
-
+    if(full_svm)
+      fprintf(1,">> class_acc: %f, class_F1: %f, acc: %f, top5: %f, top10: %f\n", class_acc, class_F1, acc, top5, top10);
+    endif
+    
     if (projected_svm)
-      fprintf(1,">> class_acc_proj_svm: %f, class_F1_proj_svm: %f, acc_proj_svm: %f\n", ...
-	      class_acc_proj_svm(iter), class_F1_proj_svm(iter), acc_proj_svm(iter));
+      fprintf(1,">> class_acc_proj_svm: %f, class_F1_proj_svm: %f, acc_proj_svm: %f, top5_proj_svm: %f, top10_proj_svm: %f\n", ...
+	      class_acc_proj_svm(iter), class_F1_proj_svm(iter), acc_proj_svm(iter), top5_proj_svm(iter), top10_proj_svm(iter));
     endif
     fprintf(1,"**************************************************************************\n");
     

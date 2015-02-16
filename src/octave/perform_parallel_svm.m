@@ -1,4 +1,4 @@
-function [out_final] = perform_parallel_svm(exp_name, C, option, exp_dir, force_retrain, tr_label)
+function [out_final, out_final_tr] = perform_parallel_svm(exp_name, C, option, exp_dir, force_retrain, tr_label)
 
 if ~exist('option', 'var'),
     option = '';
@@ -16,8 +16,11 @@ if ~exist('force_retrain', 'var'),
 end
 
 if exist(filename,"file") && ~force_retrain
-    load(filename);    
-else         
+  load(filename);    
+else       
+  if (exist(filename,"file"))
+    unlink(filename);
+  endif
     if ~exist('tr_label', 'var')
         load([exp_dir exp_name ".mat"], "-v6", "tr_label");
     end
@@ -54,6 +57,9 @@ else
      
     for lbl_idx = 1 : 1 : length(label_range) -1
 	if (~exist(cur_file(lbl_idx),'file') || force_retrain)
+	  if (exist(cur_file(lbl_idx),'file'))
+	    unlink(cur_file(lbl_idx));
+	  endif
           f = ["svm_results/" file_expr(lbl_idx) ".pbs"];       
 	  display(f);
           fid = fopen(f, 'w');
@@ -78,7 +84,12 @@ else
         pause(10);
     end    
     
-    out_final = svm_merge_batches(filename, label_range, noClasses, cur_file);    
+    
+    if (nargout == 2)      
+      [out_final, out_final_tr] = svm_merge_batches(filename, label_range, noClasses, cur_file);    
+    else
+      [out_final] = svm_merge_batches(filename, label_range, noClasses, cur_file);    
+    end
     
     disp('all done ...');                  
 
@@ -89,6 +100,12 @@ else
     [class_acc class_F1 acc] = evaluate_svm_model(tr_label,te_label, [], out_final);
     
     fprintf(1,">> class_acc: %f, class_F1: %f, acc: %f\n", class_acc, class_F1, acc);
+    
+    if (nargout == 2)      
+      [class_acc class_F1 acc] = evaluate_svm_model(tr_label,tr_label, [], out_final_tr);    
+      fprintf(1,">> train_class_acc: %f, train_class_F1: %f, train_acc: %f\n", class_acc, class_F1, acc);
+    endif
+
 end
 
 
