@@ -1,4 +1,4 @@
-function [out_final, out_final_tr, svm_models_final] = perform_parallel_projected_multilabel_svm(exp_name, C,noClasses, exp_dir, force_retrain, projection_file = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10, sparsemodel = false, keep_out = true)
+function [out_final, out_final_tr, svm_models_final] = perform_parallel_projected_multilabel_svm(exp_name, C,noClasses, exp_dir, force_retrain, projection_file = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10, sparsemodel = false, keep_out = true, wfilemap = false)
 
   if ~exist('exp_dir', 'var'),
     exp_dir = '';
@@ -119,7 +119,7 @@ function [out_final, out_final_tr, svm_models_final] = perform_parallel_projecte
         pause(10);
     end    
     
-    [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file, sparsemodel, keep_out);    
+    [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file, sparsemodel, keep_out, wfilemap);    
     
     disp('all done ...');                  
 
