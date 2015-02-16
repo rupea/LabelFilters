@@ -4,8 +4,10 @@
 //#include <octave/builtin-defun-decls.h>
 //#include <octave/oct-map.h>
 #include <iostream>
-#include <typeinfo>
+//#include <typeinfo>
 #include <time.h>
+#include <boost/numeric/conversion/bounds.hpp>
+#include <boost/limits.hpp>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #include "EigenOctave.h"
@@ -102,33 +104,33 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
       y = labelVec2Mat(yVec);
       // multiclass data 
       // the class with the highest output will be the prediction
-      thresh = std::numeric_limits<predtype>::max();
+      thresh = boost::numeric::bounds<predtype>::highest();
       k=1;
     }
   
   size_t nact, nact_noproj;
-  double MicroF1, MacroF1, MacroF1_2, MicroPrecision, MacroPrecision, MicroRecall, MacroRecall, Top1, Top5, Top10, Prec1, Prec5, Prec10, time;
-  double MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, MicroPrecision_noproj, MacroPrecision_noproj, MicroRecall_noproj, MacroRecall_noproj, Top1_noproj, Top5_noproj, Top10_noproj, Prec1_noproj, Prec5_noproj, Prec10_noproj, time_noproj;
+  double MicroF1, MacroF1, MacroF1_2, MicroPrecision, MacroPrecision, MicroRecall, MacroRecall, Top1, Top5, Top10, Prec1, Prec5, Prec10, act_prc,time;
+  double MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, MicroPrecision_noproj, MacroPrecision_noproj, MicroRecall_noproj, MacroRecall_noproj, Top1_noproj, Top5_noproj, Top10_noproj, Prec1_noproj, Prec5_noproj, Prec10_noproj, act_prc_noproj, time_noproj;
 
   if(args(0).is_sparse_type())
     {
       // Sparse data
       SparseM x = toEigenMat(args(0).sparse_matrix_value());
 
-      evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,verbose,
+      evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,"filtered",verbose,
 			  MicroF1, MacroF1, MacroF1_2, MicroPrecision,
 			  MacroPrecision, MicroRecall, MacroRecall,
-			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, time);
+			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, act_prc, time);
       
       if (nargout > 1)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,verbose,
+	  evaluate_full(x,y,ovaW,thresh,k,"not filtered",verbose,
 			MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
 			MicroPrecision_noproj, MacroPrecision_noproj, 
 			MicroRecall_noproj, MacroRecall_noproj, 
 			Top1_noproj, Top5_noproj, Top10_noproj, 
 			Prec1_noproj, Prec5_noproj, Prec10_noproj,
-			nact_noproj, time_noproj);
+			nact_noproj, act_prc_noproj, time_noproj);
 	}      
     }
   else
@@ -136,20 +138,20 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
       // Dense data
       DenseM x = toEigenMat<DenseM>(args(0).float_array_value());
 
-      evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,verbose,
+      evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,"filtered",verbose,
 			  MicroF1, MacroF1, MacroF1_2, MicroPrecision,
 			  MacroPrecision, MicroRecall, MacroRecall,
-			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, time);
+			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, act_prc, time);
       
       if (nargout > 1)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,verbose,
+	  evaluate_full(x,y,ovaW,thresh,k,"not filtered",verbose,
 			MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
 			MicroPrecision_noproj, MacroPrecision_noproj, 
 			MicroRecall_noproj, MacroRecall_noproj, 
 			Top1_noproj, Top5_noproj, Top10_noproj, 
 			Prec1_noproj, Prec5_noproj, Prec10_noproj,
-			nact_noproj, time_noproj);
+			nact_noproj, act_prc_noproj, time_noproj);
 	}
     }
   
@@ -170,6 +172,7 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
   perfs.assign("Top10", Top10);
   perfs.assign("Prec10", Prec10);
   perfs.assign("nactive", nact);
+  perfs.assign("percent_active", act_prc);
   perfs.assign("time", time);
 
   if (nargout > 1)
@@ -189,6 +192,7 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
       perfs_noproj.assign("Top10", Top10_noproj);
       perfs_noproj.assign("Prec10", Prec10_noproj);
       perfs_noproj.assign("nactive", static_cast<double>(y.rows()*y.cols()));
+      perfs_noproj.assign("percent_active", 1.0);
       perfs_noproj.assign("time", time_noproj);
     }
   

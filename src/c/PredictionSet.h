@@ -4,6 +4,8 @@
 #include "Eigen/Sparse"
 #include <vector>
 #include <iostream>
+#include <boost/numeric/conversion/bounds.hpp>
+#include <boost/limits.hpp>
 #include "typedefs.h"
 
 using namespace std;
@@ -40,7 +42,7 @@ class PredVec
   bool is_sorted() const {return _sorted;};
   size_t npreds() const {return _npreds;};
   size_t getSize() const {return _predvec->size();};
-  void prune (size_t k, predtype keep_thresh=std::numeric_limits<predtype>::max());
+  void prune (size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
   void predict(std::vector<int>& pred_class, double thresh, size_t k=0);
 };
 
@@ -68,7 +70,7 @@ class PredictionSet
   void sort();
   // prune all the prediction vectors.
   // keep only predictions higher than keep_thresh, but at least k predictions 
-  void prune(size_t k, predtype keep_thresh=std::numeric_limits<predtype>::max());
+  void prune(size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
   double PrecK(const SparseMb& y, int k);
   double TopK(const SparseMb& y, int k);
   void TopMetrics(double& Prec1, double& Top1,
@@ -95,8 +97,8 @@ inline void PredVec::init()
 {
   _predvec = new std::vector<prediction*>;
   _npreds = 0;
-  _keep_size = std::numeric_limits<size_t>::max();
-  _keep_thresh = std::numeric_limits<predtype>::min();
+  _keep_size = boost::numeric::bounds<size_t>::highest();
+  _keep_thresh = boost::numeric::bounds<predtype>::lowest();
   _sorted=false;
 }
 
@@ -127,7 +129,7 @@ inline std::vector<prediction*>* PredVec::predvec()
 
 inline void PredVec::add_pred(predtype out, int cls)
 {
-  /* if (!AddWarned && (_keep_thresh > std::numeric_limits<predtype>::min() || _keep_size < std::numeric_limits<size_t>::max())) */
+  /* if (!AddWarned && (_keep_thresh > boost::numeric::bounds<predtype>::lowest() || _keep_size < boost::numeric::bounds<size_t>::highest())) */
   /*   { */
   /*     cerr << "Warning: addind a new prediction to an already prunned vector" << endl; */
   /*     AddWarned = true; */

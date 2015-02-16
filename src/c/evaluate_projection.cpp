@@ -9,9 +9,11 @@
 #include <iostream>
 #include <vector>
 #include <stdio.h>
-#include <typeinfo>
+//#include <typeinfo>
 #include <math.h>
 #include <stdlib.h>
+#include <boost/numeric/conversion/bounds.hpp>
+#include <boost/limits.hpp>
 #include <boost/program_options.hpp>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -34,7 +36,7 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
   opt.add_options()
     ("help", "Displays help message")
     ("verbose,v", "Display status messages")
-    ("projection_file,p", po::value<string>(),".mat file with the learned projection parameters (w, min_proj, max_proj)")
+    ("projection_files,p", po::value<std::vector<string> >()->multitoken(),".mat file with the learned projection parameters (w, min_proj, max_proj). This is a multitoken option so it must be ended with '--' when all projection files have been specified.")
     ("threshold,t", po::value<predtype>(), "Threshold for predictions. By default it is not used in multiclass problems and it is 0.0 in multilabel problems")
     ("top,k", po::value<int>()->default_value(1), "Minimum number of classes to pbe predicted positive. When threshold is not used, or not enough predictions are above the threshold, the classes with highest predicted values are used. Default 1.")
     ("full", "Evaluate the performance without projections");
@@ -72,7 +74,33 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
     }
 }
 
-
+// TO DO: put protections when files are not available or the right 
+// variables are not in them.
+// now it crashes badly with a seg fault and can corrupt other processes
+void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose = false)
+{
+  octave_value_list args; 
+  args(0) = filename; // the projection filename 
+  args(1) = "w";
+  args(2) = "min_proj";
+  args(3) = "max_proj";
+  if (verbose)
+    {
+      cout << "Loading file " << args(0).string_value() << " ... " <<endl;
+    }
+  octave_value_list loaded = Fload(args, 1);
+  //feval("load", args, 0); // no arguments returned 
+  if (verbose)
+    {
+      cout << "success" << endl; 
+    }
+  
+  wmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(1).string_value()).array_value());
+  lmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(2).string_value()).array_value());
+  umat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(3).string_value()).array_value());
+  //  args.clear();
+  //  loaded.clear();
+}
 
 
 // TO DO: put protections when files are not available or the right 
@@ -127,30 +155,12 @@ int main(int argc, char * argv[])
   loaded.clear();
   
   bool do_full = vm.count("full")?true:false;
-  bool do_projection;
+  bool do_projection=false;
   DenseColM wmat, lmat, umat;
-  if (vm.count("projection_file"))
+  std::vector<string> proj_files;
+  if (vm.count("projection_files"))
     {
-      do_projection = true; 
-      args(0) = vm["projection_file"].as<string>(); // the projection filename 
-      args(1) = "w";
-      args(2) = "min_proj";
-      args(3) = "max_proj";
-      if (verbose)
-	{
-	  cout << "Loading file " << args(0).string_value() << " ... " <<endl;
-	}
-      loaded = Fload(args, 1);
-      //feval("load", args, 0); // no arguments returned 
-      if (verbose)
-	{
-	  cout << "success" << endl; 
-	}
-      wmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(1).string_value()).float_array_value());
-      lmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(2).string_value()).float_array_value());
-      umat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(3).string_value()).float_array_value());
-      args.clear();
-      loaded.clear();
+      proj_files = vm["projection_files"].as<std::vector<string> >();
     }
   
   args(0) = vm["ova_file"].as<string>(); // ova file name
@@ -168,15 +178,15 @@ int main(int argc, char * argv[])
   DenseColMf ovaW;
   toEigenMat(ovaW, loaded(0).scalar_map_value().getfield(args(1).string_value()).cell_value());
   
+  args.clear();
   loaded.clear();
-
   Fclear();
 
-  if (do_projection)
-    {
-      assert(lmat.rows() == ovaW.cols());
-      assert(umat.rows() == ovaW.cols());
-    }
+  // if (do_projection)
+  //   {
+  //     assert(lmat.rows() == ovaW.cols());
+  //     assert(umat.rows() == ovaW.cols());
+  //   }
 
   predtype thresh; //threshold to use for classification
   int k=vm["top"].as<int>(); //return at least one predictions for threshold metrics
@@ -206,7 +216,7 @@ int main(int argc, char * argv[])
       // the class with the highest output will be the prediction
       if (!vm.count("threshold"))
 	{
-	  thresh = std::numeric_limits<predtype>::max();
+	  thresh = boost::numeric::bounds<predtype>::highest();
 	}
       else 
 	{
@@ -224,14 +234,16 @@ int main(int argc, char * argv[])
       // SparseMb smally = y.topLeftCorner(reducedsize, y.cols());
       // x=smallx;
       // y=smally;
-
-      if (do_projection)
+      
+      for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
-	  evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,verbose);
+	  cerr << "***********" << *pit << "************" << endl;
+	  load_projections(wmat, lmat, umat, *pit, verbose);
+	  evaluate_projection(x, y, ovaW, wmat, lmat, umat, thresh, k, *pit, verbose);
 	}      
       if (do_full)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,verbose);
+	  evaluate_full(x,y,ovaW,thresh,k,"full",verbose);
 	}
     }
   else
@@ -239,15 +251,15 @@ int main(int argc, char * argv[])
       // Dense data
       DenseM x = toEigenMat<DenseM>(x_te.float_array_value());
 
-      if (do_projection)
+      for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
-	  evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,verbose);
+	  load_projections(wmat, lmat,umat,*pit,verbose);
+	  evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,*pit,verbose);
 	}      
       if (do_full)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,verbose);
+	  evaluate_full(x,y,ovaW,thresh,k,"full",verbose);
 	}
     }
-  clean_up_and_exit(0);
-  
+  clean_up_and_exit(0);  
 }

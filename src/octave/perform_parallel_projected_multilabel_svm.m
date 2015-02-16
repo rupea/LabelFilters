@@ -1,4 +1,4 @@
-function [out_final, out_final_tr, svm_models_final] = perform_parallel_projected_multilabel_svm(exp_name, C,noClasses, exp_dir, force_retrain, projection_file = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10)
+function [out_final, out_final_tr, svm_models_final] = perform_parallel_projected_multilabel_svm(exp_name, C,noClasses, exp_dir, force_retrain, projection_file = "", project_str = "", threshold = [], solver = "libsvm", solverparam = "-t 0", n_batches = 1000, min_batch_size = 10, sparsemodel = false, keep_out = true, wfilemap = false)
 
   if ~exist('exp_dir', 'var'),
     exp_dir = '';
@@ -26,6 +26,16 @@ function [out_final, out_final_tr, svm_models_final] = perform_parallel_projecte
     end
   end
   
+  if (isempty(noClasses))
+    load([exp_dir exp_name ".mat"], "-v6");
+    if (size(y_tr,2) == 1)
+      noClasses = max(cat(1,y_tr,y_te));
+    else
+      noClasses = size(y_tr,2);
+    endif
+  endif
+
+
   if (isempty(threshold))
     thresh_str = "none";
   else
@@ -68,8 +78,8 @@ function [out_final, out_final_tr, svm_models_final] = perform_parallel_projecte
     
     cur_file = @(idx) ["svm_results/svm_" file_expr(idx) ".mat"];    
     
-    octave_cmd = @(idx) sprintf("octave -q --path %s --eval \"perform_projected_multilabel_svm_batch('%s','%s', '%s', '%s' ,%f, %d, %d, '%s', '%s', '%s')\"", ...
-    path(), exp_name, exp_dir,projection_file, project_str, C, label_range(idx),label_range(idx+1)-1, num2str(threshold), solver, solverparam);
+    octave_cmd = @(idx) sprintf("octave -q --path %s --eval \"perform_projected_multilabel_svm_batch('%s','%s', '%s', '%s' ,%f, %d, %d, '%s', '%s', '%s', %d, %d)\"", ...
+    path(), exp_name, exp_dir,projection_file, project_str, C, label_range(idx),label_range(idx+1)-1, num2str(threshold), solver, solverparam, sparsemodel, keep_out);
     
     pbs_command = @(idx) ["#!/bin/bash \n" ...
     "#PBS -l nodes=1:ppn=1,walltime=10:00:00 \n" ...
@@ -109,7 +119,7 @@ function [out_final, out_final_tr, svm_models_final] = perform_parallel_projecte
         pause(10);
     end    
     
-    [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file);    
+    [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batches(filename, label_range, noClasses, cur_file, sparsemodel, keep_out, wfilemap);    
     
     disp('all done ...');                  
 

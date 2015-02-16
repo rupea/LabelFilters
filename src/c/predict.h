@@ -3,6 +3,8 @@
 
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
+#include <boost/numeric/conversion/bounds.hpp>
+#include <boost/limits.hpp>
 #include <vector>
 #include <boost/dynamic_bitset.hpp>
 #include "filter.h"
@@ -17,15 +19,17 @@
 using namespace std;
   
 template <typename Eigentype>
-PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDataSet* active, size_t& nact, predtype keep_thresh = std::numeric_limits<predtype>::min(), size_t keep_size = std::numeric_limits<size_t>::max())
+PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDataSet* active, size_t& nact, bool verbose = false, predtype keep_thresh = boost::numeric::bounds<predtype>::lowest(), size_t keep_size = boost::numeric::bounds<size_t>::highest())
 {
   size_t n = x.rows();
   size_t noClasses = w.cols();
   nact = 0;
-  PredictionSet* predictions = new PredictionSet(n); // preallocates n elements
-  cout << "Predicting " << n << "    " << noClasses << endl;
-
-  bool prune = !(keep_thresh == std::numeric_limits<predtype>::min() && keep_size == std::numeric_limits<size_t>::max());
+  PredictionSet* predictions = new PredictionSet(n); // preallocates n elements 
+  if (verbose)
+    {
+      cout << "Predicting " << n << "    " << noClasses << endl;
+    }
+  bool prune = !(keep_thresh == boost::numeric::bounds<predtype>::lowest() && keep_size == boost::numeric::bounds<size_t>::highest());
   
   size_t i;
   if (active == NULL)
@@ -90,7 +94,7 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
 
 
 template <typename Eigentype>
-ActiveDataSet* getactive(const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat)
+ActiveDataSet* getactive(const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat, const string projname="", bool verbose = false)
 {
   #ifdef PROFILE
   ProfilerStart("projected_getactive.profile");
@@ -107,13 +111,18 @@ ActiveDataSet* getactive(const Eigentype& x, const DenseColM& wmat, const DenseC
 
   for (int i = 0; i < projections.cols(); i++)
     {
-      cout << i << endl;
       VectorXd proj = projections.col(i);
       VectorXd l = lmat.col(i);
       VectorXd u = umat.col(i);
-      cout << "init filter" << endl;
+      if (verbose) 
+	{
+	  cout << "Init filter" << endl;
+	}
       Filter f(l,u);      
-      cout << i << "  update filter" << endl; 
+      if (verbose)
+	{
+	  cout << "Update filter, projection " << i << endl; 
+	}
       size_t j;
       ActiveDataSet::iterator it;
       size_t count = 0;
@@ -124,7 +133,7 @@ ActiveDataSet* getactive(const Eigentype& x, const DenseColM& wmat, const DenseC
 	  (*act) &= *(f.filter(proj.coeff(j)));
 	  count += act -> count();
 	}
-      cout << i << " active  " << count << " out of " << n*noClasses << " (" << count*1.0/(n*noClasses) << ")" << endl; 
+      cout << projname <<  "Active_" << i << "  " << count*1.0/(n*noClasses) << " (" << count << "/" << n*noClasses << ")" << endl; 
     }
   #ifdef PROFILE
   ProfilerStop();
