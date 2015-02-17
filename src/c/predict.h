@@ -19,7 +19,7 @@
 using namespace std;
   
 template <typename Eigentype>
-PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDataSet* active, size_t& nact, bool verbose = false, predtype keep_thresh = boost::numeric::bounds<predtype>::lowest(), size_t keep_size = boost::numeric::bounds<size_t>::highest())
+PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDataSet* active, size_t& nact, bool verbose = false, predtype keep_thresh = boost::numeric::bounds<predtype>::lowest(), size_t keep_size = boost::numeric::bounds<size_t>::highest(), const size_t start_class=0)
 {
   size_t n = x.rows();
   size_t noClasses = w.cols();
@@ -46,13 +46,14 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
 	  PredVec* pv = predictions->NewPredVecAt(i,noClasses); 
 	  for (size_t c = 0; c < noClasses; c++)
 	    {
-	      pv->add_pred(static_cast<predtype> (outs.coeff(c)),c);
+	      pv->add_pred(static_cast<predtype> (outs.coeff(c)),c+start_class);
 	    }
 	  if (prune)
 	    {
 	      pv->prune(keep_size, keep_thresh);
 	    }
 	}
+      nact = n*noClasses;
       #ifdef PROFILE
       ProfilerStop();
       #endif  
@@ -62,6 +63,11 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
       #ifdef PROFILE
       ProfilerStart("projected_predict.profile");
       #endif  
+      assert(active->length() == n);
+      if(n>0)
+	{
+	  assert((*active)[0]->size() == noClasses);
+	}
       size_t totalactive = 0;
 #pragma omp parallel for default(shared) reduction(+:totalactive) 
       for (i = 0; i < n; i++)      
@@ -75,7 +81,7 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
 	    {
 	      // could eliminate the multiplication for only one active class
 	      predtype out = static_cast<predtype> ((x.row(i)*(w.col(c).cast<double>()))(0,0));
-	      pv->add_pred(out,c);
+	      pv->add_pred(out,c+start_class);
 	      c = act->find_next(c);
 	    }
 	  if (prune)
@@ -94,7 +100,7 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
 
 
 template <typename Eigentype>
-ActiveDataSet* getactive(const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat, const string projname="", bool verbose = false)
+ActiveDataSet* getactive(vector<size_t>& no_active, const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat, const string projname="", bool verbose = false)
 {
   #ifdef PROFILE
   ProfilerStart("projected_getactive.profile");
@@ -109,6 +115,7 @@ ActiveDataSet* getactive(const Eigentype& x, const DenseColM& wmat, const DenseC
       (*it) -> set();
     }
 
+  no_active.clear();
   for (int i = 0; i < projections.cols(); i++)
     {
       VectorXd proj = projections.col(i);
@@ -133,7 +140,7 @@ ActiveDataSet* getactive(const Eigentype& x, const DenseColM& wmat, const DenseC
 	  (*act) &= *(f.filter(proj.coeff(j)));
 	  count += act -> count();
 	}
-      cout << projname <<  "Active_" << i << "  " << count*1.0/(n*noClasses) << " (" << count << "/" << n*noClasses << ")" << endl; 
+      no_active.push_back(count);
     }
   #ifdef PROFILE
   ProfilerStop();

@@ -7,6 +7,8 @@
 #include <octave/parse.h>
 #include <octave/toplev.h>
 #include <iostream>
+#include <ostream>
+#include <fstream>
 #include <vector>
 #include <stdio.h>
 //#include <typeinfo>
@@ -28,7 +30,17 @@ using Eigen::VectorXi;
 using namespace std;
 namespace po = boost::program_options;
 
-
+void print_usage(po::options_description opt)
+{
+  cerr << endl;
+  cerr << "USAGE: evaluate_projection [options] data_file ova_file" << endl << endl;
+  cerr << "  data_file: .mat file with the test data  (x_te, y_te)" << endl;
+  cerr << "  ova_file : .mat file with the ova models in a cell array" <<endl;
+  cerr << "                (only works with liblinear matlab models for now)" << endl;
+  cerr << "             or a binary file with the weights of the linear ova" << endl;
+  cerr << "                models concatenated in the order of the classes." << endl<< endl;
+  cerr << opt;
+}
 
 void parse_options(po::variables_map& vm, int argc, char* argv[])
 {
@@ -39,12 +51,15 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
     ("projection_files,p", po::value<std::vector<string> >()->multitoken(),".mat file with the learned projection parameters (w, min_proj, max_proj). This is a multitoken option so it must be ended with '--' when all projection files have been specified.")
     ("threshold,t", po::value<predtype>(), "Threshold for predictions. By default it is not used in multiclass problems and it is 0.0 in multilabel problems")
     ("top,k", po::value<int>()->default_value(1), "Minimum number of classes to pbe predicted positive. When threshold is not used, or not enough predictions are above the threshold, the classes with highest predicted values are used. Default 1.")
-    ("full", "Evaluate the performance without projections");
-
-  po::options_description hidden_opt;
+    ("full", "Evaluate the performance without projections")
+    ("distributed", po::value<string>()->default_value("None"), "Whether it is ran on a distributed fasion. Possible values are: \"None\" and \"dstorm\"")
+    ("ova_format", po::value<string>()->default_value("binary"), "Format of the file with the ova models. One of \"cellarray\" or \"binary\"")
+    ("out_file,o", po::value<string>(), "Output file. If not specified prints to stdout");
+  
+  po::options_description hidden_opt("Arguments");
   hidden_opt.add_options()
     ("data_file", po::value<string>(), ".mat file with the test data  (x_te, y_te)")
-    ("ova_file", po::value<string>(), ".mat file with the ova models in a cell array. Only works with liblinear matlab models for now");    
+    ("ova_file", po::value<string>(), ".mat file with the ova models in a cell array (only works with liblinear matlab models for now) or a binary file with the weights of the linear ova models concatenated in the order of the classes.");
 
   po::positional_options_description pd;
   pd.add("data_file",1).add("ova_file",1);
@@ -57,19 +72,45 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
 
   if(vm.count("help"))
     {
-      cerr << opt;
+      print_usage(opt);
       exit(0);
     }
+
+  if (vm.count("distributed"))
+    {
+      if (vm["distributed"].as<string>() != "dstorm" && vm["distributed"].as<string>() != "None")
+	{
+	  cerr << endl;
+	  cerr << "ERROR:Argument to distributed unrecognized" << endl;
+	  print_usage(opt);
+	  exit(-1);
+	}
+    }
+
+  if (vm.count("ova_format"))
+    {
+      if (vm["ova_format"].as<string>() !="binary" && vm["ova_format"].as<string>() != "cellarray")
+	{
+	  cerr << endl;
+	  cerr << "ERROR:Argument to ova_format unrecognized" << endl;
+	  print_usage(opt);
+	  exit(-1);
+	}
+    }
+
+
   if(!vm.count("data_file"))
     {
-      cerr << "No data file supplied" << endl;
-      cerr << opt;
+      cerr << endl;
+      cerr << "ERROR:No data file supplied" << endl;
+      print_usage(opt);
       exit(-1);
     }
   if(!vm.count("ova_file"))
     {
-      cerr << "No ova file supplied" << endl;
-      cerr << opt;
+      cerr << endl;
+      cerr << "ERROR:No ova file supplied" << endl;
+      print_usage(opt);
       exit(-1);
     }
 }
@@ -102,6 +143,31 @@ void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const s
   //  loaded.clear();
 }
 
+// the file should have a matrix sotred in column major format, with 32 bit float entries. 
+// read cols columns each with rows rows. Start from column start_col 
+void read_binary(const char* filename, DenseColMf& m, const DenseColMf::Index rows, const DenseColMf::Index cols, const DenseColMf::Index start_col = 0)
+{
+  assert(sizeof(DenseColMf::Scalar) == 32);
+  ifstream in(filename, ios::in | ios::binary);
+  if (in.is_open())
+    {
+      m.resize(rows,cols);
+      in.seekg(start_col*rows);
+      in.read((char*)m.data(), rows*cols*sizeof(DenseColMf::Scalar));
+      if(!in)
+	{
+	  cerr << "Error reading file " << filename << ". Only " << in.gcount() << " bytes read out of " << rows*cols*sizeof(DenseColMf::Scalar) << endl;
+	  exit(-1);
+	}
+      in.close();
+    }
+  else
+    {
+      cerr << "Trouble opening file " << filename << endl;
+      exit(-1);
+    }
+}
+
 
 // TO DO: put protections when files are not available or the right 
 // variables are not in them.
@@ -110,8 +176,6 @@ int main(int argc, char * argv[])
 { 
   po::variables_map vm;
   parse_options(vm, argc, argv);
-
-
   bool verbose = vm.count("verbose")?true:false;
 
 #ifdef _OPENMP
@@ -121,6 +185,42 @@ int main(int argc, char * argv[])
       cout << "initialized Eigen parallel"<<endl;
     }
 #endif
+
+  ofstream outf;
+  if (vm.count("out_file"))
+    {
+      outf.open(vm["out_file"].as<string>().c_str());
+      if (!outf.is_open())
+	{
+	  cerr << "Error opening the output file " << vm["out_file"].as<string>() << endl;
+	  exit(-1);
+	}
+    }
+  ostream& out = vm.count("out_file")?outf:cout;
+
+  bool use_dstorm = false;
+  if (vm.count("distributed"))
+    {
+      if (vm["distributed"].as<string>() == "dstorm")
+	{
+	  use_dstorm = true;
+	}
+      else if (vm["distributed"].as<string>() == "None")
+	{
+	  use_dstorm = false;
+	}
+      else
+	{
+	  // should not happen since it was checked when parsing options. 
+	  cerr << "Argument to distributed unrecognized" << endl;
+	  exit(-1);
+	}
+    }
+      	    
+
+  predtype thresh; //threshold to use for classification
+  int k=vm["top"].as<int>(); //return at least one predictions for threshold metrics
+  
 
   // need to initialize the octave interpreter or else loading
   // ascii files results in segfault
@@ -154,43 +254,6 @@ int main(int argc, char * argv[])
   args.clear();
   loaded.clear();
   
-  bool do_full = vm.count("full")?true:false;
-  bool do_projection=false;
-  DenseColM wmat, lmat, umat;
-  std::vector<string> proj_files;
-  if (vm.count("projection_files"))
-    {
-      proj_files = vm["projection_files"].as<std::vector<string> >();
-    }
-  
-  args(0) = vm["ova_file"].as<string>(); // ova file name
-  args(1) = "svm_models_final";  
-  if (verbose)
-    {
-      cout << "Loading file " << args(0).string_value() << " ... " <<endl;
-    }
-  loaded = Fload(args, 1);  
-  if (verbose)
-    {
-      cout << "success" << endl;
-    }
-
-  DenseColMf ovaW;
-  toEigenMat(ovaW, loaded(0).scalar_map_value().getfield(args(1).string_value()).cell_value());
-  
-  args.clear();
-  loaded.clear();
-  Fclear();
-
-  // if (do_projection)
-  //   {
-  //     assert(lmat.rows() == ovaW.cols());
-  //     assert(umat.rows() == ovaW.cols());
-  //   }
-
-  predtype thresh; //threshold to use for classification
-  int k=vm["top"].as<int>(); //return at least one predictions for threshold metrics
-  
   SparseMb y;
   if (y_te.is_sparse_type())
     {
@@ -209,7 +272,7 @@ int main(int argc, char * argv[])
     }
   else
     {      
-      VectorXd yVec = toEigenVec(y_te.float_array_value());
+      VectorXd yVec = toEigenVec(y_te.array_value());
   
       y = labelVec2Mat(yVec);
       // multiclass data 
@@ -222,6 +285,59 @@ int main(int argc, char * argv[])
 	{
 	  thresh = vm["threshold"].as<predtype>();
 	}
+    }
+
+  size_t noClasses = y.cols();
+  size_t dim;
+  if(x_te.is_sparse_type())
+    {
+      // Sparse data
+      dim = x_te.sparse_matrix_value().cols();
+    }
+  else
+    {
+      //Dense data
+      dim = x_te.array_value().cols();
+    }
+
+  DenseColMf ovaW;
+  if (vm["ova_format"].as<string>() == "cellarray")
+    {
+      args(0) = vm["ova_file"].as<string>(); // ova file name
+      args(1) = "svm_models_final";  
+      if (verbose)
+	{
+	  cout << "Loading file " << args(0).string_value() << " ... " <<endl;
+	}
+      loaded = Fload(args, 1);  
+      if (verbose)
+	{
+	  cout << "success" << endl;
+	}
+      toEigenMat(ovaW, loaded(0).scalar_map_value().getfield(args(1).string_value()).cell_value());
+      
+      args.clear();
+      loaded.clear();
+      Fclear();
+    }
+  else if (vm["ova_format"].as<string>() == "binary")
+    {
+      read_binary(vm["ova_file"].as<string>().c_str(), ovaW, dim, noClasses);
+    }
+  else
+    { 
+      cerr << "Unrecognized format for the ova file" << endl;
+      exit(-1);
+    }
+
+
+  bool do_full = vm.count("full")?true:false;
+  bool do_projection=false;
+  DenseColM wmat, lmat, umat;
+  std::vector<string> proj_files;
+  if (vm.count("projection_files"))
+    {
+      proj_files = vm["projection_files"].as<std::vector<string> >();
     }
 
   if(x_te.is_sparse_type())
@@ -239,27 +355,32 @@ int main(int argc, char * argv[])
 	{
 	  cerr << "***********" << *pit << "************" << endl;
 	  load_projections(wmat, lmat, umat, *pit, verbose);
-	  evaluate_projection(x, y, ovaW, wmat, lmat, umat, thresh, k, *pit, verbose);
+	  evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
 	}      
       if (do_full)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,"full",verbose);
+	  evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
 	}
     }
   else
     {
       // Dense data
-      DenseM x = toEigenMat<DenseM>(x_te.float_array_value());
+      DenseM x = toEigenMat<DenseM>(x_te.array_value());
 
       for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
+	  cerr << "***********" << *pit << "************" << endl;
 	  load_projections(wmat, lmat,umat,*pit,verbose);
-	  evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,*pit,verbose);
+	  evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
 	}      
       if (do_full)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,"full",verbose);
+	  evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
 	}
+    }
+  if (vm.count("out_file"))
+    {
+      outf.close();
     }
   clean_up_and_exit(0);  
 }
