@@ -32,7 +32,6 @@ void output_perfs(double MicroF1, double  MacroF1, double MacroF1_2, double Micr
 }
 
 
-
 template <typename EigenType>
 void evaluate_projection(const EigenType& x, const SparseMb& y, 
 			 const DenseColMf& ovaW,
@@ -123,6 +122,137 @@ void evaluate_projection(const EigenType& x, const SparseMb& y,
 		      Top1, Top5, Top10, 
 		      Prec1, Prec5, Prec10,
 		      nact, act_prc, total_time);
+}
+
+
+template <typename EigenType>
+void evaluate_projection_chunks(const EigenType& x, const SparseMb& y, 
+				const string& ova_file, int chunks,
+				const DenseColM* wmat, const DenseColM* lmat,
+				const DenseColM* umat,
+				predtype thresh, int k, const string& projname,
+				bool verbose, ostream& out,
+				double& MicroF1, double& MacroF1, double& MacroF1_2,
+				double& MicroPrecision, double& MacroPrecision,
+				double& MicroRecall, double& MacroRecall, 
+				double& Top1, double& Top5, double& Top10, 
+				double& Prec1, double& Prec5, double& Prec10,
+				size_t& nact, double& act_prc, double& total_time)
+{
+  assert(chunks > 0);
+  ActiveDataSet* active = NULL;
+
+  time_t start;
+  time_t stop;
+  total_time = 0;
+
+  size_t nact_chunk;
+  DenseColMf ovaW;
+  DenseColM lmat_chunk;
+  DenseColM umat_chunk;
+  size_t dim = x.cols();
+  size_t noClasses = y.cols();
+  size_t n = x.rows();
+  size_t total_preds = n*noClasses;
+
+  PredictionSet* predictions = new PredictionSet(n);
+  vector<size_t> no_active;
+  if (wmat)
+    {
+      no_active.resize(wmat->cols());
+    }
+  else
+    {
+      no_active.push_back(total_preds);
+    }
+  size_t start_class = 0;  
+  for (int chunk = 0; chunk < chunks; chunk++)
+    {
+      size_t chunk_size = noClasses/chunks + (chunk < (noClasses % chunks));
+      if (verbose)
+	{
+	  cout << "Load chunk ... " << endl;
+	}
+      read_binary(ova_file.c_str(), ovaW, dim, chunk_size, start_class);
+      if (verbose)
+	{
+	  cout << "Done load chunk. " << endl;
+	}
+      
+      time(&start);
+      int pred_k = k>10?k:10;
+      if (verbose)
+	{
+	  cout << "Predict chunk ... " << endl;
+	}
+      if (wmat)
+	{
+	  // this copies data
+	  lmat_chunk = lmat->block(start_class,0,chunk_size,lmat->cols());
+	  umat_chunk = umat->block(start_class,0,chunk_size,umat->cols());
+	  active = getactive (no_active, x, *wmat, lmat_chunk, umat_chunk, projname, verbose);
+	}
+      predict(predictions, x, ovaW, active, nact_chunk, verbose, thresh, pred_k, start_class); 
+      nact+=nact_chunk; 
+      if (verbose)
+	{
+	  cout << "Done predict chunk" << endl;
+	}
+
+      // delete active to free it up for the next chunk
+      if (active)
+	{   
+	  for(ActiveDataSet::iterator actit = active->begin(); actit !=active->end();actit++)
+	    {
+	      delete (*actit);
+	    }
+	  delete active;
+	}
+      
+      time(&stop);
+      total_time += difftime(stop,start);
+      start_class = start_class+chunk_size;
+    }
+  assert(start_class == noClasses);
+
+  act_prc = nact*1.0/total_preds;
+  if (verbose)
+    {
+      cout << "Evaluate... " << endl;
+    }
+  predictions->ThreshMetrics(MicroF1, MacroF1, MacroF1_2, MicroPrecision, MacroPrecision, MicroRecall, MacroRecall, y, thresh, k);
+  predictions->TopMetrics(Prec1, Top1, Prec5, Top5, Prec10, Top10, y);
+  if (verbose)
+    {
+      cout << "Done evaluate." << endl;
+    }
+  
+  delete predictions;
+
+  output_perfs(MicroF1, MacroF1, MacroF1_2, MicroPrecision, MacroPrecision, MicroRecall, MacroRecall, Top1, Top5, Top10, Prec1, Prec5, Prec10, no_active, total_preds, total_time, projname + "  ", out);
+}
+
+
+template <typename EigenType>
+void evaluate_projection_chunks(const EigenType& x, const SparseMb& y, 
+			       const string& ova_file, int chunks,
+			       const DenseColM* wmat, const DenseColM* lmat,
+			       const DenseColM* umat,
+			       predtype thresh, int k, const string& projname, 
+			       bool verbose, ostream& out = cout)
+{
+  size_t nact;
+  double total_time, act_prc;
+  double MicroF1, MacroF1, MacroF1_2, MicroPrecision, MacroPrecision, MicroRecall, MacroRecall, Top1, Top5, Top10, Prec1, Prec5, Prec10;
+  
+  evaluate_projection_chunks(x, y, ova_file, chunks, wmat, lmat, umat, thresh, k,
+			     projname, verbose, out,
+			     MicroF1, MacroF1, MacroF1_2,
+			     MicroPrecision, MacroPrecision,
+			     MicroRecall, MacroRecall, 
+			     Top1, Top5, Top10, 
+			     Prec1, Prec5, Prec10,
+			     nact, act_prc, total_time);
 }
 
 

@@ -22,6 +22,7 @@
 #include "constants.h"
 #include "typedefs.h"
 #include "EigenOctave.h"
+#include "EigenIO.h"
 #include "evaluate.h"
 
 using Eigen::VectorXd;
@@ -52,9 +53,10 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
     ("threshold,t", po::value<predtype>(), "Threshold for predictions. By default it is not used in multiclass problems and it is 0.0 in multilabel problems")
     ("top,k", po::value<int>()->default_value(1), "Minimum number of classes to pbe predicted positive. When threshold is not used, or not enough predictions are above the threshold, the classes with highest predicted values are used. Default 1.")
     ("full", "Evaluate the performance without projections")
-    ("distributed", po::value<string>()->default_value("None"), "Whether it is ran on a distributed fasion. Possible values are: \"None\" and \"dstorm\"")
+    ("distributed", po::value<string>()->default_value("None"), "Whether it is ran on a distributed fasion. Possible values are: \"None\"")
     ("ova_format", po::value<string>()->default_value("binary"), "Format of the file with the ova models. One of \"cellarray\" or \"binary\"")
-    ("out_file,o", po::value<string>(), "Output file. If not specified prints to stdout");
+    ("out_file,o", po::value<string>(), "Output file. If not specified prints to stdout")
+    ("chunks", po::value<int>()->default_value(1), "Number of chunks to split the ova file in. Used to deal with ova matrices that are too large to fit in memory. If chunks > 1 the chunks are reloaded for each projection file which leads to long load times. If chunks > 1, ova_format must be binary");
   
   po::options_description hidden_opt("Arguments");
   hidden_opt.add_options()
@@ -78,7 +80,7 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
 
   if (vm.count("distributed"))
     {
-      if (vm["distributed"].as<string>() != "dstorm" && vm["distributed"].as<string>() != "None")
+      if (vm["distributed"].as<string>() != "None")
 	{
 	  cerr << endl;
 	  cerr << "ERROR:Argument to distributed unrecognized" << endl;
@@ -98,6 +100,21 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
 	}
     }
 
+  if (vm["chunks"].as<int>() <= 0)
+    {
+      cerr << endl;
+      cerr << "ERROR: Number of chunks smaller than 1" << endl;
+      print_usage(opt);
+      exit(-1);
+    }
+
+  if (vm["chunks"].as<int>() > 1 && vm["ova_format"].as<string>() !="binary")
+    {
+      cerr << endl;
+      cerr << "ERROR: Multiple chunks can only be used in conjunction with binary ova_format" << endl;
+      print_usage(opt);
+      exit(-1);
+    }
 
   if(!vm.count("data_file"))
     {
@@ -115,58 +132,6 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
     }
 }
 
-// TO DO: put protections when files are not available or the right 
-// variables are not in them.
-// now it crashes badly with a seg fault and can corrupt other processes
-void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose = false)
-{
-  octave_value_list args; 
-  args(0) = filename; // the projection filename 
-  args(1) = "w";
-  args(2) = "min_proj";
-  args(3) = "max_proj";
-  if (verbose)
-    {
-      cout << "Loading file " << args(0).string_value() << " ... " <<endl;
-    }
-  octave_value_list loaded = Fload(args, 1);
-  //feval("load", args, 0); // no arguments returned 
-  if (verbose)
-    {
-      cout << "success" << endl; 
-    }
-  
-  wmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(1).string_value()).array_value());
-  lmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(2).string_value()).array_value());
-  umat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(3).string_value()).array_value());
-  //  args.clear();
-  //  loaded.clear();
-}
-
-// the file should have a matrix sotred in column major format, with 32 bit float entries. 
-// read cols columns each with rows rows. Start from column start_col 
-void read_binary(const char* filename, DenseColMf& m, const DenseColMf::Index rows, const DenseColMf::Index cols, const DenseColMf::Index start_col = 0)
-{
-  assert(sizeof(DenseColMf::Scalar) == 32);
-  ifstream in(filename, ios::in | ios::binary);
-  if (in.is_open())
-    {
-      m.resize(rows,cols);
-      in.seekg(start_col*rows);
-      in.read((char*)m.data(), rows*cols*sizeof(DenseColMf::Scalar));
-      if(!in)
-	{
-	  cerr << "Error reading file " << filename << ". Only " << in.gcount() << " bytes read out of " << rows*cols*sizeof(DenseColMf::Scalar) << endl;
-	  exit(-1);
-	}
-      in.close();
-    }
-  else
-    {
-      cerr << "Trouble opening file " << filename << endl;
-      exit(-1);
-    }
-}
 
 
 // TO DO: put protections when files are not available or the right 
@@ -287,49 +252,53 @@ int main(int argc, char * argv[])
 	}
     }
 
-  size_t noClasses = y.cols();
-  size_t dim;
-  if(x_te.is_sparse_type())
-    {
-      // Sparse data
-      dim = x_te.sparse_matrix_value().cols();
-    }
-  else
-    {
-      //Dense data
-      dim = x_te.array_value().cols();
-    }
-
   DenseColMf ovaW;
-  if (vm["ova_format"].as<string>() == "cellarray")
+  int chunks = vm["chunks"].as<int>();
+  assert(chunks > 0);
+  if (chunks == 1)
     {
-      args(0) = vm["ova_file"].as<string>(); // ova file name
-      args(1) = "svm_models_final";  
-      if (verbose)
+      size_t noClasses = y.cols();
+      size_t dim;
+      if(x_te.is_sparse_type())
 	{
-	  cout << "Loading file " << args(0).string_value() << " ... " <<endl;
+	  // Sparse data
+	  dim = x_te.sparse_matrix_value().cols();
 	}
-      loaded = Fload(args, 1);  
-      if (verbose)
+      else
 	{
-	  cout << "success" << endl;
+	  //Dense data
+	  dim = x_te.array_value().cols();
 	}
-      toEigenMat(ovaW, loaded(0).scalar_map_value().getfield(args(1).string_value()).cell_value());
       
-      args.clear();
-      loaded.clear();
-      Fclear();
+      if (vm["ova_format"].as<string>() == "cellarray")
+	{
+	  args(0) = vm["ova_file"].as<string>(); // ova file name
+	  args(1) = "svm_models_final";  
+	  if (verbose)
+	    {
+	      cout << "Loading file " << args(0).string_value() << " ... " <<endl;
+	    }
+	  loaded = Fload(args, 1);  
+	  if (verbose)
+	    {
+	      cout << "success" << endl;
+	    }
+	  toEigenMat(ovaW, loaded(0).scalar_map_value().getfield(args(1).string_value()).cell_value());
+	  
+	  args.clear();
+	  loaded.clear();
+	  Fclear();
+	}
+      else if (vm["ova_format"].as<string>() == "binary")
+	{
+	  read_binary(vm["ova_file"].as<string>().c_str(), ovaW, dim, noClasses);
+	}
+      else
+	{ 
+	  cerr << "Unrecognized format for the ova file" << endl;
+	  exit(-1);
+	}
     }
-  else if (vm["ova_format"].as<string>() == "binary")
-    {
-      read_binary(vm["ova_file"].as<string>().c_str(), ovaW, dim, noClasses);
-    }
-  else
-    { 
-      cerr << "Unrecognized format for the ova file" << endl;
-      exit(-1);
-    }
-
 
   bool do_full = vm.count("full")?true:false;
   bool do_projection=false;
@@ -355,11 +324,25 @@ int main(int argc, char * argv[])
 	{
 	  cerr << "***********" << *pit << "************" << endl;
 	  load_projections(wmat, lmat, umat, *pit, verbose);
-	  evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	  if (chunks == 1)
+	    {
+	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	    } 
+	  else
+	    {
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	    }	  
 	}      
       if (do_full)
 	{
-	  evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	  if (chunks == 1)
+	    {
+	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	    }
+	  else
+	    {
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	    }
 	}
     }
   else
@@ -371,11 +354,25 @@ int main(int argc, char * argv[])
 	{
 	  cerr << "***********" << *pit << "************" << endl;
 	  load_projections(wmat, lmat,umat,*pit,verbose);
-	  evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	  if (chunks == 1)
+	    {
+	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	    } 
+	  else
+	    {
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	    }	  
 	}      
       if (do_full)
 	{
-	  evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	  if (chunks == 1)
+	    {
+	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	    }
+	  else
+	    {
+	      evaluate_projection_chunks(x, y, vm["ova_vile"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	    }
 	}
     }
   if (vm.count("out_file"))
