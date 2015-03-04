@@ -34,6 +34,7 @@ typedef struct
   size_t optimizeLU_epoch; // number of iterations between full optimizations of the lower and upper bounds
   bool remove_constraints; // whether to remove the constraints for instances that fall outside the class boundaries in previous projections. 
   bool remove_class_constraints; // whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. 
+  bool reweight_lambda; // whether to diminish lambda (increase C1 and C2) as constraints are eliminated;
   Reorder_Type reorder_type; // whether to rank the classes by the mean of the projected examples or by the midpoint of its [l,u] interval (i.e. (u+l)/2).
   bool ml_wt_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering other class contraints. 
   bool ml_wt_class_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering its class contraints. 
@@ -66,6 +67,7 @@ inline param_struct set_default_params()
   def.optimizeLU_epoch=10000; // this is very expensive so it should not be done often
   def.remove_constraints = false;
   def.remove_class_constraints = false;
+  def.reweight_lambda = true;
   def.ml_wt_by_nclasses = false;
   def.ml_wt_class_by_nclasses = false;
   def.num_threads = 0; 

@@ -49,6 +49,7 @@ void print_usage()
   cout << "           min_eta - the minimum value of the lerarning rate (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]" << endl;
   cout << "           remove_constraints - whether to remove the constraints for instances that fall outside the class boundaries in previous projections. [false] " << endl;
   cout << "           remove_class_constraints - whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. [false] " << endl;
+  cout << "           reweight_lambda - whether to diminish lambda (increase C1 and C2) as constraints are eliminated [true]." << endl;
   cout << "           ml_wt_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering other class contraints. [false]" << endl;
   cout << "           ml_wt_class_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering its class contraints.[false]" << endl;
   cout << "           seed - random seed. 0 for time dependent seed. [0]" << endl;
@@ -196,6 +197,11 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	{
 	  params.remove_class_constraints=tmp.bool_value();
 	}
+      tmp = parameters.contents("reweight_lambda");
+      if (tmp.is_defined())
+	{
+	  params.reweight_lambda=tmp.bool_value();
+	}
       tmp = parameters.contents("ml_wt_by_nclasses");
       if (tmp.is_defined())
 	{
@@ -237,20 +243,22 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	  params.resume=tmp.bool_value();
 	}
     }
-
-
+  
   DenseM w, l, u, w_avg, l_avg, u_avg;
-  if(params.resume && nargin >= 6)
+  VectorXd objective_vals, objective_vals_avg;
+  if(params.resume && nargin >= 7)
     {      
       w_avg = toEigenMat<DenseM>(args(3).array_value()); // The weights from previous run
       l_avg = toEigenMat<DenseM>(args(4).array_value()); // the lower bounds from previous run
       u_avg = toEigenMat<DenseM>(args(5).array_value()); // the upper bounds from previous run
-      if (nargin == 9)
+      objective_vals_avg = toEigenVec(args(6).array_value()); // the obj vals from previous run
+      if (nargin == 11)
 	{
 	  //w,l and u were also passed
-	  w = toEigenMat<DenseM>(args(6).array_value()); // The weights from previous run
-	  l = toEigenMat<DenseM>(args(7).array_value()); // the lower bounds from previous run
-	  u = toEigenMat<DenseM>(args(8).array_value()); // the upper bounds from previous run
+	  w = toEigenMat<DenseM>(args(7).array_value()); // The weights from previous run
+	  l = toEigenMat<DenseM>(args(8).array_value()); // the lower bounds from previous run
+	  u = toEigenMat<DenseM>(args(9).array_value()); // the upper bounds from previous run
+	  objective_vals = toEigenVec(args(10).array_value()); // the obj vals from previous run
 	}
       else
 	{
@@ -258,6 +266,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	  w = w_avg;
 	  l = l_avg;
 	  u = u_avg;
+	  objective_vals = objective_vals_avg;
 	}
     }
  
@@ -266,7 +275,6 @@ DEFUN_DLD (oct_find_w, args, nargout,
 
   
   
-  VectorXd objective_vals, objective_vals_avg;
 
   /* initialize random seed: */
   if (params.seed)
@@ -297,7 +305,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
     {
       // Sparse data
       SparseM x = toEigenMat(args(0).sparse_matrix_value());
-
+      
       solve_optimization(w, l, u, objective_vals, w_avg, l_avg, u_avg, objective_vals_avg, x, y, params);
     }
   else

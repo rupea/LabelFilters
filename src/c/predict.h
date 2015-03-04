@@ -201,7 +201,7 @@ void predict(PredictionSet* predictions, const Eigentype& x, const DenseColMf& w
 }
 
 template <typename Eigentype>
-ActiveDataSet* getactive(vector<size_t>& no_active, const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat, const string projname="", bool verbose = false)
+ActiveDataSet* getactive(vector<size_t>& no_active, const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat, bool verbose = false)
 {
   #ifdef PROFILE
   ProfilerStart("projected_getactive.profile");
@@ -210,6 +210,14 @@ ActiveDataSet* getactive(vector<size_t>& no_active, const Eigentype& x, const De
   size_t n = projections.rows();
   size_t noClasses = lmat.rows();
   ActiveDataSet* active = new ActiveDataSet(n);
+  if (no_active.empty())
+    {
+      no_active.resize(projections.cols());
+    }
+  else
+    {
+      assert(no_active.size() == prjections.cols());
+    }
   for (ActiveDataSet::iterator it = active->begin(); it != active->end(); ++it)
     {
       *it = new dynamic_bitset<>(noClasses);
