@@ -45,9 +45,9 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
       return octave_value_list(0);
     }
   
-  DenseColM wmat = toEigenMat<DenseColM>(args(3).float_array_value());
-  DenseColM lmat1 = toEigenMat<DenseColM>(args(4).float_array_value());
-  DenseColM umat1 = toEigenMat<DenseColM>(args(5).float_array_value());
+  DenseColM wmat = toEigenMat<DenseColM>(args(3).array_value());
+  DenseColM lmat1 = toEigenMat<DenseColM>(args(4).array_value());
+  DenseColM umat1 = toEigenMat<DenseColM>(args(5).array_value());
   DenseM projections;
 
   
@@ -67,8 +67,8 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
   toEigenMat(ovaW, (*loaded)(0).scalar_map_value().getfield(arg(1).string_value()).cell_value());
   
   cout << lmat1.rows() << "   " <<  lmat1.cols() << endl;
-  DenseM lmat = lmat1.topRows(ovaW.cols());
-  DenseM umat = umat1.topRows(ovaW.cols());
+  DenseColM lmat = lmat1.topRows(ovaW.cols());
+  DenseColM umat = umat1.topRows(ovaW.cols());
   cout << lmat.rows() << "   " <<  lmat.cols() << endl;
 
   cout << "size of prediction " << sizeof(prediction) << endl;
@@ -97,7 +97,7 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
     }
   else
     {      
-      FloatNDArray yVector = args(1).float_array_value(); // the label vector
+      FloatNDArray yVector = args(1).array_value(); // the label vector
       
       VectorXd yVec = toEigenVec(yVector);
   
@@ -117,41 +117,41 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
       // Sparse data
       SparseM x = toEigenMat(args(0).sparse_matrix_value());
 
-      evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,"filtered",verbose,
+      evaluate_projection(x,y,ovaW,&wmat,&lmat,&umat,thresh,k,"filtered",verbose,std::cout,
 			  MicroF1, MacroF1, MacroF1_2, MicroPrecision,
 			  MacroPrecision, MicroRecall, MacroRecall,
 			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, act_prc, time);
       
       if (nargout > 1)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,"not filtered",verbose,
-			MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
-			MicroPrecision_noproj, MacroPrecision_noproj, 
-			MicroRecall_noproj, MacroRecall_noproj, 
-			Top1_noproj, Top5_noproj, Top10_noproj, 
-			Prec1_noproj, Prec5_noproj, Prec10_noproj,
-			nact_noproj, act_prc_noproj, time_noproj);
+	  evaluate_projection(x,y,ovaW,NULL, NULL, NULL,thresh,k,"not filtered",verbose, std::cout,
+			      MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
+			      MicroPrecision_noproj, MacroPrecision_noproj, 
+			      MicroRecall_noproj, MacroRecall_noproj, 
+			      Top1_noproj, Top5_noproj, Top10_noproj, 
+			      Prec1_noproj, Prec5_noproj, Prec10_noproj,
+			      nact_noproj, act_prc_noproj, time_noproj);
 	}      
     }
   else
     {
       // Dense data
-      DenseM x = toEigenMat<DenseM>(args(0).float_array_value());
+      DenseM x = toEigenMat<DenseM>(args(0).array_value());
 
-      evaluate_projection(x,y,ovaW,wmat,lmat,umat,thresh,k,"filtered",verbose,
+      evaluate_projection(x,y,ovaW,&wmat,&lmat,&umat,thresh,k,"filtered",verbose,std::cout,
 			  MicroF1, MacroF1, MacroF1_2, MicroPrecision,
 			  MacroPrecision, MicroRecall, MacroRecall,
 			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, act_prc, time);
       
       if (nargout > 1)
 	{
-	  evaluate_full(x,y,ovaW,thresh,k,"not filtered",verbose,
-			MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
-			MicroPrecision_noproj, MacroPrecision_noproj, 
-			MicroRecall_noproj, MacroRecall_noproj, 
-			Top1_noproj, Top5_noproj, Top10_noproj, 
-			Prec1_noproj, Prec5_noproj, Prec10_noproj,
-			nact_noproj, act_prc_noproj, time_noproj);
+	  evaluate_projection(x,y,ovaW,NULL,NULL,NULL,thresh,k,"not filtered",verbose,std::cout,
+			      MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
+			      MicroPrecision_noproj, MacroPrecision_noproj, 
+			      MicroRecall_noproj, MacroRecall_noproj, 
+			      Top1_noproj, Top5_noproj, Top10_noproj, 
+			      Prec1_noproj, Prec5_noproj, Prec10_noproj,
+			      nact_noproj, act_prc_noproj, time_noproj);
 	}
     }
   

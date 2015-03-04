@@ -837,9 +837,22 @@ void optimizeLU(VectorXd&l, VectorXd&u,
       // grad are stored in order of the ranked classes
       // to minimize cash misses and false sharing       
       VectorXd grad(noClasses);
+      double classweight;
       for (int sc = 0; sc <noClasses; sc++) 
 	{
-	  grad.coeffRef(sc) = C1*wc.coeff(sorted_class[sc]);
+	  // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
+	  classweight = wc.coeff(sorted_class[sc]);
+	  if (classweight == 0)
+	    {
+	      // there are no examples of this class
+	      // so just put l and u to 0 (l is set below)
+	      u.coeffRef(sorted_class[sc]) = 0;
+	      grad.coeffRef(sc) = -1; 
+	    }
+	  else
+	    {
+	      grad.coeffRef(sc) = C1*classweight;
+	    }	  
 	}
       //      VectorXd grad = C1*wc;
 
@@ -867,6 +880,8 @@ void optimizeLU(VectorXd&l, VectorXd&u,
 		    {
 		      int cs = it.col();
 		      int sc = class_order[cs];
+		      // should check for filtered (in case classes were filtered)
+		      // but things brake above if remove_class_constraints is true
 		      if (grad.coeff(sc) >= 0 )
 			{
 			  grad.coeffRef(sc) -= class_weight;
@@ -958,10 +973,24 @@ void optimizeLU(VectorXd&l, VectorXd&u,
       // grad are stored in order of the ranked classes
       // to minimize cash misses and false sharing       
       VectorXd grad(noClasses);
+      double classweight;
       for (int sc = 0; sc <noClasses; sc++) 
 	{
-	  grad.coeffRef(sc) = C1*wc.coeff(sorted_class[sc]);
-	}
+	  // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
+	  classweight = wc.coeff(sorted_class[sc]);
+	  if (classweight == 0)
+	    {
+	      // there are no examples of this class
+	      // so just put l and u to 0
+	      l.coeffRef(sorted_class[sc]) = 0.0;
+	      grad.coeffRef(sc) = -1; 
+	    }
+	  else
+	    {
+	      grad.coeffRef(sc) = C1*classweight;
+	    }
+	}	  
+
       //      VectorXd grad = C1*wc;
       for (std::vector<size_t>::const_reverse_iterator i = indices.rbegin(); i != indices.rend(); i++)
 	{

@@ -242,7 +242,7 @@ double PredictionSet::MacroRecall(const SparseMb& y, double thresh, size_t k)
       }
     return rec/l;
   }
-
+#if 0
 void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1, 
 			       double& MacroF1_2, 
 			       double& MicroPrecision, double& MacroPrecision,
@@ -260,7 +260,7 @@ void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1,
     for ( predit = _preddata->begin(), i=0; predit != _preddata->end(); predit++,i++)
       {
 	(*predit)->predict(preds, thresh, k);
-	// it woudl be more efficitent to look or the true classes in preds using find	
+	// it woudl be more efficitent to look or the true classes in preds using find
 	for (std::vector<int>::iterator it = preds.begin(); it !=preds.end();it++)
 	  {
 	    class_total_p[*it]++;
@@ -318,27 +318,124 @@ void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1,
     MacroF1 = 2*MacroPrecision*MacroRecall/(MacroPrecision+MacroRecall);
     MacroF1_2 = f1/l;
   }
+#endif //# if 0
+
+void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1, 
+			       double& MacroF1_2, 
+			       double& MicroPrecision, double& MacroPrecision,
+			       double& MicroRecall, double& MacroRecall, 
+			       const SparseMb& y, double thresh, size_t k)
+  {
+    assert (y.rows() == _preddata->size());
+    std::vector<size_t> class_tp(y.cols(),0);
+    std::vector<size_t> class_total_p(y.cols(),0);    
+    std::vector<size_t> ncl(y.cols(),0);
+    size_t tp=0;
+    size_t total_p=0;
+
+    std::vector<PredVec*>* preddata = _preddata; // needed to make the omp work.
+#pragma omp parallel default(none) shared(preddata,thresh,k,y,class_tp,class_total_p,total_p,tp,ncl)
+    {
+      std::vector<size_t> class_tp_private(y.cols(),0);
+      std::vector<size_t> class_total_p_private(y.cols(),0);    
+      std::vector<size_t> ncl_private(y.cols(),0);
+      size_t tp_private=0;
+      size_t total_p_private=0;
+#pragma omp for
+      for ( size_t i=0; i < preddata->size(); i++)
+	{
+	  std::vector<int> preds;
+	  ((*preddata)[i])->predict(preds, thresh, k);
+	  // it woudl be more efficitent to look or the true classes in preds using find
+	  for (std::vector<int>::iterator it = preds.begin(); it !=preds.end();it++)
+	    {
+	      class_total_p_private[*it]++;
+	      //	    cout << *it << "   " << class_tp[*it] << "   " << class_total_p[*it] << "   " << y.coeff(i,*it) << endl;
+	      if (y.coeff(i,*it))
+		{
+		  class_tp_private[*it]++;		
+		  tp_private++;
+		}
+	    }
+
+	  // get the number of examples in each class
+	  for (SparseMb::InnerIterator it(y,i); it ; ++it)
+	    {
+	      if (it.value())
+		{
+		  ncl_private[it.col()]++;
+		}
+	    }	  
+	  total_p_private+=preds.size();
+	}
+#pragma omp critical
+      {
+	for (size_t i=0; i < y.cols(); i++)
+	  {
+	    class_total_p[i] += class_total_p_private[i];
+	    class_tp[i] += class_tp_private[i];
+	    ncl[i]+=ncl_private[i];
+	  }
+	tp+=tp_private;
+	total_p += total_p_private;
+      }
+    }
+
+    MicroPrecision = tp*1.0/total_p;
+    MicroRecall = tp*1.0/y.nonZeros();
+    MicroF1 = 2*MicroPrecision*MicroRecall/(MicroPrecision+MicroRecall);
+
+    double prec = 0;
+    double rec = 0;
+    double f1 = 0;
+    size_t l=0;
+#pragma omp parallel for default(shared) reduction(+:prec,rec,f1,l)
+    for (int j=0;j<y.cols();j++)
+      {
+	double p=0,r=0;
+	if (class_total_p[j] > 0)
+	  {	    
+	    p = class_tp[j]*1.0/class_total_p[j];
+	    prec += p;
+	  }
+	if (ncl[j] > 0)
+	  {	    
+	    r = class_tp[j]*1.0/ncl[j];
+	    rec += r;
+	    if (p+r>0)
+	      {
+		f1 += 2*p*r/(p+r);
+	      }
+	    l++;
+	  }
+      }
+    MacroPrecision = prec*1.0/l;
+    MacroRecall = rec*1.0/l;
+    MacroF1 = 2*MacroPrecision*MacroRecall/(MacroPrecision+MacroRecall);
+    MacroF1_2 = f1/l;
+  }
 
 void PredictionSet::TopMetrics(double& Prec1, double& Top1,
-			    double& Prec5, double& Top5, 
-			    double& Prec10, double& Top10,
-			    const SparseMb& y)
+			       double& Prec5, double& Top5, 
+			       double& Prec10, double& Top10,
+			       const SparseMb& y)
   {
     assert (y.rows() == _preddata->size());
     int maxtop = 10;
-    std::vector<int> preds;
-    std::vector<PredVec*>::iterator predit;
-    size_t i;
-    double ret=0;
-    Top1 = 0; Prec1 = 0; Top5 = 0; Prec5 = 0; Top10 = 0; Prec10 = 0;
-    for ( predit = _preddata->begin(), i=0; predit != _preddata->end(); predit++,i++)
-      {
-	(*predit)->predict(preds, boost::numeric::bounds<predtype>::highest(), maxtop);
+    double my_top1=0, my_prec1=0, my_top5=0, my_prec5=0, my_top10=0, my_prec10=0;
+    
+    std::vector<PredVec*>* preddata = _preddata; // needed to make the omp work.
+#pragma omp parallel for default(none) shared(preddata,y,maxtop) reduction(+:my_top1,my_top5,my_top10,my_prec1,my_prec5,my_prec10)
+    for ( size_t i=0; i<preddata->size(); i++)
+      {	
+	std::vector<int> preds;
+	((*preddata)[i])->predict(preds, boost::numeric::bounds<predtype>::highest(), maxtop);
 	if (preds.size()==0)
 	  {
 	    // no predictions were made for this case.
 	    continue;
 	  }
+	
 	size_t tp = 0;
 	int k = 0;
 	for (std::vector<int>::iterator it = preds.begin(); it != preds.end(); it++)
@@ -350,38 +447,39 @@ void PredictionSet::TopMetrics(double& Prec1, double& Top1,
 	    k++;
 	    if (k == 1)
 	      {
-		Prec1 += tp;
-		Top1 += tp;
+		my_prec1 += tp;
+		my_top1 += tp;
 	      }
 	    if (k == 5)
 	      {
-		Prec5 += tp*1.0/5;
-		Top5 += (tp>0);
+		my_prec5 += tp*1.0/5;
+		my_top5 += (tp>0);
 	      }
 	    if (k == 10)
 	      {
-		Prec10 += tp*1.0/10;
-		Top10 += (tp>0);
+		my_prec10 += tp*1.0/10;
+		my_top10 += (tp>0);
 	      }
 	  }
 	//k is at least 1
 	if (k < 5)
 	  {
-	    Prec5 += tp*1.0/k;
-	    Top5 += (tp>0);
+	    my_prec5 += tp*1.0/k;
+	    my_top5 += (tp>0);
 	  }
 	if (k < 10)
 	  {
-	    Prec10 += tp*1.0/k;
-	    Top10 += (tp>0);
+	    my_prec10 += tp*1.0/k;
+	    my_top10 += (tp>0);
 	  }	    	    
-      }
-    Prec1 /= _preddata->size();
-    Top1 /=  _preddata->size();
-    Prec5 /= _preddata->size();
-    Top5 /=  _preddata->size();
-    Prec10 /= _preddata->size();
-    Top10 /=  _preddata->size();
+      }      
+    
+    Prec1 = my_prec1 / _preddata->size();
+    Top1 = my_top1 / _preddata->size();
+    Prec5 = my_prec5 / _preddata->size();
+    Top5 =  my_top5 / _preddata->size();
+    Prec10 = my_prec10 / _preddata->size();
+    Top10 = my_top10 / _preddata->size();
   }
 
 size_t PredictionSet::npreds() const
