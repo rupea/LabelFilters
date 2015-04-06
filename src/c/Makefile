@@ -20,8 +20,8 @@ profile:
 learn_projection: learn_projection.o find_w.o printing.o EigenOctave.o utils.o
 	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o learn_projection learn_projection.o EigenOctave.o find_w.o printing.o utils.o
 
-evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o
-	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o evaluate_projection evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o
+evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
+	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o evaluate_projection evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
 
 .cpp.o:
 	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<

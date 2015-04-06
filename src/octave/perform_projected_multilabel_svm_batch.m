@@ -83,12 +83,27 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,
       tmpY=y_tr(in_range,class);
     end
     tmpY(tmpY==0) = -1;
+
     assert(numel(unique(tmpY))<=2);
-    
+
     if (size(tmpX,1) == 0)
+      %% all trainig examples have been filtered out
+      %% just create a classifier that alwasy predicts 0
       tmpX = sparse(2,size(x_tr,2));
       tmpY = [-1;1];
     end
+    
+
+    if (numel(unique(tmpY)) == 1)
+      %% one label is missing. 
+      %% liblinear treats it as a one class problem, which might be fine except that it will always make positive predictiosn(even if the labels are -1).
+      %% maybe these classes should be removed, but for now, just add an all zero document with the missing label.      
+      %% this could create problems down the road, but it is an easier fix now
+      %% maybe a better fix is for these models to always predict -9999
+      %% could do this if we introduce a bias
+      tmpX = [sparse(1,size(x_tr,2));tmpX];
+      tmpY = [-unique(tmpY); tmpY];
+    endif
     
     svmparams = sprintf("%s -c %f", solverparams, C);
 

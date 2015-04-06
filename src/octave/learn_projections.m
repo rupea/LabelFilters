@@ -3,18 +3,22 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
 
   
   %% if we have multiple restarts we can't resume the computation
-  if (parameters.restarts != 1)
-    parameters.resume = 0
-  end
+  # if (parameters.restarts != 1)
+  #   parameters.resume = 0
+  # end
 
+  ## if parameters.resume is true, it assumes that parameters.projection_file exists
+  ## and will resume the computation from this file
+  ## parameters.projection_file will be overwritten
 
   if (!parameters.relearn_projection && exist(parameters.projection_file,"file"))
     load(parameters.projection_file, "w", "min_proj", "max_proj", "obj_val", "w_noavg", "min_proj_noavg", "max_proj_noavg", "obj_val_noavg");
     if (!parameters.resume || parameters.no_projections <= size(w,2))
       return;
-    endif    
+    endif
   endif
-  
+
+
   if (isempty(x_tr))
     if (!isfield(parameters, "data_file") || !exist(parameters.data_file,"file"))
       error("Learn_projections is called without a dataset and without a data file");
@@ -24,7 +28,7 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
 
   if (parameters.onlycorrect)
     if (!isfield(parameters, "ova_preds_file") || !exist(parameters.ova_preds_file,"file"))
-      warning("Learn_projections is called with onlycorrect byt without without a ova predictions file. Disabling onlycorrect.");
+      warning("Learn_projections is called with onlycorrect but without without a ova predictions file. Disabling onlycorrect.");
       parameters.onlycorrect=false;
     endif
     if (size(y_tr,2)!=1)
@@ -59,16 +63,39 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
     endif
     parameters.C1 = parameters.C2*parameters.C1*noClasses;
   endif  
-  
+
+  ## consistency checks for resume
+  if (parameters.resume)
+    if(exist(parameters.resume_from,"file"))
+      load(parameters.resume_from, "w", "min_proj", "max_proj", "obj_val", "w_noavg", "min_proj_noavg", "max_proj_noavg", "obj_val_noavg");
+    else
+      warning("Resume is true, but resume_from file does not exist. Starting from scratch");
+      parameters.resume = false;
+    endif
+  endif
+
+  if (!exist("w","var"))
+    parameters.resume = false;
+  endif
+
+  if (parameters.resume)
+    assert(size(w,1) == size(x_tr,2))
+    if (size(y_tr,2) == 1) #multi-class problem
+      assert(size(min_proj,1) == max(y_tr));
+    else
+      assert(size(min_proj,1) == size(y_tr,2));
+    endif
+  endif
+
   disp("-----------------------------------------------------");
   best_obj=Inf;
   for r=1:parameters.restarts
     disp(sprintf("restart %d\n", r));
     if ( parameters.resume )
       if (exist("w_noavg","var"))
-	[w,min_proj,max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj,w_noavg, min_proj_noavg, max_proj_noavg);
+	[w,min_proj,max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg);
       elseif (exist("w","var"))
-	[w,min_proj,max_proj, obj_val,w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj);
+	[w,min_proj,max_proj, obj_val,w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj, obj_val);
       endif
     else 
       #w=init_w(2, x_tr_proj, y_tr_proj, size(x_tr_proj,2), parameters.no_projections);

@@ -40,9 +40,9 @@ DEFUN_DLD (oct_predict_data, args, nargout,
       return octave_value_list(0);
     }
   
-  DenseColM wmat = toEigenMat<DenseColM>(args(2).float_array_value());
-  DenseColM lmat = toEigenMat<DenseColM>(args(3).float_array_value());
-  DenseColM umat = toEigenMat<DenseColM>(args(4).float_array_value());
+  DenseColM wmat = toEigenMat<DenseColM>(args(2).array_value());
+  DenseColM lmat = toEigenMat<DenseColM>(args(3).array_value());
+  DenseColM umat = toEigenMat<DenseColM>(args(4).array_value());
   DenseM projections;
 
   
@@ -65,19 +65,20 @@ DEFUN_DLD (oct_predict_data, args, nargout,
   ActiveDataSet* active;
   PredictionSet* predictions;
   size_t nact;
+  vector<size_t> no_active(wmat.cols());
   if(args(0).is_sparse_type())
     {
       // Sparse data
       SparseM x = toEigenMat(args(0).sparse_matrix_value());
       
-      active = getactive (x, wmat, lmat, umat);
+      active = getactive (no_active, x, wmat, lmat, umat);
       predictions = predict(x, ovaW, active, nact); 
     }
   else
     {
       // Dense data
       DenseM x = toEigenMat<DenseM>(args(0).float_array_value());
-      active = getactive (x, wmat, lmat, umat);
+      active = getactive (no_active, x, wmat, lmat, umat);
       predictions = predict(x, ovaW, active, nact); 
     }
 

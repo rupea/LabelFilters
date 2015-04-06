@@ -42,6 +42,8 @@ class PredVec
   bool is_sorted() const {return _sorted;};
   size_t npreds() const {return _npreds;};
   size_t getSize() const {return _predvec->size();};
+  void reserve_extra(size_t n) {_predvec->reserve(n+_predvec->size());};
+  void reserve(size_t n) {_predvec->reserve(n);};
   void prune (size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
   void predict(std::vector<int>& pred_class, double thresh, size_t k=0);
 };
@@ -68,6 +70,7 @@ class PredictionSet
   PredVec* GetPredVec(size_t i) const;
   // sort all predictions sets.
   void sort();
+  size_t size(){return _preddata->size();};
   // prune all the prediction vectors.
   // keep only predictions higher than keep_thresh, but at least k predictions 
   void prune(size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
@@ -138,8 +141,8 @@ inline void PredVec::add_pred(predtype out, int cls)
   pred->out = out; 
   pred->cls = cls; 
   _predvec->push_back(pred);
-  //  _sorted=false;
-  //  _npreds++;
+  _sorted=false;
+  _npreds++;
 }  
 
 // sort predictions in order of the output
@@ -249,6 +252,7 @@ inline PredVec* PredictionSet::NewPredVecAt(size_t i, size_t n)
   (*_preddata)[i]=newpredvec;
   return newpredvec;
 }
+
 
 // puts a new prediction vector at position i.
 // assumes the pointer at position i is NULL so does not delete it

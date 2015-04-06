@@ -153,8 +153,10 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc,
   means.setZero();
   for (k = 0; k < noClasses; k++)
     {
-      l(k)=boost::numeric::bounds<double>::highest();
-      u(k)=boost::numeric::bounds<double>::lowest();	      
+      // need /10 because octave gives and error when reading the saved file otherwise.
+      // this should not be a problem. If this is a problem then we have bigger issues
+      l(k)=boost::numeric::bounds<double>::highest()/10;
+      u(k)=boost::numeric::bounds<double>::lowest()/10;	      
     }
   VectorXd projection;
   w.project(projection,x);
@@ -406,16 +408,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   int idx_remaining = batch_size % idx_chunks;
   
 
-  if (params.report_epoch > 0)
-    {
-      objective_val.resize(1000 + (no_projections * params.max_iter / params.report_epoch));
-    }
-
-  if (params.report_avg_epoch > 0)
-    {
-      objective_val_avg.resize(1000 + (no_projections * params.max_iter / params.report_avg_epoch));
-    }
-
   init_nc(nc, nclasses, y);
   if (params.optimizeLU_epoch > 0)
     {
@@ -429,49 +421,71 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   unsigned long total_constraints = n*noClasses - (1-params.remove_class_constraints)*nc.sum();
   size_t no_filtered=0;
   int projection_dim = 0;
+  
+  assert(wmat.cols() <= no_projections);
 
-  if (params.resume && params.remove_constraints)
+  if (params.resume)
     {
-      for (projection_dim = 0; projection_dim < weights.cols(); projection_dim++)
+      if(params.remove_constraints)
 	{
-	  // use weights_avg since they will hold the correct weights regardless if 
-	  // averaging was performed on a prior run or not
-	  w = WeightVector(weights_avg.col(projection_dim));
-	  l = lower_bounds_avg.col(projection_dim);
-	  u = upper_bounds_avg.col(projection_dim);
-	  
-	  // should we do this in parallel? 
-	  // the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
-	  // should update to use the filter class 
-	  // things will not work correctly with remove_class_constrains on. We need to update wc, nclass 
-	  //       and maybe nc
-	  // check if nclass and nc are used for anything else than weighting examples belonging
-	  //       to multiple classes
-	  if (params.remove_constraints && projection_dim < no_projections-1)
+	  for (projection_dim = 0; projection_dim < weights.cols(); projection_dim++)
 	    {
-
-	      w.project(projection,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
-	      update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
-	    }
+	      // use weights_avg since they will hold the correct weights regardless if 
+	      // averaging was performed on a prior run or not
+	      w = WeightVector(weights_avg.col(projection_dim));
+	      l = lower_bounds_avg.col(projection_dim);
+	      u = upper_bounds_avg.col(projection_dim);
 	      
-	  no_filtered = filtered.count();
-	  cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
-	  // work on this. This is just a crude approximation.
-	  // now every example - class pair introduces nclass(example) constraints
-	  // if weighting is done, the number is different
-	  // eliminating one example -class pair removes nclass(exmple) potential
-	  // if the class not among the classes of the example
-	  long int no_remaining = total_constraints - no_filtered;
-	  lambda = no_remaining*1.0/(total_constraints*params.C2);
+	      // should we do this in parallel? 
+	      // the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
+	      // should update to use the filter class 
+	      // things will not work correctly with remove_class_constrains on. We need to update wc, nclass 
+	      //       and maybe nc
+	      // check if nclass and nc are used for anything else than weighting examples belonging
+	      //       to multiple classes
+	      if (params.remove_constraints && projection_dim < no_projections-1)
+		{
+		  
+		  w.project(projection,x);
+		  update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
+		}
+	      
+	      no_filtered = filtered.count();
+	      cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
+	      // work on this. This is just a crude approximation.
+	      // now every example - class pair introduces nclass(example) constraints
+	      // if weighting is done, the number is different
+	      // eliminating one example -class pair removes nclass(exmple) potential
+	      // if the class not among the classes of the example
+	      if (params.reweight_lambda)
+		{
+		  long int no_remaining = total_constraints - no_filtered;
+		  lambda = no_remaining*1.0/(total_constraints*params.C2);
+		}
+	    }
 	}
+      projection_dim = weights.cols();
+      obj_idx = objective_val.size();
+      obj_idx_avg = objective_val_avg.size();	    
     }
-
+  
   weights.conservativeResize(d, no_projections);
   weights_avg.conservativeResize(d, no_projections);
   lower_bounds.conservativeResize(noClasses, no_projections);
   upper_bounds.conservativeResize(noClasses, no_projections);
   lower_bounds_avg.conservativeResize(noClasses, no_projections);
   upper_bounds_avg.conservativeResize(noClasses, no_projections);
+  
+  if (params.report_epoch > 0)
+    {
+      objective_val.conservativeResize(1000 + (no_projections * params.max_iter / params.report_epoch));
+    }
+
+  if (params.report_avg_epoch > 0)
+    {
+      objective_val_avg.conservativeResize(1000 + (no_projections * params.max_iter / params.report_avg_epoch));
+    }
+
   
   for(; projection_dim < no_projections; projection_dim++)
     {
@@ -952,8 +966,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	  // if weighting is done, the number is different
 	  // eliminating one example -class pair removes nclass(exmple) potential
 	  // if the class not among the classes of the example
-	  long int no_remaining = total_constraints - no_filtered;
-	  lambda = no_remaining*1.0/(total_constraints*params.C2);
+	      if (params.reweight_lambda)
+		{
+		  long int no_remaining = total_constraints - no_filtered;
+		  lambda = no_remaining*1.0/(total_constraints*params.C2);
+		}
 	}
       
       //      C2*=((n-1)*noClasses)*1.0/no_remaining;
