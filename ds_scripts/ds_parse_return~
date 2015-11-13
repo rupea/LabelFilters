@@ -1,6 +1,0 @@
-#!/bin/tcsh -f 
-
-echo "$#argv"
-#set file = "/dev/stdin"
-
-
