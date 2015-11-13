@@ -1,0 +1,11 @@
+function retstruct = parse_ds_params(paramstruct)
+  z = regexp(paramstruct.params, "'(?<key>[^']*)': (?<val>u?'?[^',]*)",'names');
+  for i = 1:length(z.key)
+    if (strncmp(z.val{i},"u'",2))
+      retstruct.(z.key{i}) = z.val{i}(3:end);
+    else
+      retstruct.(z.key{i}) = str2double(z.val{i});
+    endif
+  end
+  retstruct.db_path = paramstruct.path;
+end

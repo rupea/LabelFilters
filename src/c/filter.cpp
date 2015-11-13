@@ -18,8 +18,8 @@ Filter::Filter(const VectorXd& l, const VectorXd& u)
       _sortedLU->coeffRef(2*i) = l.coeff(i);
       if (l.coeff(i) >= u.coeff(i))
 	{
-	  cerr << "Warning, L >= U for class " << i << " (L=" << l.coeff(i) << ",U=" << u.coeff(i) << ")" << endl;
-	  cerr << "     using interval [L, L+1e-6]" << endl;
+	  // cerr << "Warning, L >= U for class " << i << " (L=" << l.coeff(i) << ",U=" << u.coeff(i) << ")" << endl;
+	  // cerr << "     using interval [L, L+1e-6]" << endl;
 	  //better to deal with this by eliminating the class. This way there won't be any cases that will match this class
 	  _sortedLU->coeffRef(2*i+1) = l.coeff(i)+1e-6;	
 	}

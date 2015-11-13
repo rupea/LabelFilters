@@ -360,6 +360,311 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
     }  // end for idx (second)
 }
 
+
+
+
+
+// function to calculate the multiplier of the gradient for w for a single example. 
+
+double compute_single_w_gradient_size ( int sc_start, int sc_end,
+				       const double proj, const size_t i,
+				       const SparseMb& y, const VectorXi& nclasses, 
+				       int maxclasses, 
+				       const vector<int>& sorted_class,
+				       const vector<int>& class_order, 
+				       const VectorXd& sortedLU,
+				       const boolmatrix& filtered,
+				       double C1, double C2,
+				       const param_struct& params )
+{ 
+  double multiplier = 0.0;
+  int sc, cp;
+  int noClasses = y.cols();
+  size_t no_filtered = filtered.count();
+  double class_weight, other_weight, left_update, right_update;
+  vector<int> classes;
+  vector<int>::iterator class_iter;
+  int left_classes, right_classes;
+  const double *sortedLU_iter; 
+  
+
+  double pp1 = proj + 1;
+  double pm1 = proj - 1;
+
+  class_weight = C1;
+  other_weight = C2;
+  if (params.ml_wt_by_nclasses)
+    {
+      other_weight /= nclasses.coeff(i);
+    }
+  if (params.ml_wt_class_by_nclasses)
+    {
+      class_weight /= nclasses.coeff(i);
+    }
+  
+  left_classes = 0; //number of classes to the left of the current one
+  left_update = 0; // left_classes * other_weight
+  right_classes = nclasses.coeff(i); //number of classes to the right of the current one		  
+  right_update = other_weight * right_classes;
+  
+  // calling y.coeff is expensive so get the classes here
+  classes.resize(0);
+  for (SparseMb::InnerIterator it(y,i); it; ++it)
+    {
+      if (it.value())
+	{
+	  int c = class_order[it.col()];
+	  if ( c < sc_start ) 
+	    {
+	      left_classes++;
+	      left_update += other_weight;
+	      right_classes--;
+	      right_update -= other_weight;
+	    }
+	  else if (c < sc_end)
+	    {
+	      classes.push_back(c);
+	    }
+	}
+    }
+  classes.push_back(sc_end); // this will always be the last 
+  std::sort(classes.begin(),classes.end());
+  
+  sc=sc_start;
+  class_iter = classes.begin();
+  sortedLU_iter = sortedLU.data() + 2*sc_start;
+  while (sc < sc_end)
+    {
+      while(sc < *class_iter)
+	{
+	  // while example is not of class cp
+	  cp = sorted_class[sc]; 			  
+	  if (no_filtered == 0 || !(filtered.get(i,cp))) 
+	    {			      
+	      //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
+	      if (left_classes && (pp1 > *sortedLU_iter)) // I3 Condition w*x > l(cp) - 1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I3 : " << i << endl;
+		  }
+#endif
+		  multiplier += left_update; 
+		}
+	      ++sortedLU_iter;
+	      //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
+	      if (right_classes && (*sortedLU_iter > pm1)) //  I4 Condition  w*x < u(cp) + 1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I4 : " << i<< endl;
+		  }
+#endif
+		  multiplier -= right_update;
+		}
+	      ++sortedLU_iter;			      
+	    }
+	  else
+	    {
+	      sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+	    }
+	  ++sc;
+	}
+      if (sc < sc_end) // test if we are done
+	{
+	  // example has class cp
+	  cp = sorted_class[sc]; 			  
+	  if (!params.remove_class_constraints || no_filtered == 0 || !(filtered.get(i,cp))) 
+	    {			      
+	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
+	      if (*(sortedLU_iter++) > pm1)// I1 Condition  w*x < l(c)+1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I1 : " << i<< endl;
+		  }
+#endif
+		  multiplier -= class_weight;
+		} // end if
+	      
+	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
+	      if (pp1 > *(sortedLU_iter++))//  I2 Condition  w*x > u(c)-1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I2 : " << i << endl;
+		  }
+#endif
+		  multiplier += class_weight;
+		} // end if			      
+	    }
+	  else
+	    {
+	      sortedLU_iter +=2; //the iterator needs to be incremeted even if the class is filtered
+	    }
+	  //update the left and right classes;
+	  ++left_classes;
+	  left_update += other_weight;
+	  --right_classes;
+	  right_update -= other_weight;
+	  ++class_iter;
+	  ++sc;
+	}
+    } // while(sc<noClasses)
+  return multiplier;
+}
+
+
+
+// function to update L and U for a single example, given w. 
+
+void update_single_sortedLU( VectorXd& sortedLU,
+			     int sc_start, int sc_end,
+			     const double proj, const size_t i,
+			     const SparseMb& y, const VectorXi& nclasses, 
+			     int maxclasses, 
+			     const vector<int>& sorted_class,
+			     const vector<int>& class_order, 
+			     const boolmatrix& filtered,
+			     double C1, double C2, const double eta_t,
+			     const param_struct& params)
+{
+
+  int sc, cp;
+  int noClasses = y.cols();
+  size_t no_filtered = filtered.count();
+  double class_weight, other_weight, left_update, right_update;
+  vector<int> classes;
+  vector<int>::iterator class_iter;
+  int left_classes, right_classes;
+  double *sortedLU_iter;
+
+  class_weight = C1;
+  other_weight = C2;
+  if (params.ml_wt_by_nclasses)
+    {
+      other_weight /= nclasses.coeff(i);
+    }
+  if (params.ml_wt_class_by_nclasses)
+    {
+      class_weight /= nclasses.coeff(i);
+    }
+  
+  left_classes = 0; //number of classes to the left of the current one
+  left_update = 0; // left_classes * other_weight
+  right_classes = nclasses.coeff(i); //number of classes to the right of the current one		  
+  right_update = other_weight * right_classes;
+  
+  // calling y.coeff is expensive so get the classes here
+  classes.resize(0);
+  for (SparseMb::InnerIterator it(y,i); it; ++it)
+    {
+      if (it.value())
+	{
+	  int c = class_order[it.col()];
+	  if ( c < sc_start ) 
+	    {
+	      left_classes++;
+	      left_update += other_weight;
+	      right_classes--;
+	      right_update -= other_weight;
+	    }
+	  else if (c < sc_end)
+	    {
+	      classes.push_back(c);
+	    }
+	}
+    }
+  classes.push_back(sc_end); // this will always be the last 
+  std::sort(classes.begin(),classes.end());
+  
+  sc=sc_start;
+  class_iter = classes.begin();
+  sortedLU_iter = sortedLU.data() + 2*sc_start;
+  while (sc < sc_end)
+    {
+      while(sc < *class_iter)
+	{
+	  // while example is not of class cp
+	  cp = sorted_class[sc]; 			  
+	  if (no_filtered == 0 || !(filtered.get(i,cp))) 
+	    {			      
+	      if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I3 : " << idx << ", " << i << endl;
+		  }
+#endif
+		  *sortedLU_iter = min(*sortedLU_iter + left_update*eta_t,proj+1);
+		}
+	      ++sortedLU_iter;
+	      if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I4 : " << idx << ", " << i<< endl;
+		  }
+#endif
+		  *sortedLU_iter = max(*sortedLU_iter - right_update*eta_t,proj-1);
+		}
+	      ++sortedLU_iter;			      
+	    }
+	  else
+	    {
+	      sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+	    }
+	  ++sc;
+	}
+      if (sc < sc_end) // test if we are done
+	{
+	  // example has class cp
+	  cp = sorted_class[sc]; 			  
+	  if (!params.remove_class_constraints || no_filtered == 0 || !(filtered.get(i,cp))) 
+	    {			      
+	      if ((1 - proj + *sortedLU_iter) > 0)// I1 Condition  w*x < l(c)+1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I1 : " << idx << ", " << i<< endl;
+		  }
+#endif
+		  *sortedLU_iter = max(*sortedLU_iter - class_weight*eta_t,proj-1);
+		} // end if
+	      
+	      ++sortedLU_iter;			      
+	      
+	      if ((1 + proj - *sortedLU_iter) > 0)//  I2 Condition  w*x > u(c)-1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I2 : " << idx << ", " << i << endl;
+		  }
+#endif
+		  *sortedLU_iter = min(*sortedLU_iter + class_weight*eta_t,proj+1);
+		} // end if			      
+	      ++sortedLU_iter;
+	    }
+	  else
+	    {
+	      sortedLU_iter +=2; //the iterator needs to be incremeted even if the class is filtered
+	    }
+	  //update the left and right classes;
+	  ++left_classes;
+	  left_update += other_weight;
+	  --right_classes;
+	  right_update -= other_weight;
+	  ++class_iter;
+	  ++sc;
+	}
+    } // while(sc<noClasses)
+}
+  
+
+
+
+
+
 // *****************************************
 // Function to calculate the objective for one example
 // this almost duplicates the function compute_objective

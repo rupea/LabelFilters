@@ -55,13 +55,22 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
     y_tr_proj=y_tr;  
   endif
 
-  if (parameters.C1multiplier)
+  if (parameters.C1multiplier == 1)
     if (size(y_tr_proj,2) == 1)
       noClasses = max(y_tr_proj);
     else
       noClasses = size(y_tr_proj,2);
     endif
     parameters.C1 = parameters.C2*parameters.C1*noClasses;
+  endif  
+
+  if (parameters.C1multiplier == 2)
+    if (size(y_tr_proj,2) == 1)
+      noClasses = max(y_tr_proj);
+    else
+      noClasses = size(y_tr_proj,2);
+    endif
+    parameters.C1 = parameters.C1*noClasses;
   endif  
 
   ## consistency checks for resume
@@ -137,6 +146,11 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
     print("-dpdf", parameters.obj_plot_file)
   end
   
+  if (length(parameters.projection_file) >= 255)
+    parameters.projection_file = sprintf("%s_%d",strtrunc(parameters.projection_file,248),unidrnd(1e5));
+  endif
+     
+
   save(parameters.projection_file, "w", "min_proj", "max_proj" , "obj_val", "w_noavg", "min_proj_noavg", "max_proj_noavg", "obj_val_noavg");
 
   return; 

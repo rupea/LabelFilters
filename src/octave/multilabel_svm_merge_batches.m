@@ -103,7 +103,14 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
     end
   endif
   ## save in octave binary format because saving in matlab v6 format gives errors
-  fclose(wfile);
+  if (wfilemap)
+    fclose(wfile);
+  endif
   save(filename, "-binary", "out_final", "out_final_tr", "svm_models_final", "solver", "solverparams", "sparsemodel_final", "wfilemap", "wmapfilename");    
+
+  # delete the partial files
+  for lbl_idx = 1 : nfiles
+    unlink(cur_file(lbl_idx));
+  end
   return ;
 end

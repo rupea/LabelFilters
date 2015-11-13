@@ -1,0 +1,151 @@
+#!/home/mlshack/alex/Programs/octave-3.8.2/bin/octave -qf
+
+global __DS_VERBOSE = false;
+
+srcdir = "~/Research/mcfilter/src";
+bindir = [srcdir "/c"];
+addpath([srcdir "/octave/"])
+addpath([srcdir "/libsvm-3.17/matlab/"])
+addpath([srcdir "/liblinear-1.94/matlab/"])
+
+%addpath("/bigml/alex/Research/mcfilter/LSHTC-2014/scripts")
+addpath("/bigml/alex/Research/mcfilter/LSHTC-2014/ds_scripts")
+
+
+arg_list = argv();
+
+data_query = arg_list{1};
+ova_query = arg_list{2};
+proj_query = arg_list{3};
+
+recompute = false;
+compute_full = true;
+
+db_data_entries = ds_query(data_query);
+db_ova_entries = ds_query(ova_query);
+db_proj_entries = ds_query(proj_query);
+
+## entry in the filter field if no filter is used
+fullproj.type = "no_filter"; 
+
+clear perf_params;
+perf_params.type = "performances";
+for data_entry = db_data_entries  
+  data_entry = data_entry{1};
+  [foo, df] = fileparts(data_entry.db_path);
+  perf_params.data = data_entry.params;
+  for ova_entry = db_ova_entries
+    ova_entry = ova_entry{1};
+    perf_params.ova = ova_entry.params;      
+    computed_proj = {};
+    if (!recompute)
+      db_perf_entries = ds_query(perf_params);
+      computed_proj = cellfun("getfield",db_perf_entries,{{1}},{"params"},{{1}},{"filter"},"UniformOutput",false);
+    else
+      ds_remove(perf_params);
+    endif
+    cf = compute_full;
+    if (any(cellfun("isequal",computed_proj,{fullproj})))
+      ## the performance with no filter has been calculated
+      ## for this data and this ova model, so don't compute it again
+      cf = false;
+    endif
+    
+#    [foo, of] = fileparts(ova_entry.db_path);
+    proj_files = "";
+    for proj_entry = db_proj_entries
+      proj_entry = proj_entry{1};
+      if (!any(cellfun("isequal",computed_proj,{proj_entry.params})))
+	if(!exist(proj_entry.db_path))
+	  ds_get(proj_entry.params);
+	endif
+	proj_files = [proj_files " " proj_entry.db_path];
+      endif
+    end
+
+    opt_str = "";
+    if (!isempty(proj_files))
+      opt_str = ["-p " proj_files]
+    endif
+    if (cf)
+      opt_str = ["--full " opt_str]
+    endif
+
+    if (!isempty(opt_str))
+      ## if there is some work to do 
+      ## do this here to avoid downloading these big files if they 
+      ## are not needed
+      if (!exist(data_entry.db_path,"file"))
+	ds_get(data_entry.params);
+      endif
+      if ( !exist(ova_entry.db_path,"file"))
+	ds_get(ova_entry.params);
+      endif
+      eval_cmd = sprintf("%s/evaluate_projection %s -- %s %s", bindir, opt_str, data_entry.db_path, ova_entry.db_path);
+      
+      [status,output] = system(eval_cmd, 1);
+
+      for proj_entry = db_proj_entries
+	proj_entry = proj_entry{1};
+	if (!any(cellfun("isequal",computed_proj,{proj_entry.params})))
+	  perfs = parse_eval_output(output, proj_entry.db_path);      
+	  [foo, pf] = fileparts(proj_entry.db_path);
+	  if (!exist("perfs","dir"))
+	    mkdir("perfs");
+	  endif
+	  
+	  newperf_params = perf_params;
+	  newperf_params.filter = proj_entry.params;
+	  for [val,key] = perfs
+	    newperf_params.(key) = val;
+	  end
+	 
+	  outfile = ["perfs/" ds_name(newperf_params, {"data.data.min_ex_per_class","data.data.min_word_count","data.trial", "filter.C1", "filter.C2", "filter.optimizeLU_epoch", "__TIME"})];	  
+	  
+	  outfid = fopen(outfile,"wt");
+	  for [val,key] = perfs
+	    fprintf(outfid,"%s  ", key);
+	    if (ischar(val))
+	      fprintf(outfid, " %s", val);
+	    elseif (isnumeric(val))
+	      fprintf(outfid," %g", val);
+	    endif
+	    fprintf(outfid,"\n");
+	  end
+	  fclose(outfid);
+	  
+	  ds_add(outfile, newperf_params);
+	endif
+      end
+
+      if (cf)
+	perfs = parse_eval_output(output, "full");      
+	if (!exist("perfs","dir"))
+	  mkdir("perfs");
+	endif
+
+	newperf_params = perf_params;
+	newperf_params.filter = fullproj;
+	for [val,key] = perfs
+	  newperf_params.(key) = val;
+	end
+
+	outfile = ["perfs/" ds_name(newperf_params, {"data.data.min_ex_per_class","data.data.min_word_count","data.trial", "filter.type", "__TIME"})];	  
+
+	outfid = fopen(outfile,"wt");
+	for [val,key] = perfs
+	  fprintf(outfid,"%s  ", key);
+	  if (ischar(val))
+	    fprintf(outfid, " %s", val);
+	  elseif (isnumeric(val))
+	    fprintf(outfid," %g", val);
+	  endif
+	  fprintf(outfid,"\n");
+	end
+	fclose(outfid);
+	
+	ds_add(outfile, newperf_params);
+      endif
+    endif
+  end
+end

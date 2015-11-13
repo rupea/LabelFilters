@@ -2,7 +2,7 @@
 ### Project training points on a learned w and filter the instances before training the svm for each class. If project_file==[] no projection is done.
 
 
-function perform_projected_multilabel_svm_batch(exp_name,exp_dir,
+function perform_projected_multilabel_svm_batch(data_file,data_dir,
 						projection_file, project_str, ...
 						C, class_idx_start,class_idx_end, ...
 						threshold = [], ...
@@ -10,7 +10,7 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,
 						sparsemodel = false, keep_out = true )
 
   %%loading data
-  load([exp_dir exp_name ".mat"], "-v6");
+  load([data_dir data_file ".mat"], "-v6");
 
   if (isempty(projection_file)),
     projection = false;
@@ -158,7 +158,7 @@ function perform_projected_multilabel_svm_batch(exp_name,exp_dir,
       
   end
   
-  filename = ["svm_results/svm_" exp_name "_C" num2str(C) "_" num2str(class_idx_start) "_" num2str(class_idx_end) "_threshold" thresh_str "_projected_" project_str ".mat"];
+  filename = ["svm_results/svm_" data_file "_C" num2str(C) "_" num2str(class_idx_start) "_" num2str(class_idx_end) "_threshold" thresh_str "_projected_" project_str ".mat"];
   save(filename, "-v6", "out", "out_tr", "svm_models", "class_idx_start", "class_idx_end", "solver", "solverparams", "sparsemodel");
       
   return;

@@ -72,6 +72,9 @@ Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& da
 
 VectorXd toEigenVec(const FloatNDArray& data);
 
+int32NDArray toIntArray(const VectorXi& eigenVec);
+int64NDArray toInt64Array(const VectorXsz& eigenVec);
+
 Matrix toMatrix(const DenseM& data);
 
 SparseMatrix toMatrix(const SparseM &mat);

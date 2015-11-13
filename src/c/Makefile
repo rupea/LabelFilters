@@ -8,14 +8,18 @@ OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
 
 LDFLAGS ?= -L$(BOOSTDIR)/lib -lboost_program_options
+PROFILE_OPENMP =
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -g -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
-PROFILE_LDFLAGS = -L$(PROFILEDIR)/lib -lprofiler
+PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
-all: learn_projection evaluate_projection
+all: learn_projection evaluate_projection run_LPSR
 
-profile: 
-	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" main main_evaluate
+profile_learnproj: 
+	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
+
+profile_evaluate: 
+	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
 learn_projection: learn_projection.o find_w.o printing.o EigenOctave.o utils.o
 	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o learn_projection learn_projection.o EigenOctave.o find_w.o printing.o utils.o
@@ -23,8 +27,17 @@ learn_projection: learn_projection.o find_w.o printing.o EigenOctave.o utils.o
 evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
 	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o evaluate_projection evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
 
+run_kmeans: run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
+	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o run_kmeans run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
+
+run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o PredictionSet.o
+	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o run_LPSR run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o PredictionSet.o
+
+profile_kmeans: 
+	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" run_kmeans
+
 .cpp.o:
 	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
 
 clean: 
-	rm -f *.o learn_projection evaluate_projection
+	rm -f *.o learn_projection evaluate_projection run_kmeans

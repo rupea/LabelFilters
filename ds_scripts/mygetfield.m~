@@ -1,0 +1,29 @@
+function [vals] = mygetfield(structs,key)
+  if (!iscell(structs))
+    struct = {structs};
+  endif
+
+  idx = index(key,".");
+  if (idx)
+    firstkey = key(1:(idx-1));
+    lastkey = key((idx+1):end);
+  else
+    firstkey = key;
+    lastkey = "";
+  endif
+
+  are_struct = cellfun("isstruct",structs);
+  have_field = cellfun("isfield", structs, {firstkey});
+  alive = are_struct && have_field;
+  vals(!alive) = NA;
+
+  if (!any(alive))
+    return;
+  endif
+
+  if (isempty(lastkey))
+    vals(alive) = cellfun("getfield",structs(alive),{firstkey});
+  else
+    vals(alive) = mygetfield(cellfun("getfield",structs(alive),{firstkey},"UniformOutput",false),lastkey);
+  endif
+end

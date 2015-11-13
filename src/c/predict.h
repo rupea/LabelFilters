@@ -10,6 +10,7 @@
 #include "filter.h"
 #include "typedefs.h"
 #include "PredictionSet.h"
+#include "utils.h"
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
@@ -37,11 +38,12 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
       #ifdef PROFILE
       ProfilerStart("full_predict.profile");
       #endif  
-#pragma omp parallel for default(shared)
+      VectorXd outs(noClasses);
+#pragma omp parallel for firstprivate(outs) default(shared)
       for (i = 0; i < n; i++)
-	{	  
-	  DenseM outs;
-	  outs = x.row(i)*(w.cast<double>());	  
+	{	  	  
+	  //outs = x.row(i)*(w.cast<double>());	  
+	  DotProductInnerVector(outs,w,x,i);
 	  // should preallocate to be more efficient
 	  PredVec* pv = predictions->NewPredVecAt(i,noClasses); 
 	  for (size_t c = 0; c < noClasses; c++)
@@ -80,7 +82,7 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
 	  while (c < noClasses)
 	    {
 	      // could eliminate the multiplication for only one active class
-	      predtype out = static_cast<predtype> ((x.row(i)*(w.col(c).cast<double>()))(0,0));
+	      predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
 	      pv->add_pred(out,c+start_class);
 	      c = act->find_next(c);
 	    }
@@ -123,11 +125,13 @@ void predict(PredictionSet* predictions, const Eigentype& x, const DenseColMf& w
       #ifdef PROFILE
       ProfilerStart("full_predict.profile");
       #endif  
-#pragma omp parallel for default(shared)
+
+      Eigen::RowVectorXd outs(noClasses);
+#pragma omp parallel for firstprivate(outs) default(shared)
       for (i = 0; i < n; i++)
-	{	  
-	  DenseM outs;
-	  outs = x.row(i)*(w.cast<double>());	  
+	{	  	  
+	  //outs = x.row(i)*(w.cast<double>());	  
+	  DotProductInnerVector(outs,w,x,i);
 	  // should preallocate to be more efficient	  
 	  PredVec* pv;
 	  if (start_class == 0) // assumes chunk 0 is always the first
@@ -183,7 +187,8 @@ void predict(PredictionSet* predictions, const Eigentype& x, const DenseColMf& w
 	  size_t c = act->find_first();	  
 	  while (c < noClasses)
 	    {
-	      predtype out = static_cast<predtype> ((x.row(i)*(w.col(c).cast<double>()))(0,0));
+	      //	      predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
+	      predtype out = static_cast<predtype>((x.row(i)*w.col(c).cast<double>())(0,0));
 	      pv->add_pred(out,c+start_class);
 	      c = act->find_next(c);
 	    }
@@ -201,7 +206,7 @@ void predict(PredictionSet* predictions, const Eigentype& x, const DenseColMf& w
 }
 
 template <typename Eigentype>
-ActiveDataSet* getactive(vector<size_t>& no_active, const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat, bool verbose = false)
+ActiveDataSet* getactive(VectorXsz& no_active, const Eigentype& x, const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat, bool verbose = false)
 {
   #ifdef PROFILE
   ProfilerStart("projected_getactive.profile");
@@ -210,14 +215,10 @@ ActiveDataSet* getactive(vector<size_t>& no_active, const Eigentype& x, const De
   size_t n = projections.rows();
   size_t noClasses = lmat.rows();
   ActiveDataSet* active = new ActiveDataSet(n);
-  if (no_active.empty())
-    {
-      no_active.resize(projections.cols());
-    }
-  else
-    {
-      assert(no_active.size() == prjections.cols());
-    }
+
+  no_active.resize(projections.cols());
+  no_active.setZero();
+
   for (ActiveDataSet::iterator it = active->begin(); it != active->end(); ++it)
     {
       *it = new dynamic_bitset<>(noClasses);
@@ -248,7 +249,7 @@ ActiveDataSet* getactive(vector<size_t>& no_active, const Eigentype& x, const De
 	  (*act) &= *(f.filter(proj.coeff(j)));
 	  count += act -> count();
 	}
-      no_active[i]+=count;
+      no_active[i]=count;
     }
   #ifdef PROFILE
   ProfilerStop();

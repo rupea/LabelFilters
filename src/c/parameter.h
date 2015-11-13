@@ -9,6 +9,12 @@ enum Eta_Type
     ETA_3_4  // eta*(1+eta*lambda*t)^(-3/4)
   }; 
 
+enum Update_Type
+  {
+    MINIBATCH_SGD, //update w,L and U at the same time using minibatch SGD
+    SAFE_SGD  // update w first, then L and U using projected gradietn using a minibatch of 1
+  };
+
 enum Reorder_Type
   {
     REORDER_AVG_PROJ_MEANS, // reorder by the mean of the projection based on averaged w
@@ -23,6 +29,7 @@ typedef struct
   double C2;   // the penalty for an example being inside other class' boundary
   size_t max_iter;  // maximum number of iterations
   int batch_size; // size of the minibatch
+  Update_Type update_type; // how to update w, L and U (need a better name) 
   double eps; // not used
   Eta_Type eta_type; // how does the learning rate decay
   double eta; // the initial learning rate. The leraning rate is eta/sqrt(t) where t is the number of iterations
@@ -34,7 +41,7 @@ typedef struct
   size_t optimizeLU_epoch; // number of iterations between full optimizations of the lower and upper bounds
   bool remove_constraints; // whether to remove the constraints for instances that fall outside the class boundaries in previous projections. 
   bool remove_class_constraints; // whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. 
-  bool reweight_lambda; // whether to diminish lambda (increase C1 and C2) as constraints are eliminated;
+  int reweight_lambda; // whether to diminish lambda (increase C1 and C2) as constraints are eliminated;
   Reorder_Type reorder_type; // whether to rank the classes by the mean of the projected examples or by the midpoint of its [l,u] interval (i.e. (u+l)/2).
   bool ml_wt_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering other class contraints. 
   bool ml_wt_class_by_nclasses; // whether to weight an example by the number of classes it belongs to when conssidering its class contraints. 
@@ -55,6 +62,7 @@ inline param_struct set_default_params()
   def.C2=1.0;
   def.max_iter=1e6;
   def.eps=1e-4;
+  def.update_type = MINIBATCH_SGD;
   def.eta_type = ETA_LIN;
   def.eta=0.1;
   def.min_eta= 0;
@@ -67,7 +75,7 @@ inline param_struct set_default_params()
   def.optimizeLU_epoch=10000; // this is very expensive so it should not be done often
   def.remove_constraints = false;
   def.remove_class_constraints = false;
-  def.reweight_lambda = true;
+  def.reweight_lambda = 1;
   def.ml_wt_by_nclasses = false;
   def.ml_wt_class_by_nclasses = false;
   def.num_threads = 0; 

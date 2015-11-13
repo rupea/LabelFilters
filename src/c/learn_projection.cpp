@@ -62,7 +62,7 @@ int main(int argc, char * argv[])
   srand (42782);
  
   octave_value_list args; 
-  args(0)="/bigml/alex/Research/mcfilter/LSHTC-2014/data/LSHTC14train_minclass10_minfeat10_weighting_tfidf_normalization_row_trial1.mat"; 
+  args(0)="~/Research/mcfilter/LSHTC-2014/data/LSHTC14train_minclass10_minfeat10_weighting_tfidf_normalization_row_trial1.mat"; 
   args(1)="x_tr"; 
   args(2)="y_tr"; 
 
@@ -106,14 +106,16 @@ int main(int argc, char * argv[])
 
 
   param_struct params = set_default_params();
-  params.C2 = 100;
-  params.C1 = y.cols() * 5 * params.C2;
+  params.C2 = 0.5;
+  params.C1 = y.cols() * 2 * params.C2;
+  params.optimizeLU_epoch = 0;
   params.remove_constraints = true;
-  params.max_iter = 1e+5;
-  params.report_epoch = 1e+3; 
-  
-
-  smally = y.topLeftCorner(100000,y.cols());
+  params.max_iter = 1e+8;
+  params.report_epoch = 1e+6; 
+  params.reorder_epoch = 1e+6;
+  params.update_type = SAFE_SGD;
+  params.batch_size = 1;
+  //smally = y.topLeftCorner(100000,y.cols());
 
 
   if(x_tr.is_sparse_type())
@@ -128,7 +130,7 @@ int main(int argc, char * argv[])
       size_t d = x.cols();
       size_t k = y.cols();
       
-      SparseM smallx = x.topLeftCorner(100000,d);
+      //SparseM smallx = x.topLeftCorner(100000,d);
 
       DenseM w(d,5),l(k,5),u(k,5);
       w.setRandom();

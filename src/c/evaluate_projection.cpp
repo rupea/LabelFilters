@@ -49,6 +49,8 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
   opt.add_options()
     ("help", "Displays help message")
     ("verbose,v", "Display status messages")
+    ("validation", "Use the first half of the test set as a validation set")
+    ("allproj", "Evaluate the performance for all intermediate projections")
     ("projection_files,p", po::value<std::vector<string> >()->multitoken(),".mat file with the learned projection parameters (w, min_proj, max_proj). This is a multitoken option so it must be ended with '--' when all projection files have been specified.")
     ("threshold,t", po::value<predtype>(), "Threshold for predictions. By default it is not used in multiclass problems and it is 0.0 in multilabel problems")
     ("top,k", po::value<int>()->default_value(1), "Minimum number of classes to pbe predicted positive. When threshold is not used, or not enough predictions are above the threshold, the classes with highest predicted values are used. Default 1.")
@@ -56,7 +58,8 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
     ("distributed", po::value<string>()->default_value("None"), "Whether it is ran on a distributed fasion. Possible values are: \"None\"")
     ("ova_format", po::value<string>()->default_value("binary"), "Format of the file with the ova models. One of \"cellarray\" or \"binary\"")
     ("out_file,o", po::value<string>(), "Output file. If not specified prints to stdout")
-    ("chunks", po::value<int>()->default_value(1), "Number of chunks to split the ova file in. Used to deal with ova matrices that are too large to fit in memory. If chunks > 1 the chunks are reloaded for each projection file which leads to long load times. If chunks > 1, ova_format must be binary");
+    ("chunks", po::value<int>()->default_value(1), "Number of chunks to split the ova file in. Used to deal with ova matrices that are too large to fit in memory. If chunks > 1 the chunks are reloaded for each projection file which leads to long load times. If chunks > 1, ova_format must be binary")
+    ("num_threads", po::value<int>()->default_value(0), "Number of threads to run on. 0 for using all available threads.");
   
   po::options_description hidden_opt("Arguments");
   hidden_opt.add_options()
@@ -143,7 +146,15 @@ int main(int argc, char * argv[])
   parse_options(vm, argc, argv);
   bool verbose = vm.count("verbose")?true:false;
 
+  bool validation = vm.count("validation")?true:false;
+  bool allproj = vm.count("allproj")?true:false;
+
+  int num_threads = vm["num_threads"].as<int>();
 #ifdef _OPENMP
+  if (num_threads < 1)
+    omp_set_num_threads(omp_get_max_threads());
+  else
+    omp_set_num_threads(num_threads);
   Eigen::initParallel();
   if (verbose)
     {
@@ -326,22 +337,22 @@ int main(int argc, char * argv[])
 	  load_projections(wmat, lmat, umat, *pit, verbose);
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
 	    } 
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
 	    }	  
 	}      
       if (do_full)
 	{
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
 	    }
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", validation, false,  verbose, out);
 	    }
 	}
     }
@@ -356,22 +367,22 @@ int main(int argc, char * argv[])
 	  load_projections(wmat, lmat,umat,*pit,verbose);
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
 	    } 
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
 	    }	  
 	}      
       if (do_full)
 	{
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
 	    }
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_vile"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_vile"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
 	    }
 	}
     }

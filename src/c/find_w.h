@@ -325,6 +325,265 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx, con
   cerr << endl;
 }       
 
+// function to compute the gradient size for w for a single example
+double compute_single_w_gradient_size ( int sc_start, int sc_end,
+					const double proj, const size_t i,
+					const SparseMb& y, const VectorXi& nclasses, 
+					int maxclasses, 
+					const vector<int>& sorted_class,
+					const vector<int>& class_order, 
+					const VectorXd& sortedLU,
+					const boolmatrix& filtered,
+					double C1, double C2,
+					const param_struct& params );
+
+
+// function to update L and U for a single example, given w. 
+// performs projected gradient updates
+void update_single_sortedLU( VectorXd& sortedLU,
+			     int sc_start, int sc_end,
+			     const double proj, const size_t i,
+			     const SparseMb& y, const VectorXi& nclasses, 
+			     int maxclasses, 
+			     const vector<int>& sorted_class,
+			     const vector<int>& class_order, 
+			     const boolmatrix& filtered,
+			     double C1, double C2, const double eta_t,
+			     const param_struct& params);
+
+
+
+// function to compute the gradient and update w, L and U using safe updates that do not 
+// ofershoot
+
+// update w first, making sure we do not overshoot
+// then update LU using projected gradient
+// only works for batch sizes of 1
+
+template<typename EigenType>
+void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
+		      const EigenType& x, const SparseMb& y, 
+		      const double C1, const double C2, const double lambda,
+		      const unsigned long t, const double eta_t,
+		      const size_t n, const VectorXi& nclasses, const int maxclasses,
+		      const std::vector<int>& sorted_class, const std::vector<int>& class_order,
+		      const boolmatrix& filtered,
+		      const int sc_chunks, const int sc_chunk_size, const int sc_remaining,
+		      const param_struct& params)		        
+{
+
+  double multiplier = 0;
+    
+  // batch size should be 1
+  size_t i = ((size_t) rand()) % n;
+  double proj = w.project_row(x,i);
+    
+#pragma omp parallel for default(shared) reduction(+:multiplier)
+  for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
+    {
+      // the first chunks will have an extra iteration 
+      int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+      int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+      multiplier += compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
+						   proj, i,
+						   y, nclasses, maxclasses,
+						   sorted_class, class_order,
+						   sortedLU, filtered, C1, C2, params);
+    }
+  
+  // make sure we do not overshoot with the update
+  // this is expensive, so we might want an option to turn it off
+  double new_multiplier, new_proj;
+  double eta = eta_t;
+  do
+    {
+      // WARNING: for now it assumes that norm(x) = 1!!!!!
+      new_proj = proj - eta*lambda*proj - eta*multiplier; 
+      new_multiplier=0;
+#pragma omp parallel for  default(shared) reduction(+:new_multiplier)
+      for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
+	{
+	  // the first chunks will have an extra iteration 
+	  int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+	  int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+	  new_multiplier += compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
+							   new_proj, i,
+							   y, nclasses, maxclasses,
+							   sorted_class, class_order,
+							   sortedLU, filtered, C1, C2, params);
+	}
+      eta = eta/2;
+    } while (multiplier*new_multiplier < 0);
+  
+  // last eta did not overshooot so restore it
+  eta = eta*2;
+  
+  //update w
+  if (params.avg_epoch && t >= params.avg_epoch)
+    {
+      // updates both the curent w and the average w
+      w.batch_gradient_update_avg(x,i,multiplier,lambda,eta);
+    }
+  else
+    {
+      // update only the current w
+      w.batch_gradient_update(x, i, multiplier, lambda, eta);
+    }
+  
+  // update L and U with w fixed. 
+#pragma omp parallel for  default(shared)
+  for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
+    {
+      int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+      int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+      update_single_sortedLU(sortedLU, sc_start, sc_start+sc_incr, new_proj, i, 
+			     y, nclasses, maxclasses, sorted_class, class_order,
+			     filtered, C1, C2, eta_t, params);
+    
+      // update the average LU
+      if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
+	{
+	  // if we optimize the LU, we do not need to
+	  // keep track of the averaged lower and upper bounds 
+	  // We optimize the bounds at the end based on the 
+	  // average w 	      
+	  
+	  // do not divide by t-params.avg_epoch + 1 here 
+	  // do it when using sortedLU_avg
+	  // it might become too big!, but through division it 
+	  //might become too small 
+	  sortedLU_avg.segment(2*sc_start, 2*sc_incr) += sortedLU.segment(2*sc_start, 2*sc_incr);
+	}
+      
+    }
+}
+
+
+
+// function to perform batch SGD update of w, L and U
+
+template<typename EigenType>
+void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
+		      const EigenType& x, const SparseMb& y,
+		      const double C1, const double C2, const double lambda, 
+		      const unsigned long t, const double eta_t,
+		      const size_t n, const size_t batch_size,
+		      const VectorXi& nclasses, const int maxclasses,
+		      const std::vector<int>& sorted_class, const std::vector<int>& class_order,
+		      const boolmatrix& filtered,
+		      const int idx_chunks, const int sc_chunks, 
+		      MutexType* idx_locks, MutexType* sc_locks,
+		      const int idx_chunk_size, const int idx_remaining,
+		      const size_t sc_chunk_size, const size_t sc_remaining,
+		      const param_struct& params)		        
+{
+  // use statics to avoid the cost of alocation at each iteration? 
+  static VectorXd proj(batch_size);
+  static VectorXsz index(batch_size);
+  static VectorXd multipliers(batch_size);
+  VectorXd multipliers_chunk;
+  //  VectorXd sortedLU_gradient(2*noClasses); // used to improve cache performance
+  VectorXd sortedLU_gradient_chunk;
+  size_t i,idx;
+  
+  // first compute all the projections so that we can update w directly
+  for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
+    {
+      if(batch_size < n)
+	{
+	  i = ((size_t) rand()) % n;
+	}
+      else
+	{
+	  i=idx;
+	}
+      
+      proj.coeffRef(idx) = w.project_row(x,i);
+      index.coeffRef(idx)=i;
+    }	      
+  // now we can update w and L,U directly
+  
+  multipliers.setZero();
+  //  sortedLU_gradient.setZero(); 
+  
+#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
+  for (int idx_chunk = 0; idx_chunk < idx_chunks; idx_chunk++)
+    for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
+      {
+	// the first chunks will have an extra iteration 
+	size_t idx_start = idx_chunk*idx_chunk_size + (idx_chunk<idx_remaining?idx_chunk:idx_remaining);
+	size_t idx_incr = idx_chunk_size + (idx_chunk<idx_remaining);
+	// the first chunks will have an extra iteration 
+	int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+	int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+	compute_gradients(multipliers_chunk, sortedLU_gradient_chunk,
+			  idx_start, idx_start+idx_incr, 
+			  sc_start, sc_start+sc_incr,
+			  proj, index, y, nclasses, maxclasses,
+			  sorted_class, class_order,
+			  sortedLU, filtered, 
+			  C1, C2, params);
+	
+#pragma omp task default(none) shared(sc_chunk, idx_chunk, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
+	{
+#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
+	  {
+	    idx_locks[idx_chunk].YieldLock();
+	    multipliers.segment(idx_start, idx_incr) += multipliers_chunk;
+	    idx_locks[idx_chunk].Unlock();
+	  }		    			
+	  sc_locks[sc_chunk].YieldLock();
+	  // update the lower and upper bounds
+	  // divide by batch_size here because the gradients have 
+	  // not been averaged
+	  sortedLU.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk * (eta_t / batch_size); 
+	  //		  sortedLU_gradient.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk;
+	  sc_locks[sc_chunk].Unlock();
+#pragma omp taskwait		     
+	}
+#pragma omp taskwait 
+      }
+   
+  //update w
+  if (params.avg_epoch && t >= params.avg_epoch)
+    {
+      // updates both the curent w and the average w
+      w.batch_gradient_update_avg(x, index, multipliers, lambda, eta_t);
+    }
+  else
+    {
+      // update only the current w
+      w.batch_gradient_update(x, index, multipliers, lambda, eta_t);
+    }
+  
+  ///// did this above in parallel
+  // update the lower and upper bounds
+  // divide by batch_size here because the gradients have 
+  // not been averaged
+  // should be done above
+  // sortedLU += sortedLU_gradient * (eta_t / batch_size); 
+  
+  
+  // update the average version
+  // should do in parallel (maybe Eigen already does it?)
+  // especially for small batch sizes. 
+  if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
+    {
+      // if we optimize the LU, we do not need to
+      // keep track of the averaged lower and upper bounds 
+      // We optimize the bounds at the end based on the 
+      // average w 	      
+      
+      // do not divide by t-params.avg_epoch + 1 here 
+      // do it when using sortedLU_avg
+      // it might become too big!, but through division it 
+      //might become too small 
+      sortedLU_avg += sortedLU;
+    }
+}
+
+
+
 
 // *********************************
 // Solve the optimization using the gradient decent on hinge loss
@@ -351,6 +610,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   cout << "no_projections: " << no_projections << endl;
   const size_t n = x.rows(); 
   const size_t batch_size = (params.batch_size < 1 || params.batch_size > n) ? (size_t) n : params.batch_size;
+  if (params.update_type == SAFE_SGD)
+    {
+      // save_sgd update only works with batch size 1 
+      assert(batch_size == 1);
+    }
+  
   const size_t d = x.cols();
   //std::vector<int> classes = get_classes(y);
   cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
@@ -361,8 +626,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   VectorXd projection, projection_avg;
   VectorXd l(noClasses),u(noClasses);
   VectorXd sortedLU(2*noClasses); // holds l and u interleaved in the curent class sorting order (i.e. l,u,l,u,l,u)
-  VectorXd sortedLU_gradient(2*noClasses); // used to improve cache performance
-  VectorXd sortedLU_gradient_chunk;
+  //  VectorXd sortedLU_gradient(2*noClasses); // used to improve cache performance
+  //  VectorXd sortedLU_gradient_chunk;
   VectorXd l_avg(noClasses),u_avg(noClasses); // the lower and upper bounds for the averaged gradient
   VectorXd sortedLU_avg(2*noClasses); // holds l_avg and u_avg interleaved in the curent class sorting order (i.e. l_avg,u_avg,l_avg,u_avg,l_avg,u_avg)
   VectorXd means(noClasses); // used for initialization of the class order vector;
@@ -370,19 +635,18 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   VectorXd wc; // the number of examples in each class 
   VectorXi nclasses; // the number of examples in each class 
   int maxclasses; // the maximum number of classes an example might have
-  double eta_t, tmp, sj;
-  int cp;// current class and the other classes
+  double eta_t;
   size_t obj_idx = 0, obj_idx_avg = 0;
   //  bool order_changed = 1;
-  VectorXd proj(batch_size);
-  VectorXsz index(batch_size);
-  VectorXd multipliers(batch_size);
-  VectorXd multipliers_chunk;
+  //  VectorXd proj(batch_size);
+  //  VectorXsz index(batch_size);
+  //  VectorXd multipliers(batch_size);
+  //  VectorXd multipliers_chunk;
   // in the multilabel case each example will have an impact proportinal
   // to the number of classes it belongs to. ml_wt and ml_wt_class
   // allows weighting that impact when updating params for the other classes
   // respectively its own class. 
-  size_t  i=0, k=0,idx=0;
+  //  size_t  i=0, idx=0;
   unsigned long t = 1;
   std::vector<int> sorted_class(noClasses), class_order(noClasses);//, prev_class_order(noClasses);// used as the switch
   char iter_str[30];
@@ -424,18 +688,57 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   
   assert(wmat.cols() <= no_projections);
 
-  if (params.resume)
+  if (params.reoptimize_LU)
     {
-      if(params.remove_constraints)
+      lower_bounds.setZero(noClasses, no_projections);
+      upper_bounds.setZero(noClasses, no_projections);
+      lower_bounds_avg.setZero(noClasses, no_projections);
+      upper_bounds_avg.setZero(noClasses, no_projections);
+    }
+
+  if (params.resume || params.reoptimize_LU)
+    {
+      if(params.reoptimize_LU || params.remove_constraints)
 	{
 	  for (projection_dim = 0; projection_dim < weights.cols(); projection_dim++)
 	    {
 	      // use weights_avg since they will hold the correct weights regardless if 
 	      // averaging was performed on a prior run or not
 	      w = WeightVector(weights_avg.col(projection_dim));
-	      l = lower_bounds_avg.col(projection_dim);
-	      u = upper_bounds_avg.col(projection_dim);
+
+	      if (params.reoptimize_LU || (params.remove_constraints && projection_dim < no_projections-1))
+		{
+		  w.project(projection,x);
+		}
 	      
+	      if (params.reoptimize_LU)
+		{
+		  switch (params.reorder_type)
+		    {
+		    case REORDER_AVG_PROJ_MEANS:
+		      // use the current w since averaging has not started yet 
+		    case REORDER_PROJ_MEANS:	       
+		      proj_means(means, nc, projection, y);
+		      break;
+		    case REORDER_RANGE_MIDPOINTS: 
+		      // this should not work with optimizeLU since it depends on LU and LU on the reordering
+		      //		      means = l+u; //no need to divide by 2 since it is only used for ordering
+		      cerr << "Error, reordering " << params.reorder_type << " should not be used when reoptimizing the LU parameters" << endl;
+		      exit(-1);
+		      break;
+		    default:
+		      cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
+		      exit(-1);	      
+		    }	  
+		  rank_classes(sorted_class, class_order, means);
+
+		  optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+		}
+	      else
+		{
+		  l = lower_bounds_avg.col(projection_dim);
+		  u = upper_bounds_avg.col(projection_dim);
+		}
 	      // should we do this in parallel? 
 	      // the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
 	      // should update to use the filter class 
@@ -445,8 +748,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      //       to multiple classes
 	      if (params.remove_constraints && projection_dim < no_projections-1)
 		{
-		  
-		  w.project(projection,x);
 		  update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
 		}
 	      
@@ -461,6 +762,10 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		{
 		  long int no_remaining = total_constraints - no_filtered;
 		  lambda = no_remaining*1.0/(total_constraints*params.C2);
+		  if (params.reweight_lambda == 2)
+		    {
+		      C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
+		    }
 		}
 	    }
 	}
@@ -558,106 +863,31 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	    {
 	      for (size_t fdtest=0; fdtest<params.no_finite_diff_tests; fdtest++)
 		{
-		  idx = ((size_t) rand()) % n;
+		  size_t idx = ((size_t) rand()) % n;
 		  finite_diff_test(w, x, idx, y, nclasses, maxclasses, sorted_class, class_order, sortedLU, filtered, C1, C2, params);
 		}
 	    }
-	  
-	  // compute the gradient and update 
-	  
-	  // first compute all the projections so that we can update w directly
-	  for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
-	    {
-	      if(batch_size < n)
-		{
-		  i = ((size_t) rand()) % n;
-		}
-	      else
-		{
-		  i=idx;
-		}
-	      
-	      proj.coeffRef(idx) = w.project_row(x,i);
-	      index.coeffRef(idx)=i;
-	    }	      
-	  // now we can update w directly
-	  
-	  multipliers.setZero();
-	  sortedLU_gradient.setZero(); 
-	  
-# pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
-	  for (int idx_chunk = 0; idx_chunk < idx_chunks; idx_chunk++)
-	    for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
-	      {
-		// the first chunks will have an extra iteration 
-		int idx_start = idx_chunk*idx_chunk_size + (idx_chunk<idx_remaining?idx_chunk:idx_remaining);
-		int idx_incr = idx_chunk_size + (idx_chunk<idx_remaining);
-		// the first chunks will have an extra iteration 
-		int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
-		int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
-		compute_gradients(multipliers_chunk, sortedLU_gradient_chunk,
-				  idx_start, idx_start+idx_incr, 
-				  sc_start, sc_start+sc_incr,
-				  proj, index, y, nclasses, maxclasses,
-				  sorted_class, class_order,
-				  sortedLU, filtered, 
-				  C1, C2, params);
-		
-#pragma omp task default(none) shared(sc_chunk, idx_chunk, sortedLU_gradient, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
-		{
-#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
-		  {
-		    idx_locks[idx_chunk].YieldLock();
-		    multipliers.segment(idx_start, idx_incr) += multipliers_chunk;
-		    idx_locks[idx_chunk].Unlock();
-		  }		    			
-		  sc_locks[sc_chunk].YieldLock();
-		  // shoulc update directly sortedLU
-		  // this would be important if batch size is small
-		  sortedLU_gradient.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk;
-		  sc_locks[sc_chunk].Unlock();
-#pragma omp taskwait		     
-		}
-#pragma omp taskwait 
-	      }
-	  
+
 	  // set eta for this iteration
 	  eta_t = set_eta(params, t, lambda);
 	  
-	  //update w
-	  if (params.avg_epoch && t >= params.avg_epoch)
+	  // compute the gradient and update
+	  if (params.update_type == SAFE_SGD)
 	    {
-	      // updates both the curent w and the average w
-	      w.batch_gradient_update_avg(x, index, multipliers, lambda, eta_t);
+	      update_safe_SGD(w, sortedLU, sortedLU_avg,
+			      x, y, C1, C2, lambda, t, eta_t, n,
+			      nclasses, maxclasses, sorted_class, class_order, 
+			      filtered, sc_chunks, sc_chunk_size, sc_remaining, params);
 	    }
-	  else
+	  else if (params.update_type == MINIBATCH_SGD)
 	    {
-	      // update only the current w
-	      w.batch_gradient_update(x, index, multipliers, lambda, eta_t);
+	      update_minibatch_SGD(w, sortedLU, sortedLU_avg,
+				   x, y, C1, C2, lambda, t, eta_t, n, batch_size,
+				   nclasses, maxclasses, sorted_class, class_order, filtered, 
+				   idx_chunks, sc_chunks, idx_locks, sc_locks,
+				   idx_chunk_size, idx_remaining, sc_chunk_size, sc_remaining,
+				   params);
 	    }
-	  
-	  // update the lower and upper bounds
-	  // divide by batch_size here because the gradients have 
-	  // not been averaged
-	  // should be done above
-	  sortedLU += sortedLU_gradient * (eta_t / batch_size); 
-	  // update the average version
-	  // should do in parallel (maybe Eigen already does it?)
-	  // especially for small batch sizes. 
-	  if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
-	    {
-	      // if we optimize the LU, we do not need to
-	      // keep track of the averaged lower and upper bounds 
-	      // We optimize the bounds at the end based on the 
-	      // average w 	      
-
-	      // do not divide by t-params.avg_epoch + 1 here 
-	      // do it when using sortedLU_avg
-	      // it might become too big!, but through division it 
-              //might become too small 
-	      sortedLU_avg += sortedLU;
-	    }
-
 	  if ((params.reorder_epoch > 0 && (t % params.reorder_epoch == 0)
 	       && params.reorder_type == REORDER_AVG_PROJ_MEANS) 
 	      || (params.report_avg_epoch && (t % params.report_avg_epoch == 0)))
@@ -966,11 +1196,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	  // if weighting is done, the number is different
 	  // eliminating one example -class pair removes nclass(exmple) potential
 	  // if the class not among the classes of the example
-	      if (params.reweight_lambda)
+	  if (params.reweight_lambda)
+	    {
+	      long int no_remaining = total_constraints - no_filtered;
+	      lambda = no_remaining*1.0/(total_constraints*params.C2);
+	      if (params.reweight_lambda == 2)
 		{
-		  long int no_remaining = total_constraints - no_filtered;
-		  lambda = no_remaining*1.0/(total_constraints*params.C2);
+		  C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
 		}
+	    }
 	}
       
       //      C2*=((n-1)*noClasses)*1.0/no_remaining;

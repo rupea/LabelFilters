@@ -56,6 +56,7 @@ class PredictionSet
  public:
   PredictionSet();
   PredictionSet(size_t n);
+  template <typename EigenType> PredictionSet(const EigenType& preds);
   ~PredictionSet();
   // generate new predicton vector for a new example.
   // maybe the entire prediction set should e generated at once. 
@@ -114,7 +115,7 @@ inline PredVec::PredVec(size_t n)
 {
   init();
   _predvec->reserve(n);
-}
+}  
 
 inline PredVec::~PredVec()
 {
@@ -220,9 +221,24 @@ inline PredictionSet::PredictionSet()
 
 inline PredictionSet::PredictionSet(size_t n)
 {
-  _preddata = new std::vector<PredVec*>(n);
-  
+  _preddata = new std::vector<PredVec*>(n);  
 }
+
+template <typename EigenType>
+inline PredictionSet::PredictionSet(const EigenType& preds)
+{
+  size_t n = preds.rows();
+  _preddata = new std::vector<PredVec*>(n);
+  for (size_t i = 0 ; i < n; i++)
+    {
+      PredVec* pv = NewPredVecAt_fast(i,0);
+      for (typename EigenType::InnerIterator it(preds,i); it; ++it)
+	{
+	  pv->add_pred(it.value(),it.col());
+	}
+    }
+}
+
 
 inline PredictionSet::~PredictionSet()
 {

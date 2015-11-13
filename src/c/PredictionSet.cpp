@@ -438,7 +438,7 @@ void PredictionSet::TopMetrics(double& Prec1, double& Top1,
 	
 	size_t tp = 0;
 	int k = 0;
-	for (std::vector<int>::iterator it = preds.begin(); it != preds.end(); it++)
+	for (std::vector<int>::iterator it = preds.begin(); it != preds.end() && k<=10; it++)
 	  {	    
 	    if (y.coeff(i,*it))
 	      {
@@ -452,12 +452,12 @@ void PredictionSet::TopMetrics(double& Prec1, double& Top1,
 	      }
 	    if (k == 5)
 	      {
-		my_prec5 += tp*1.0/5;
+		my_prec5 += tp*0.2;
 		my_top5 += (tp>0);
 	      }
 	    if (k == 10)
 	      {
-		my_prec10 += tp*1.0/10;
+		my_prec10 += tp*0.1;
 		my_top10 += (tp>0);
 	      }
 	  }

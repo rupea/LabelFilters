@@ -1,6 +1,8 @@
 #ifndef __WEIGHTVECTOR_H
 #define __WEIGHTVECTOR_H
 
+#include "utils.h"
+
 using Eigen::VectorXd;
 using Eigen::VectorXi;
 
@@ -183,6 +185,22 @@ class WeightVector
 	}
     }
 
+  // updates the current weight only, not the average
+  // should not be called if the average has been updated (i.e. my_avg_t > 1) 
+  // special function when batch size = 1
+  template<typename EigenType> 
+    void batch_gradient_update(const EigenType& x, size_t index, double gradient, double lambda, double eta)
+    {      
+      assert(x.cols()==my_weights.size());
+      assert(my_avg_t == 0);
+      // update for the reglarizer
+      scale(1.0-lambda*eta);      
+      if ( gradient != 0 )
+	{
+	  gradient_update_nochecks(x, index, gradient * eta);
+	}
+    }
+
   // updates the current weight and the average
   // should not be called once the averaging should start
   // should have a different function for dense examples vectors
@@ -218,6 +236,37 @@ class WeightVector
 	}
     }
 
+  
+  // special function for cases where batch_size = 1
+  // updates the current weight and the average
+  // should not be called once the averaging should start
+  // should have a different function for dense examples vectors
+  // as one could only update the average once per batch rather than at 
+  // every iteration. 
+  // in fact shoud have a different class for dense examples 
+  template<typename EigenType> 
+    void batch_gradient_update_avg(const EigenType& x, size_t index, double gradient, double lambda, double eta)
+    {      
+      if (my_avg_t == 0)
+	{
+	  // first time calling the averaging, 
+	  // is the same as simply updating the gradient
+	  batch_gradient_update(x,index,gradient,lambda,eta);
+	  my_avg_t++;
+	}
+      else
+	{
+	  assert(x.cols()==my_weights.size());
+	  // update for the reglarizer
+	  scale(1.0-lambda*eta);
+	  if ( gradient != 0 )
+	    {
+	      gradient_update_avg_nochecks(x, index, gradient * eta);
+	    }	  
+	  update_alpha_beta();
+	}
+    }
+
   // updates the current weight only, not the average
   // should not be called if the average has been updated (i.e. my_avg_t > 1) 
   // should check if my_avg_t > 1, but won't do it here to eliminate an operation
@@ -247,6 +296,7 @@ class WeightVector
 
   template<typename EigenType> inline double project_row(const EigenType& x, const int row) const
     {
+      //return my_scale*DotProductInnerVector(my_weights,x,row);
       return my_scale*((x.row(row)*my_weights)(0,0));
     }
 
@@ -257,6 +307,7 @@ class WeightVector
 
   template<typename EigenType> inline double project_row_avg(const EigenType& x, const int row) const
     {
+      //return (DotProductInnerVector(my_A,x,row) + my_alpha*DotProductInnerVector(my_weights,x,row))/my_beta;
       return (x.row(row)*my_A + my_alpha*(x.row(row)*my_weights))(0,0)/my_beta;
     }
 

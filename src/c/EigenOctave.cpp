@@ -54,6 +54,24 @@ VectorXd toEigenVec(const FloatNDArray& data) {
   return v;
 }
 
+int32NDArray toIntArray(const VectorXi& eigenVec) 
+{
+  int32NDArray v(dim_vector(eigenVec.size(),1));
+  for (size_t i = 0; i < eigenVec.size(); i++) {
+    v(i) = eigenVec(i);
+  }
+  return v;
+}
+
+int64NDArray toInt64Array(const VectorXsz& eigenVec) 
+{
+  int64NDArray v(dim_vector(eigenVec.size(),1));
+  for (size_t i = 0; i < eigenVec.size(); i++) {
+    v(i) = eigenVec(i);
+  }
+  return v;
+}
+
 Matrix toMatrix(const DenseM& data) 
 {
   Matrix m(data.rows(), data.cols());
