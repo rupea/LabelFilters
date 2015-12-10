@@ -51,6 +51,7 @@ typedef struct
   size_t no_finite_diff_tests; // number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. 
   double finite_diff_test_delta; // the size of the finite differene
   bool resume; // whether to train more projections. Old projections should be passed to the program.
+  bool reoptimize_LU; // whether to reoptimize the baounds of the class intervals. 
 } param_struct;
 
 

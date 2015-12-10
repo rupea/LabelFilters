@@ -1,5 +1,7 @@
 #!/home/mlshack/alex/Programs/octave-3.8.2/bin/octave -qf 
 
+# #!/usr/bin/octave -qf
+
 #  #!/var/run/net/mlstorage2/mlshack/alex/Programs/octave-3.8.2/bin/octave -qf
 
 
@@ -39,6 +41,8 @@ file_name_fields = strsplit(input_params.file_name_fields);
 # if (hash_field)
 #   full_file_name_fields(end+1) = "__HASH";
 # endif
+
+struct_levels_to_print(10)
 
 input_params
 
@@ -90,8 +94,8 @@ for data_entry = db_data_entries
     cf = input_params.compute_full;
     if (any(cellfun("isequal",computed_proj,{fullproj})))
       ## the performance with no filter has been calculated
-      ## for this data and this ova model, so don't compute it again
-      cf = false;
+      ## for this data and this ova model, so don't compute it again      
+      cf = false
     endif
     
     if (input_params.same_data)
@@ -149,11 +153,16 @@ for data_entry = db_data_entries
       s = make_absolute_filename(ova_file);
       local_ova_file = ["/mnt/local/" substr(s,strfind(s,"alex"))];
       if (!exist(local_ova_file,"file"))	
-	system(["mkdir -p ", fileparts(local_ova_file)]);
-	[status,msg] = copyfile(ova_file,local_ova_file);
+	[status,msg] = system(["mkdir -p ", fileparts(local_ova_file)]);
 	if (!status)
 	  warning(["Copy of the ova file to the local drive failed with message: " msg "\n   Using the nfs file"]);
 	  local_ova_file = ova_file;
+	else	
+	  [status,msg] = copyfile(ova_file,local_ova_file);
+	  if (!status)
+	    warning(["Copy of the ova file to the local drive failed with message: " msg "\n   Using the nfs file"]);
+	    local_ova_file = ova_file;
+	  endif
 	endif
       endif
 

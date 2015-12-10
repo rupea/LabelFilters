@@ -73,6 +73,27 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
     parameters.C1 = parameters.C1*noClasses;
   endif  
 
+  ## get the weights to reoptimize LU for. 
+  if (parameters.reoptimize_LU)
+    ## no point to have multiple restarts]
+    parameters.restarts = 1;
+    if (parameters.resume)
+      warning("Both resume and reoptimize_LU were true. Turning resume off.");
+      parameters.resume=false;
+    endif
+      
+    if(exist(parameters.reoptimize_LU_file,"file"))
+      load(parameters.reoptimize_LU_file, "w");
+    else
+      errro(["reoptimize_LU is true, but " parameters.reoptimze_LU_file " file does not exist."]);
+    endif
+    if (!exist("w","var"))
+      error(["reoptimize_LU is true, but w could not be loaded from " parameters.reoptimize_LU_file "."]);
+    endif
+    assert(size(w,1) == size(x_tr,2));
+  endif
+
+
   ## consistency checks for resume
   if (parameters.resume)
     if(exist(parameters.resume_from,"file"))
@@ -81,13 +102,10 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
       warning("Resume is true, but resume_from file does not exist. Starting from scratch");
       parameters.resume = false;
     endif
-  endif
-
-  if (!exist("w","var"))
-    parameters.resume = false;
-  endif
-
-  if (parameters.resume)
+    if (!exist("w","var"))
+      warning(["Resume is true, but w could not be loaded from " parameters.resume_from ". Starting from scratch"]);
+      parameters.resume = false;
+    endif
     assert(size(w,1) == size(x_tr,2))
     if (size(y_tr,2) == 1) #multi-class problem
       assert(size(min_proj,1) == max(y_tr));
@@ -106,7 +124,9 @@ function [w, min_proj, max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noav
       elseif (exist("w","var"))
 	[w,min_proj,max_proj, obj_val,w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w,min_proj, max_proj, obj_val);
       endif
-    else 
+    elseif (parameters.reoptimize_LU)
+      [w,min_proj,max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters,w);
+    else
       #w=init_w(2, x_tr_proj, y_tr_proj, size(x_tr_proj,2), parameters.no_projections);
       [w,min_proj,max_proj, obj_val, w_noavg, min_proj_noavg, max_proj_noavg, obj_val_noavg]=oct_find_w(x_tr_proj,y_tr_proj,parameters);
     endif    

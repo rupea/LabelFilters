@@ -13,7 +13,7 @@ using Eigen::VectorXd;
 
 void print_usage()
 {
-  cout << "[w l u obj_val w_last l_last u_last] = oct_find_w x y parameters w_init [l_init u_init]" << endl;
+  cout << "[w l u obj_val w_last l_last u_last] = oct_find_w x y parameters w_init [l_init u_init w_last_init l_last_init u_last_init]" << endl;
   cout << "     w - the projection matrix" << endl;
   cout << "     l - the lower bound for each class and each projection" << endl;
   cout << "     u - the upper bound for each class and each projection" << endl;
@@ -273,31 +273,70 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	  params.reoptimize_LU=tmp.bool_value();
 	}
     }
+
+
   
   DenseM w, l, u, w_avg, l_avg, u_avg;
   VectorXd objective_vals, objective_vals_avg;
-  if(params.resume && nargin >= 7)
-    {      
+
+  // get the parameters from previous runs
+
+  if (nargin >= 4)
+    {
       w_avg = toEigenMat<DenseM>(args(3).array_value()); // The weights from previous run
+    }
+  if (nargin >= 6)
+    {
       l_avg = toEigenMat<DenseM>(args(4).array_value()); // the lower bounds from previous run
       u_avg = toEigenMat<DenseM>(args(5).array_value()); // the upper bounds from previous run
+      assert(l_avg.cols() == w_avg.cols());
+      assert(u_avg.cols() == w_avg.cols());
+    }
+  if (nargin >= 7)
+    {
       objective_vals_avg = toEigenVec(args(6).array_value()); // the obj vals from previous run
-      if (nargin == 11)
-	{
-	  //w,l and u were also passed
-	  w = toEigenMat<DenseM>(args(7).array_value()); // The weights from previous run
-	  l = toEigenMat<DenseM>(args(8).array_value()); // the lower bounds from previous run
-	  u = toEigenMat<DenseM>(args(9).array_value()); // the upper bounds from previous run
-	  objective_vals = toEigenVec(args(10).array_value()); // the obj vals from previous run
-	}
-      else
-	{
-	  //if w,l and u were not passed, copy the avg values here for completion.
-	  w = w_avg;
-	  l = l_avg;
-	  u = u_avg;
-	  objective_vals = objective_vals_avg;
-	}
+    }
+      
+  if (nargin >= 8)
+    {
+      w = toEigenMat<DenseM>(args(7).array_value()); // The weights from previous run
+      assert(w.cols() == w_avg.cols());
+      assert(w.rows() == w_avg.rows());
+    }
+  else
+    {
+      // if w was not passed use w_avg for completeness
+      w = w_avg;
+    }
+
+  if (nargin >= 10)
+    {
+      l = toEigenMat<DenseM>(args(8).array_value()); // the lower bounds from previous run
+      u = toEigenMat<DenseM>(args(9).array_value()); // the upper bounds from previous run
+      assert(l.cols() == w.cols());
+      assert(u.cols() == w.cols());
+    }
+  else
+    {
+      // if l,u was not passed use l_avg,u_avg for completeness
+      l = l_avg;
+      u = u_avg;
+    }
+  
+  if (nargin >= 11)
+    {
+      objective_vals = toEigenVec(args(10).array_value()); // the obj vals from previous run
+    }
+  else
+    {
+      // if objective_vals was not passed use objective_vals_avg for completeness
+      objective_vals = objective_vals_avg;
+    }
+  
+  if (params.resume && !params.reoptimize_LU && l_avg.cols()!=w_avg.cols())
+    {
+      cerr << "ERROR: asked to resume, but l_avg and u_avg do not match w_avg" << endl;
+      exit(-4);
     }
  
 

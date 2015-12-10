@@ -50,13 +50,36 @@ function learn_projection_db(proj_params, database)
     proj_params.ova_preds_file = "";
   end
   
+
+## if we are reoptimizing LU get the starting file
+  if (proj_params.reoptimize_LU)
+    if (!isempty(proj_params.reoptimize_LU_query))
+      db_reoptimize_LU_params = ds_query(proj_params.reoptimize_LU_query);
+      if (length(db_reoptimize_LU_params) == 1 )
+	db_reoptimize_LU_params = db_reoptimize_LU_params{1};
+	proj_params.reoptimize_LU_file = db_reoptimize_LU_params.db_path;
+	proj_params.reoptimize_LU_params = db_reoptimize_LU_params.params;
+      elseif (length(db_reoptimize_LU_params) == 0)
+	error("Query for the file to reoptimize LU from returned no matches");
+      else
+	error("Query for the file to reoptimize LU from returned more than one match");
+      endif
+    else
+      proj_params.reoptimize_LU_params.type = "local_file";
+      proj_params.reoptimize_LU_params.filename = proj_params.ova_preds_file;
+    endif  
+  else
+    proj_params.reoptimize_LU_query = "";
+    proj_params.reoptmize_LU_file = "";
+  end
+  
   
   ## if we have a log file, try to get it from the DB to append to it
   ## if we relearn the projection, remove the log file entry from the DB
   ## if the file exists but it is not in the DB, keep it and append to it 
   
   if (!strcmp(proj_params.log_file,"stdout"))
-    db_proj_log_params = rmfield(proj_params, ["exp_name"; "log_name_fields"; "projection_name_fields"; "obj_plot_name_fields"; "relearn_projection"; "projection_file"; "obj_plot_file"; "ova_preds_file"; "projection_dir"; "log_dir"; "obj_plot_dir"; "ova_preds_query"; "data_file"; "data_query"; "resume_from"]);
+    db_proj_log_params = rmfield(proj_params, ["exp_name"; "log_name_fields"; "projection_name_fields"; "obj_plot_name_fields"; "relearn_projection"; "projection_file"; "obj_plot_file"; "ova_preds_file"; "ova_preds_query"; "reoptimize_LU_file"; "reoptimize_LU_query"; "projection_dir"; "log_dir"; "obj_plot_dir"; "data_file"; "data_query"; "resume_from"; "resumed_from"; "resume"]);
     db_proj_log_params.type = "log_file";
     
     db_log_entries = ds_query(db_proj_log_params);
@@ -121,7 +144,7 @@ function learn_projection_db(proj_params, database)
   
   
   ## query if the result already exists in the database
-  db_proj_file_params = rmfield(proj_params, [ "projection_dir"; "log_dir"; "obj_plot_dir";"log_name_fields"; "projection_name_fields"; "obj_plot_name_fields"; "exp_name"; "data_file"; "data_query"; "ova_preds_file"; "ova_preds_query"; "projection_file"; "relearn_projection"; "plot_objval"; "obj_plot_file"; "log_file"; "report_epoch"; "report_avg_epoch"; "num_threads"; "finite_diff_test_epoch"; "no_finite_diff_tests"; "finite_diff_test_delta"; "resume_from"]);
+  db_proj_file_params = rmfield(proj_params, [ "projection_dir"; "log_dir"; "obj_plot_dir";"log_name_fields"; "projection_name_fields"; "obj_plot_name_fields"; "exp_name"; "data_file"; "data_query"; "ova_preds_file"; "ova_preds_query"; "reoptimize_LU_file"; "reoptimize_LU_query"; "projection_file"; "relearn_projection"; "plot_objval"; "obj_plot_file"; "log_file"; "report_epoch"; "report_avg_epoch"; "num_threads"; "finite_diff_test_epoch"; "no_finite_diff_tests"; "finite_diff_test_delta"; "resume_from"; "resume"; "resumed_from"]);
   db_proj_file_params.type = "projection_file";
   
   db_proj_file = ds_query(db_proj_file_params); 
@@ -134,7 +157,7 @@ function learn_projection_db(proj_params, database)
       ds_unlink(db_proj_file.db_path);
     endif
     if (proj_params.relearn_projection)
-      ds_remove(db_proj_file_params);    
+      ds_remove(db_proj_file_params);
     else
       ds_get(db_proj_file_params); #assumes the that the db has not changed
       proj_params.projection_file = db_proj_file.db_path;
@@ -143,6 +166,9 @@ function learn_projection_db(proj_params, database)
     ## no db entry has been found
     db_proj_file = [];
   endif
+
+  ## resumed_from shoud not be used in the query (i.e. if there is a matching entry it is irrelevant if it was resumed and where from)
+  db_proj_file_params.resumed_from = "";
 
   if (isempty(proj_params.projection_file))
     if (isempty(proj_params.projection_name_fields))
@@ -157,7 +183,7 @@ function learn_projection_db(proj_params, database)
   ## should be better structured 
   ##ds_pull(); 
   
-  db_obj_plot_file_params = rmfield(proj_params, [ "projection_dir"; "log_dir"; "obj_plot_dir";"log_name_fields"; "projection_name_fields"; "obj_plot_name_fields"; "exp_name"; "ova_preds_file"; "ova_preds_query"; "data_file"; "data_query"; "obj_plot_file"; "projection_file"; "log_file"; "relearn_projection"; "plot_objval"; "num_threads"; "finite_diff_test_epoch"; "no_finite_diff_tests"; "finite_diff_test_delta"; "resume_from"]);
+  db_obj_plot_file_params = rmfield(proj_params, [ "projection_dir"; "log_dir"; "obj_plot_dir";"log_name_fields"; "projection_name_fields"; "obj_plot_name_fields"; "exp_name"; "ova_preds_file"; "ova_preds_query"; "reoptimize_LU_file"; "reoptimize_LU_query"; "data_file"; "data_query"; "obj_plot_file"; "projection_file"; "log_file"; "relearn_projection"; "plot_objval"; "num_threads"; "finite_diff_test_epoch"; "no_finite_diff_tests"; "finite_diff_test_delta"; "resume_from"; "resume"; "resumed_from"]);
   db_obj_plot_file_params.type = "obj_plot";
   
   db_obj_plot_file = ds_query(db_obj_plot_file_params); 
@@ -208,7 +234,7 @@ function learn_projection_db(proj_params, database)
   endif  
     
   if (proj_params.resume && !exist(proj_params.projection_file,"file"))
-    db_proj_file_resume_params = rmfield(db_proj_file_params,["no_projections";"seed"; "resume"; "resumed_from"]);
+    db_proj_file_resume_params = rmfield(db_proj_file_params,["no_projections";"seed";]);
 
     db_proj_file_resume = ds_query(db_proj_file_resume_params);
     if (length(db_proj_file_resume) >= 1) 
@@ -223,6 +249,7 @@ function learn_projection_db(proj_params, database)
     else
       warning("Resume was true, but no file was found to resume from. Starting from scratch");
       proj_params.resume = false;
+      proj_params.reoptimize_LU = false;
     endif
   endif
     
@@ -262,6 +289,20 @@ function learn_projection_db(proj_params, database)
   ##get all the files on the transaction list before the computation starts
   ## using autopull
   ## ds_pull();
+
+  if (proj_params.reoptimize_LU && !isempty(proj_params.reoptimize_LU_query) && !exist(db_reoptimize_LU_params.db_path))
+    db_reoptimize_LU_params_get = ds_get(proj_params.reoptimize_LU_query);
+    if (length(db_reoptimize_LU_params_get) == 1 )
+      db_reoptimize_LU_params_get = db_reoptimize_LU_params_get{1};
+      if (!isequal(db_reoptimize_LU_params_get,db_reoptimize_LU_params))
+	exit("DB entry for the OVA predictions has changed between querying and getting it.");
+      endif
+    elseif (length(db_reoptimize_LU_params_get) == 0)
+      error("The data file was removed from the DB");
+    else
+      error("Too many DB entries match the data file query");
+    endif
+  endif
   
   
   proj_params

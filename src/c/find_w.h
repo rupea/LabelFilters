@@ -686,7 +686,16 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   size_t no_filtered=0;
   int projection_dim = 0;
   
-  assert(wmat.cols() <= no_projections);
+  if (weights.cols() > no_projections)
+    {
+      cerr << "Warning: the number of requested filters is lower than the number of filters already learned. Dropping the extra filters" << endl; 
+      weights.conservativeResize(d, no_projections);
+      weights_avg.conservativeResize(d, no_projections);
+      lower_bounds.conservativeResize(noClasses, no_projections);
+      upper_bounds.conservativeResize(noClasses, no_projections);
+      lower_bounds_avg.conservativeResize(noClasses, no_projections);
+      upper_bounds_avg.conservativeResize(noClasses, no_projections);
+    }
 
   if (params.reoptimize_LU)
     {
@@ -695,7 +704,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       lower_bounds_avg.setZero(noClasses, no_projections);
       upper_bounds_avg.setZero(noClasses, no_projections);
     }
-
+  
   if (params.resume || params.reoptimize_LU)
     {
       if(params.reoptimize_LU || params.remove_constraints)
@@ -733,6 +742,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		  rank_classes(sorted_class, class_order, means);
 
 		  optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+		  lower_bounds_avg.col(projection_dim) = l;
+		  upper_bounds_avg.col(projection_dim) = u;
+		  // coppy w, lower_bound, upper_bound from the coresponding averaged terms. 
+		  // this way we do not spend time reoptimizing LU for non-averaged terms we probably won't use. 
+		  // The right way to handle this would be to know whether we want to return only hte averaged values or we also need the non-averaged ones. 
+		  weights.col(projection_dim) = w;
+		  lower_bounds.col(projection_dim) = l;
+		  upper_bounds.col(projection_dim) = u;
 		}
 	      else
 		{
@@ -749,10 +766,10 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      if (params.remove_constraints && projection_dim < no_projections-1)
 		{
 		  update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
+		  no_filtered = filtered.count();
+		  cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
 		}
 	      
-	      no_filtered = filtered.count();
-	      cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
 	      // work on this. This is just a crude approximation.
 	      // now every example - class pair introduces nclass(example) constraints
 	      // if weighting is done, the number is different
@@ -783,12 +800,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   
   if (params.report_epoch > 0)
     {
-      objective_val.conservativeResize(1000 + (no_projections * params.max_iter / params.report_epoch));
+      objective_val.conservativeResize(obj_idx + 1000 + ((no_projections-projection_dim) * params.max_iter / params.report_epoch));
     }
 
   if (params.report_avg_epoch > 0)
     {
-      objective_val_avg.conservativeResize(1000 + (no_projections * params.max_iter / params.report_avg_epoch));
+      objective_val.conservativeResize(obj_idx_avg + 1000 + ((no_projections-projection_dim) * params.max_iter / params.report_avg_epoch));
     }
 
   
