@@ -7,6 +7,17 @@ using Eigen::VectorXi;
 
 using namespace std;
 
+void write_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose = false)
+{
+    cerr<<" write_projections code TO BE WRITTEN"<<endl;
+    exit(-1);
+}
+
+void read_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose = false)
+{
+    cerr<<" read_projections code TO BE WRITTEN"<<endl;
+    exit(-1);
+}
 
 void toEigenMat(DenseColMf& m, const Cell& data);
 

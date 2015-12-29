@@ -3,7 +3,7 @@
 
 #include <boost/dynamic_bitset.hpp>
 
-using namespace boost;
+//using namespace boost;
 
 class boolmatrix
 {
@@ -21,7 +21,7 @@ class boolmatrix
   size_t rows() const {return _nrow;}
   size_t cols() const {return _ncol;}
  private:
-  dynamic_bitset<>* _data;
+  boost::dynamic_bitset<>* _data;
   size_t _nrow;
   size_t _ncol;
   size_t _count;
@@ -29,7 +29,7 @@ class boolmatrix
 
 inline boolmatrix::boolmatrix(size_t n, size_t m)
 {
-  _data = new dynamic_bitset<> (n*m);
+  _data = new boost::dynamic_bitset<> (n*m);
   _nrow = n;
   _ncol = m;
   _count = 0;

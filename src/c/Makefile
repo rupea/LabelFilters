@@ -19,24 +19,14 @@ PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE 
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
 all: learn_projection evaluate_projection run_LPSR
-lib: settings libmcfilter.a
-settings:
-	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
-	echo "BOOSTDIR       = $(BOOSTDIR)"
-# Create a library of octave-free C++ code for the main functionality in MCFilter
-#   (find_w, filter, kmeans, LPSR)
-#   This should aid in producing an interface in lua [I hope]
-libmcfilter.a: find_w.o filter.o PredictionSet.o printing.o utils.o
-	$(AR) -vru $@ $^
-
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
 
 profile_evaluate: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
-learn_projection: learn_projection.o find_w.o printing.o EigenOctave.o utils.o
-	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o learn_projection learn_projection.o EigenOctave.o find_w.o printing.o utils.o
+learn_projection: learn_projection.o find_w.o printing.o EigenOctave.o utils.o parameter.o
+	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o learn_projection $^
 
 evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
 	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o evaluate_projection evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
@@ -52,6 +42,25 @@ profile_kmeans:
 
 .cpp.o:
 	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
+
+## extra stuff
+settings:
+	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
+	echo "BOOSTDIR       = $(BOOSTDIR)"
+check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h utils.h WeightVector.h
+	for header in $^; do \
+		echo "Checking standalone compile of $$header..."; \
+		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
+	done; \
+	echo "DONE checking standalone header compilation"
+lib: libmcfilter.a demo-proj
+# Create a library of octave-free C++ code for the main functionality in MCFilter
+#   (find_w, filter, kmeans, LPSR)
+#   This should aid in producing an interface in lua [I hope]
+libmcfilter.a: find_w.o filter.o PredictionSet.o printing.o utils.o EigenIO.o parameter.o
+	$(AR) -vru $@ $^
+demo-proj: erik/demo-proj.cpp libmcfilter.a
+	$(CXX) -o $@ $(CPPFLAGS) -I. $< libmcfilter.a
 
 clean: 
 	rm -f *.o learn_projection evaluate_projection run_kmeans

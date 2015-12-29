@@ -12,15 +12,15 @@
 #include "boolmatrix.h"
 #include "mutexlock.h" 
 #include "utils.h"
+#include <cstdio>       // std::snprintf
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
 #endif
 
-using Eigen::VectorXd;
-using Eigen::VectorXi;
-
-using namespace std;
+//using Eigen::VectorXd;
+//using Eigen::VectorXi;
+//using namespace std;
 
 
 // *******************************
@@ -63,8 +63,8 @@ double compute_objective(const VectorXd& projection, const SparseMb& y,
 			 const VectorXi& nclasses, int maxclasses,
 			 size_t i_start, size_t i_end, 
 			 int sc_start, int sc_end, 
-			 const vector<int>& sorted_class, 
-			 const vector<int>& class_order,
+			 const std::vector<int>& sorted_class, 
+			 const std::vector<int>& class_order,
 			 const VectorXd& sortedLU,
 			 const boolmatrix& filtered,
 			 double C1, double C2,
@@ -105,13 +105,13 @@ void rank_classes(std::vector<int>& order, std::vector<int>& cranks, const Vecto
 // **********************************************
 // get l and u in the original class order
 
-void get_lu (VectorXd& l, VectorXd& u, const VectorXd& sortedLU, const vector<int>& sorted_class);
+void get_lu (VectorXd& l, VectorXd& u, const VectorXd& sortedLU, const std::vector<int>& sorted_class);
 
 // **********************************
 // sort l and u in the new class order
 
 void get_sortedLU(VectorXd& sortedLU, const VectorXd& l, const VectorXd& u, 
-		  const vector<int>& sorted_class);
+		  const std::vector<int>& sorted_class);
 
 // *******************************
 // Get the number of exampls in each class
@@ -130,7 +130,7 @@ void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const pa
 // computationally expensive so it should be done sparingly 
 void optimizeLU(VectorXd&l, VectorXd&u, 
 		const VectorXd& projection, const SparseMb& y, 
-		const vector<int>& class_order, const vector<int>& sorted_class,
+		const std::vector<int>& class_order, const std::vector<int>& sorted_class,
 		const VectorXd& wc, const VectorXi& nclasses,
 		const boolmatrix& filtered, 
 		const double C1, const double C2,
@@ -249,8 +249,8 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 			const VectorXd& proj, const VectorXsz& index,
 			const SparseMb& y, const VectorXi& nclasses, 
 			int maxclasses,
-			const vector<int>& sorted_class,
-			const vector<int>& class_order,
+			const std::vector<int>& sorted_class,
+			const std::vector<int>& class_order,
 			const VectorXd& sortedLU,
 			const boolmatrix& filtered,
 			double C1, double C2,
@@ -261,8 +261,9 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 // check the gradient calculation using finite differences
 
 template<typename EigenType>
-void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx, const SparseMb& y, const VectorXi& nclasses, int maxclasses, const vector<int>& sorted_class, const vector<int>& class_order, const VectorXd& sortedLU, const boolmatrix& filtered, double C1, double C2, const param_struct& params)
+void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx, const SparseMb& y, const VectorXi& nclasses, int maxclasses, const std::vector<int>& sorted_class, const std::vector<int>& class_order, const VectorXd& sortedLU, const boolmatrix& filtered, double C1, double C2, const param_struct& params)
 {
+  using namespace std;
   double delta = params.finite_diff_test_delta;
   VectorXd proj(1);
   proj.coeffRef(0) = w.project_row(x,idx);
@@ -330,8 +331,8 @@ double compute_single_w_gradient_size ( int sc_start, int sc_end,
 					const double proj, const size_t i,
 					const SparseMb& y, const VectorXi& nclasses, 
 					int maxclasses, 
-					const vector<int>& sorted_class,
-					const vector<int>& class_order, 
+					const std::vector<int>& sorted_class,
+					const std::vector<int>& class_order, 
 					const VectorXd& sortedLU,
 					const boolmatrix& filtered,
 					double C1, double C2,
@@ -345,8 +346,8 @@ void update_single_sortedLU( VectorXd& sortedLU,
 			     const double proj, const size_t i,
 			     const SparseMb& y, const VectorXi& nclasses, 
 			     int maxclasses, 
-			     const vector<int>& sorted_class,
-			     const vector<int>& class_order, 
+			     const std::vector<int>& sorted_class,
+			     const std::vector<int>& class_order, 
 			     const boolmatrix& filtered,
 			     double C1, double C2, const double eta_t,
 			     const param_struct& params);
@@ -354,18 +355,18 @@ void update_single_sortedLU( VectorXd& sortedLU,
 
 // generates num_samples uniform samples between 0 and max-1 with replacement,
 //  and sorts them in ascending order  
-void get_ordered_sample(vector<int>& sample, int max, int num_samples);
+void get_ordered_sample(std::vector<int>& sample, int max, int num_samples);
 
 
 // function to calculate the multiplier of the gradient for w for a single example. 
 // subsampling the negative class constraints 
 double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
-					       const vector<int>& sc_sample,
+					       const std::vector<int>& sc_sample,
 					       const double proj, const size_t i,
 					       const SparseMb& y, const VectorXi& nclasses, 
 					       int maxclasses, 
-					       const vector<int>& sorted_class,
-					       const vector<int>& class_order, 
+					       const std::vector<int>& sorted_class,
+					       const std::vector<int>& class_order, 
 					       const VectorXd& sortedLU,
 					       const boolmatrix& filtered,
 					       double C1, double C2,
@@ -375,12 +376,12 @@ double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
 // subsampling the negative classes
 void update_single_sortedLU_sample ( VectorXd& sortedLU,
 				     int sc_start, int sc_end,
-				     const vector<int>& sc_sample,
+				     const std::vector<int>& sc_sample,
 				     const double proj, const size_t i,
 				     const SparseMb& y, const VectorXi& nclasses, 
 				     int maxclasses, 
-				     const vector<int>& sorted_class,
-				     const vector<int>& class_order, 
+				     const std::vector<int>& sorted_class,
+				     const std::vector<int>& class_order, 
 				     const boolmatrix& filtered,
 				     double C1, double C2, const double eta_t,
 				     const param_struct& params);
@@ -405,6 +406,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 		      const int sc_chunks, const int sc_chunk_size, const int sc_remaining,
 		      const param_struct& params)		        
 {
+  using namespace std;
 
   double multiplier = 0;
     
@@ -672,8 +674,25 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
 
 
 
-// *********************************
-// Solve the optimization using the gradient decent on hinge loss
+/**
+ * Solve the optimization using the gradient descent on hinge loss.
+ *
+ * - Suppose \c d-dimensional features, \c k classes, and \c p features
+ * - The training data \c x is a <examples> x \c d matrix [k cols]
+ * - The training labels \c y is a <examples> x \c k matrix [k cols],
+ *   - typically a vector converted to a SparseMb (sparse bool matrix)
+ *  \p weights          inout: d x p matrix, init setRandom
+ *  \p lower_bounds     inout: k x p matrix, init setZero
+ *  \p upper_bounds     inout: k x p matrix, init setZero
+ *  \p objective_val    out:  VectorXd(k)
+ *  \p w_avg            inout: d x p matrix, init setRandom
+ *  \p l_avg            inout: k x p matrix, init setZero
+ *  \p u_avg            inout: k x p matrix, init setZero
+ *  \p object_val_avg   out: VectorXd(k)
+ *  \p x                in: X x d, X d-dim training examples
+ *  \p y                in: X x 1, X labels of each training example
+ *  \p params           many parameters, eg from set_default_params()
+ */
 
 template<typename EigenType>
 void solve_optimization(DenseM& weights, DenseM& lower_bounds,
@@ -686,6 +705,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 			const param_struct& params)
 
 {
+  using namespace std;
   #ifdef PROFILE
   ProfilerStart("init.profile");
   #endif
@@ -902,7 +922,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     }
 
   cout << "start projection " << projection_dim << endl;
-  fflush(stdout);
+  cout.flush(); //fflush(stdout);
   for(; projection_dim < no_projections; projection_dim++)
     {
             
@@ -940,7 +960,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       
       
       cout << "start optimize LU" << endl;
-      fflush(stdout);
+      cout.flush(); //fflush(stdout);
 
 #ifdef PROFILE
       ProfilerStop();
@@ -955,7 +975,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	  optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
 	}	  
       cout << "end optimize LU" << endl;
-      fflush(stdout);
+      cout.flush(); //fflush(stdout);
 
       get_sortedLU(sortedLU, l, u, sorted_class);
 
@@ -986,7 +1006,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	    {
 	      snprintf(iter_str,30, "Projection %d > ", projection_dim+1);
 	      print_progress(iter_str, t, params.max_iter);
-	      fflush(stdout);
+	      cout.flush(); //fflush(stdout);
 	    }
 	  
 	  // perform finite differences test

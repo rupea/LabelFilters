@@ -9,6 +9,35 @@
 
 using Eigen::VectorXd;
 
+// TO DO: put protections when files are not available or the right 
+// variables are not in them.
+// now it crashes badly with a seg fault and can corrupt other processes
+void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose)
+{
+  octave_value_list args; 
+  args(0) = filename; // the projection filename 
+  args(1) = "w";
+  args(2) = "min_proj";
+  args(3) = "max_proj";
+  if (verbose)
+    {
+      cout << "Loading file " << args(0).string_value() << " ... " <<endl;
+    }
+  octave_value_list loaded = Fload(args, 1);
+  //feval("load", args, 0); // no arguments returned 
+  if (verbose)
+    {
+      cout << "success" << endl; 
+    }
+  
+  wmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(1).string_value()).array_value());
+  lmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(2).string_value()).array_value());
+  umat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(3).string_value()).array_value());
+  args.clear();
+  loaded.clear();
+  Fclear();
+}
+
 // converts data from a cell array of vectors of the same length to
 // a eigen dense matrix, with each vector representing a column of the
 // matrix. Assumes the vectors are row vectors (maybe this can be relaxed)

@@ -5,7 +5,7 @@
 #include "utils.h"
 #include "EigenIO.h"
 
-using namespace std;
+//using namespace std;
 
 
 void output_perfs(const std::vector<double>& MicroF1, const std::vector<double>&  MacroF1,

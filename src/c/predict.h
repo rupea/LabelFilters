@@ -1,27 +1,29 @@
 #ifndef __PREDICT_H
 #define __PREDICT_H
 
+#include "filter.h"
+#include "typedefs.h"
+#include "PredictionSet.h"
+#include "utils.h"
+
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #include <boost/numeric/conversion/bounds.hpp>
 #include <boost/limits.hpp>
 #include <vector>
 #include <boost/dynamic_bitset.hpp>
-#include "filter.h"
-#include "typedefs.h"
-#include "PredictionSet.h"
-#include "utils.h"
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
 #endif
 
 
-using namespace std;
+//using namespace std;
   
 template <typename Eigentype>
 PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDataSet* active, size_t& nact, bool verbose = false, predtype keep_thresh = boost::numeric::bounds<predtype>::lowest(), size_t keep_size = boost::numeric::bounds<size_t>::highest(), const size_t start_class=0)
 {
+  using namespace std;
   size_t n = x.rows();
   size_t noClasses = w.cols();
   nact = 0;
@@ -65,7 +67,7 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
       #ifdef PROFILE
       ProfilerStart("projected_predict.profile");
       #endif  
-      assert(active->length() == n);
+      assert(active->size() == n);
       if(n>0)
 	{
 	  assert((*active)[0]->size() == noClasses);
@@ -74,7 +76,7 @@ PredictionSet* predict ( const Eigentype& x, const DenseColMf& w, const ActiveDa
 #pragma omp parallel for default(shared) reduction(+:totalactive) 
       for (i = 0; i < n; i++)      
 	{
-	  dynamic_bitset<>* act = (*active)[i];
+          boost::dynamic_bitset<>* act = (*active)[i];
 	  size_t nactive = act->count();
 	  totalactive += nactive;
 	  PredVec* pv = predictions->NewPredVecAt(i,nactive);
@@ -162,7 +164,7 @@ void predict(PredictionSet* predictions, const Eigentype& x, const DenseColMf& w
       #ifdef PROFILE
       ProfilerStart("projected_predict.profile");
       #endif  
-      assert(active->length() == n);
+      assert(active->size() == n);
       if(n>0)
 	{
 	  assert((*active)[0]->size() == noClasses);
@@ -171,7 +173,7 @@ void predict(PredictionSet* predictions, const Eigentype& x, const DenseColMf& w
 #pragma omp parallel for default(shared) reduction(+:totalactive) 
       for (i = 0; i < n; i++)      
 	{
-	  dynamic_bitset<>* act = (*active)[i];
+          boost::dynamic_bitset<>* act = (*active)[i];
 	  size_t nactive = act->count();
 	  totalactive += nactive;	  
 	  PredVec* pv;
@@ -221,7 +223,7 @@ ActiveDataSet* getactive(VectorXsz& no_active, const Eigentype& x, const DenseCo
 
   for (ActiveDataSet::iterator it = active->begin(); it != active->end(); ++it)
     {
-      *it = new dynamic_bitset<>(noClasses);
+      *it = new boost::dynamic_bitset<>(noClasses);
       (*it) -> set();
     }
 
@@ -245,7 +247,7 @@ ActiveDataSet* getactive(VectorXsz& no_active, const Eigentype& x, const DenseCo
 #pragma omp parallel for default(shared) reduction(+:count)
       for (j=0; j < n; j++)
 	{
-	  dynamic_bitset<>* act = (*active)[j];
+          boost::dynamic_bitset<>* act = (*active)[j];
 	  (*act) &= *(f.filter(proj.coeff(j)));
 	  count += act -> count();
 	}

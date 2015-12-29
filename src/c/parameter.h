@@ -1,6 +1,9 @@
 #ifndef __PARAMETER_H
 #define __PARAMETER_H
 
+#include <cstdlib>      // size_t
+using std::size_t;
+
 enum Eta_Type 
   {
     ETA_CONST, // eta
@@ -90,5 +93,7 @@ inline param_struct set_default_params()
   def.class_samples = 0;
   return def;
 }
+
+void print_parameter_usage();
   
 #endif
