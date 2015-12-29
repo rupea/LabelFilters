@@ -15,6 +15,10 @@
 #include "utils.h"
 #include "evaluate.h"
 
+//********** this has not been updated with all the parameters. 
+// Evaluation should be done through the stand alone executable rather than through octave.
+// the main reason for this is to save memory 
+
 void print_usage()
 {
   cout << "oct_evaluate_model x y ova_models w l u" << endl;
@@ -117,14 +121,14 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
       // Sparse data
       SparseM x = toEigenMat(args(0).sparse_matrix_value());
 
-      evaluate_projection(x,y,ovaW,&wmat,&lmat,&umat,thresh,k,"filtered",verbose,std::cout,
+      evaluate_projection(x,y,ovaW,&wmat,&lmat,&umat,thresh,k,"filtered",false, false, verbose,std::cout,
 			  MicroF1, MacroF1, MacroF1_2, MicroPrecision,
 			  MacroPrecision, MicroRecall, MacroRecall,
 			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, act_prc, time);
       
       if (nargout > 1)
 	{
-	  evaluate_projection(x,y,ovaW,NULL, NULL, NULL,thresh,k,"not filtered",verbose, std::cout,
+	  evaluate_projection(x,y,ovaW,NULL, NULL, NULL,thresh,k,"not filtered",false, false, verbose, std::cout,
 			      MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
 			      MicroPrecision_noproj, MacroPrecision_noproj, 
 			      MicroRecall_noproj, MacroRecall_noproj, 
@@ -138,14 +142,14 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
       // Dense data
       DenseM x = toEigenMat<DenseM>(args(0).array_value());
 
-      evaluate_projection(x,y,ovaW,&wmat,&lmat,&umat,thresh,k,"filtered",verbose,std::cout,
+      evaluate_projection(x,y,ovaW,&wmat,&lmat,&umat,thresh,k,"filtered",false, false,verbose,std::cout,
 			  MicroF1, MacroF1, MacroF1_2, MicroPrecision,
 			  MacroPrecision, MicroRecall, MacroRecall,
 			  Top1, Top5, Top10, Prec1, Prec5, Prec10, nact, act_prc, time);
       
       if (nargout > 1)
 	{
-	  evaluate_projection(x,y,ovaW,NULL,NULL,NULL,thresh,k,"not filtered",verbose,std::cout,
+	  evaluate_projection(x,y,ovaW,NULL,NULL,NULL,thresh,k,"not filtered",false, false, verbose,std::cout,
 			      MicroF1_noproj, MacroF1_noproj, MacroF1_2_noproj, 
 			      MicroPrecision_noproj, MacroPrecision_noproj, 
 			      MicroRecall_noproj, MacroRecall_noproj, 

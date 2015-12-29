@@ -8,7 +8,7 @@ OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
 
 LDFLAGS ?= -L$(BOOSTDIR)/lib -lboost_program_options
-PROFILE_OPENMP =
+PROFILE_OPENMP = -fopenmp
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 

@@ -62,6 +62,8 @@ void print_usage()
   cout << "           finite_diff_test_delta - the size of the finite difference. [1e-2]" << endl;
   cout << "           resume - whether to continue with additional projections. Takes previous projections from w_prev l_prev and u_prev. [false]" << endl;
   cout << "           reoptimize_LU - optimize l and u for given projections w_prev. Implies resume is true (i.e. if no_projections > w_prev.cols() additional projections will be learned. [false]" << endl;
+  cout << "           class_samples - the number of negative classes to sample for each example at each iteration. 0 to use all classes. [0]" << endl;
+  
   cout << "     w_prev - previous w matrix. Used for filtering in case resume=true" << endl;
   cout << "     l_prev - previous l matrix. Used for filtering in case resume=true" << endl;
   cout << "     u_prev - previous u matrix. Used for filtering in case resume=true" << endl;
@@ -271,6 +273,11 @@ DEFUN_DLD (oct_find_w, args, nargout,
       if (tmp.is_defined())
 	{
 	  params.reoptimize_LU=tmp.bool_value();
+	}
+      tmp = parameters.contents("class_samples");
+      if (tmp.is_defined())
+	{
+	  params.class_samples=tmp.int_value();
 	}
     }
 

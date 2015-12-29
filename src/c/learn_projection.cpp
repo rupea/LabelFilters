@@ -62,7 +62,8 @@ int main(int argc, char * argv[])
   srand (42782);
  
   octave_value_list args; 
-  args(0)="~/Research/mcfilter/LSHTC-2014/data/LSHTC14train_minclass10_minfeat10_weighting_tfidf_normalization_row_trial1.mat"; 
+  args(0)="~/Research/mcfilter/LSHTC-2014/data/LSHTC14train_minclass0_minfeat10_weighting_tfidf_normalization_row_trial1.mat"; 
+  //  args(0)="~/Research/mcfilter/ipc/ipc_full_db/data/ipc_minclass0_minfeat1_coding_none_normalization_row.mat"; 
   args(1)="x_tr"; 
   args(2)="y_tr"; 
 
@@ -108,13 +109,35 @@ int main(int argc, char * argv[])
   param_struct params = set_default_params();
   params.C2 = 0.5;
   params.C1 = y.cols() * 2 * params.C2;
-  params.optimizeLU_epoch = 0;
   params.remove_constraints = true;
-  params.max_iter = 1e+8;
-  params.report_epoch = 1e+6; 
-  params.reorder_epoch = 1e+6;
+  params.max_iter = 1e+5;
+  params.report_epoch = 1e+5; 
+  params.reorder_epoch = 1e+5;
   params.update_type = SAFE_SGD;
   params.batch_size = 1;
+  params.optimizeLU_epoch = params.max_iter;
+  params.eta = 0.01;
+  params.min_eta = 0;
+  params.class_samples = 3000;
+  params.reweight_lambda = 2;
+  params.num_threads = 1;
+  params.no_projections = 1;
+
+  // params.C2 = 100;
+  // params.C1 = 200000;
+  // params.remove_constraints = true;
+  // params.max_iter = 1e+7;
+  // params.report_epoch = 1e+6; 
+  // params.reorder_epoch = 1e+6;
+  // params.optimizeLU_epoch = params.max_iter;
+  // params.update_type = SAFE_SGD;
+  // params.batch_size = 1;
+  // params.eta = 0.01;
+  // params.min_eta = 0;
+  // params.class_samples = 0;
+  // params.reweight_lambda = 2;
+  // params.num_threads = 1;
+  // params.no_projections = 2;
   //smally = y.topLeftCorner(100000,y.cols());
 
 
@@ -132,11 +155,11 @@ int main(int argc, char * argv[])
       
       //SparseM smallx = x.topLeftCorner(100000,d);
 
-      DenseM w(d,5),l(k,5),u(k,5);
+      DenseM w(d,2),l(k,2),u(k,2);
       w.setRandom();
       l.setZero();
       u.setZero();
-      DenseM w_avg(d,5),l_avg(k,5),u_avg(k,5);
+      DenseM w_avg(d,2),l_avg(k,2),u_avg(k,2);
       w_avg.setRandom();
       l_avg.setZero();
       u_avg.setZero();
@@ -152,11 +175,11 @@ int main(int argc, char * argv[])
       size_t d = x.cols();
       size_t k = y.cols();
       
-      DenseM w(d,5),l(k,5),u(k,5);
+      DenseM w(d,2),l(k,2),u(k,2);
       w.setRandom();
       l.setZero();
       u.setZero();
-      DenseM w_avg(d,5),l_avg(k,5),u_avg(k,5);
+      DenseM w_avg(d,2),l_avg(k,2),u_avg(k,2);
       w_avg.setRandom();
       l_avg.setZero();
       u_avg.setZero();

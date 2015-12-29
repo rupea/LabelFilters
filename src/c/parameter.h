@@ -52,6 +52,7 @@ typedef struct
   double finite_diff_test_delta; // the size of the finite differene
   bool resume; // whether to train more projections. Old projections should be passed to the program.
   bool reoptimize_LU; // whether to reoptimize the baounds of the class intervals. 
+  int class_samples; // the number of negative classes to use at each gradient iteration. 0 to use all the classes
 } param_struct;
 
 
@@ -85,6 +86,8 @@ inline param_struct set_default_params()
   def.no_finite_diff_tests=1000;
   def.finite_diff_test_delta=1e-4;
   def.resume = false;
+  def.reoptimize_LU = false;
+  def.class_samples = 0;
   return def;
 }
   

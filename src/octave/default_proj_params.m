@@ -41,5 +41,6 @@ function [ proj_params ] = default_proj_params()
   proj_params.finite_diff_test_epoch = 0;
   proj_params.no_finite_diff_tests = 1000;
   proj_params.finite_diff_test_delta = 1e-4;
+  proj_params.class_samples = 0;
   return;
 end

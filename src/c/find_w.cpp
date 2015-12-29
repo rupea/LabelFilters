@@ -175,6 +175,48 @@ void update_filtered(boolmatrix& filtered, const VectorXd& projection,
     }
 }
 
+
+// internal function that initializes some counts and the class vectors 
+// used by compute_gradiends, compute_single_w_gradient_size and update_single_sortedLU 
+
+void init_ordered_class_list(int& left_classes, double& left_update, 
+			     int& right_classes, double& right_update, 
+			     vector<int>& classes, 
+			     double class_weight, double other_weight,
+			     size_t i, const SparseMb& y, const VectorXi& nclasses,
+			     const vector<int>& class_order,
+			     int sc_start, int sc_end)
+{
+  
+  left_classes = 0; //number of classes to the left of the current one
+  left_update = 0; // left_classes * other_weight
+  right_classes = nclasses.coeff(i); //number of classes to the right of the current one		  
+  right_update = other_weight * right_classes;
+  
+  // calling y.coeff is expensive so get the classes here
+  classes.resize(0);
+  for (SparseMb::InnerIterator it(y,i); it; ++it)
+    {
+      if (it.value())
+	{
+	  int c = class_order[it.col()];
+	  if ( c < sc_start ) 
+	    {
+	      left_classes++;
+	      left_update += other_weight;
+	      right_classes--;
+	      right_update -= other_weight;
+	    }
+	  else if (c < sc_end)  
+	    {
+	      classes.push_back(c);
+	    }
+	}
+    }
+  classes.push_back(sc_end+1); // this will always be the last. This avoids an extra check if s < sc_end inside the while loop.
+  std::sort(classes.begin(),classes.end());
+}
+
   
 
 // ***********************************************
@@ -198,7 +240,6 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
   int sc, cp;
   int noClasses = y.cols();
   size_t idx, i;
-  size_t no_filtered = filtered.count();
   double class_weight, other_weight, left_update, right_update;
   double tmp;
   vector<int> classes;
@@ -233,86 +274,25 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 	  class_weight /= nclasses.coeff(i);
 	}
       
-      left_classes = 0; //number of classes to the left of the current one
-      left_update = 0; // left_classes * other_weight
-      right_classes = nclasses.coeff(i); //number of classes to the right of the current one		  
-      right_update = other_weight * right_classes;
+
+      init_ordered_class_list(left_classes, left_update, 
+			      right_classes, right_update, 
+			      classes, 
+			      class_weight, other_weight, 
+			      i, y, nclasses, class_order, sc_start, sc_end);    
       
-      // calling y.coeff is expensive so get the classes here
-      classes.resize(0);
-      for (SparseMb::InnerIterator it(y,i); it; ++it)
-	{
-	  if (it.value())
-	    {
-	      int c = class_order[it.col()];
-	      if ( c < sc_start ) 
-		{
-		  left_classes++;
-		  left_update += other_weight;
-		  right_classes--;
-		  right_update -= other_weight;
-		}
-	      else if (c < sc_end)
-		{
-		  classes.push_back(c);
-		}
-	    }
-	}
-      classes.push_back(sc_end); // this will always be the last 
-      std::sort(classes.begin(),classes.end());
 
       sc=sc_start;
       class_iter = classes.begin();
       sortedLU_iter = sortedLU.data() + 2*sc_start;
       sortedLU_gradient_iter = sortedLU_gradient.data();
-      while (sc < sc_end)
+      while (1)
 	{
-	  while(sc < *class_iter)
-	    {
-	      // while example is not of class cp
-	      cp = sorted_class[sc]; 			  
-	      if (no_filtered == 0 || !(filtered.get(i,cp))) 
-		{			      
-		  if (left_classes && ((1 - *sortedLU_iter + tmp) > 0)) // I3 Condition w*x > l(cp) - 1
-		    {
-#ifdef PRINTI
-		      {
-			cout << "I3 : " << idx << ", " << i << endl;
-		      }
-#endif
-		      *multipliers_iter += left_update; // use the iterator for multiplier too ?
-		      *sortedLU_gradient_iter += left_update;
-		      //l_gradient.coeffRef(cp) -= other_weight*left_classes;
-		    }
-		  sortedLU_iter++;
-		  sortedLU_gradient_iter++;
-		  //if (right_classes && hinge_loss(tmp - u.coeff(cp)) > 0) //  I4 Condition
-		  if (right_classes && ((1 - tmp + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
-		    {
-#ifdef PRINTI
-		      {
-			cout << "I4 : " << idx << ", " << i<< endl;
-		      }
-#endif
-		      *multipliers_iter -= right_update;
-		      *sortedLU_gradient_iter -= right_update;
-				  //u_gradient.coeffRef(cp) += other_weight*right_classes;
-		    }
-		  sortedLU_iter++;			      
-		  sortedLU_gradient_iter++;
-		}
-	      else
-		{
-		  sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
-		  sortedLU_gradient_iter += 2; //the iterator needs to be incremeted even if the class is filtered
-		}
-	      sc++;
-	    }
-	  if (sc < sc_end) // test if we are done
+	  while (sc == *class_iter) // classes.back = sc_end+1 so this must end before sc == sc_end
 	    {
 	      // example has class cp
 	      cp = sorted_class[sc]; 			  
-	      if (!params.remove_class_constraints || no_filtered == 0 || !(filtered.get(i,cp))) 
+	      if (!params.remove_class_constraints || !(filtered.get(i,cp))) 
 		{			      
 		  if ((1 - tmp + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
 		    {
@@ -355,11 +335,52 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 	      ++class_iter;
 	      sc++;
 	    }
-	} // while(sc<noClasses)
+	  if (sc == sc_end)
+	    {
+	      break; // we are done
+	    }
+	  // example is not of class cp
+	  cp = sorted_class[sc]; 			  
+	  if (!(filtered.get(i,cp))) 
+	    {			      
+	      if (left_classes && ((1 - *sortedLU_iter + tmp) > 0)) // I3 Condition w*x > l(cp) - 1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I3 : " << idx << ", " << i << endl;
+		  }
+#endif
+		  *multipliers_iter += left_update; // use the iterator for multiplier too ?
+		  *sortedLU_gradient_iter += left_update;
+		  //l_gradient.coeffRef(cp) -= other_weight*left_classes;
+		}
+	      sortedLU_iter++;
+	      sortedLU_gradient_iter++;
+	      //if (right_classes && hinge_loss(tmp - u.coeff(cp)) > 0) //  I4 Condition
+	      if (right_classes && ((1 - tmp + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I4 : " << idx << ", " << i<< endl;
+		  }
+#endif
+		  *multipliers_iter -= right_update;
+		  *sortedLU_gradient_iter -= right_update;
+		  //u_gradient.coeffRef(cp) += other_weight*right_classes;
+		}
+	      sortedLU_iter++;			      
+	      sortedLU_gradient_iter++;
+	    }
+	  else
+	    {
+	      sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+	      sortedLU_gradient_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+	    }
+	  sc++;
+	} // while(1)
       multipliers_iter++;
     }  // end for idx (second)
 }
-
 
 
 
@@ -380,7 +401,6 @@ double compute_single_w_gradient_size ( int sc_start, int sc_end,
   double multiplier = 0.0;
   int sc, cp;
   int noClasses = y.cols();
-  size_t no_filtered = filtered.count();
   double class_weight, other_weight, left_update, right_update;
   vector<int> classes;
   vector<int>::iterator class_iter;
@@ -401,80 +421,23 @@ double compute_single_w_gradient_size ( int sc_start, int sc_end,
     {
       class_weight /= nclasses.coeff(i);
     }
-  
-  left_classes = 0; //number of classes to the left of the current one
-  left_update = 0; // left_classes * other_weight
-  right_classes = nclasses.coeff(i); //number of classes to the right of the current one		  
-  right_update = other_weight * right_classes;
-  
-  // calling y.coeff is expensive so get the classes here
-  classes.resize(0);
-  for (SparseMb::InnerIterator it(y,i); it; ++it)
-    {
-      if (it.value())
-	{
-	  int c = class_order[it.col()];
-	  if ( c < sc_start ) 
-	    {
-	      left_classes++;
-	      left_update += other_weight;
-	      right_classes--;
-	      right_update -= other_weight;
-	    }
-	  else if (c < sc_end)
-	    {
-	      classes.push_back(c);
-	    }
-	}
-    }
-  classes.push_back(sc_end); // this will always be the last 
-  std::sort(classes.begin(),classes.end());
+
+  init_ordered_class_list(left_classes, left_update, 
+			  right_classes, right_update, 
+			  classes, 
+			  class_weight, other_weight, 
+			  i, y, nclasses, class_order, sc_start, sc_end);
   
   sc=sc_start;
   class_iter = classes.begin();
   sortedLU_iter = sortedLU.data() + 2*sc_start;
-  while (sc < sc_end)
+  while (1)
     {
-      while(sc < *class_iter)
-	{
-	  // while example is not of class cp
-	  cp = sorted_class[sc]; 			  
-	  if (no_filtered == 0 || !(filtered.get(i,cp))) 
-	    {			      
-	      //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
-	      if (left_classes && (pp1 > *sortedLU_iter)) // I3 Condition w*x > l(cp) - 1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I3 : " << i << endl;
-		  }
-#endif
-		  multiplier += left_update; 
-		}
-	      ++sortedLU_iter;
-	      //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
-	      if (right_classes && (*sortedLU_iter > pm1)) //  I4 Condition  w*x < u(cp) + 1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I4 : " << i<< endl;
-		  }
-#endif
-		  multiplier -= right_update;
-		}
-	      ++sortedLU_iter;			      
-	    }
-	  else
-	    {
-	      sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
-	    }
-	  ++sc;
-	}
-      if (sc < sc_end) // test if we are done
+      while (sc == *class_iter)
 	{
 	  // example has class cp
 	  cp = sorted_class[sc]; 			  
-	  if (!params.remove_class_constraints || no_filtered == 0 || !(filtered.get(i,cp))) 
+	  if (!params.remove_class_constraints || !(filtered.get(i,cp))) 
 	    {			      
 	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
 	      if (*(sortedLU_iter++) > pm1)// I1 Condition  w*x < l(c)+1
@@ -509,8 +472,44 @@ double compute_single_w_gradient_size ( int sc_start, int sc_end,
 	  right_update -= other_weight;
 	  ++class_iter;
 	  ++sc;
+	}      
+      if (sc == sc_end) 
+	{
+	  break; // we are done
 	}
-    } // while(sc<noClasses)
+      // example is not of class cp
+      cp = sorted_class[sc]; 			  
+      if (!(filtered.get(i,cp))) 
+	{			      
+	  //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
+	  if (left_classes && (pp1 > *sortedLU_iter)) // I3 Condition w*x > l(cp) - 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I3 : " << i << endl;
+	      }
+#endif
+	      multiplier += left_update; 
+	    }
+	  ++sortedLU_iter;
+	  //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
+	  if (right_classes && (*sortedLU_iter > pm1)) //  I4 Condition  w*x < u(cp) + 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I4 : " << i<< endl;
+	      }
+#endif
+	      multiplier -= right_update;
+	    }
+	  ++sortedLU_iter;			      
+	}
+      else
+	{
+	  sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+	}
+      ++sc;
+    } // while(1)
   return multiplier;
 }
 
@@ -532,15 +531,18 @@ void update_single_sortedLU( VectorXd& sortedLU,
 
   int sc, cp;
   int noClasses = y.cols();
-  size_t no_filtered = filtered.count();
   double class_weight, other_weight, left_update, right_update;
   vector<int> classes;
   vector<int>::iterator class_iter;
   int left_classes, right_classes;
   double *sortedLU_iter;
 
-  class_weight = C1;
-  other_weight = C2;
+  double pp1 = proj + 1;
+  double pm1 = proj - 1;
+
+  // absorbe the learning rate in C1 and C2
+  class_weight = C1*eta_t;
+  other_weight = C2*eta_t;
   if (params.ml_wt_by_nclasses)
     {
       other_weight /= nclasses.coeff(i);
@@ -549,99 +551,42 @@ void update_single_sortedLU( VectorXd& sortedLU,
     {
       class_weight /= nclasses.coeff(i);
     }
-  
-  left_classes = 0; //number of classes to the left of the current one
-  left_update = 0; // left_classes * other_weight
-  right_classes = nclasses.coeff(i); //number of classes to the right of the current one		  
-  right_update = other_weight * right_classes;
-  
-  // calling y.coeff is expensive so get the classes here
-  classes.resize(0);
-  for (SparseMb::InnerIterator it(y,i); it; ++it)
-    {
-      if (it.value())
-	{
-	  int c = class_order[it.col()];
-	  if ( c < sc_start ) 
-	    {
-	      left_classes++;
-	      left_update += other_weight;
-	      right_classes--;
-	      right_update -= other_weight;
-	    }
-	  else if (c < sc_end)
-	    {
-	      classes.push_back(c);
-	    }
-	}
-    }
-  classes.push_back(sc_end); // this will always be the last 
-  std::sort(classes.begin(),classes.end());
-  
+  init_ordered_class_list(left_classes, left_update, 
+			  right_classes, right_update, 
+			  classes, 
+			  class_weight, other_weight, 
+			  i, y, nclasses, class_order, sc_start, sc_end);    
   sc=sc_start;
   class_iter = classes.begin();
   sortedLU_iter = sortedLU.data() + 2*sc_start;
-  while (sc < sc_end)
+  while (1)
     {
-      while(sc < *class_iter)
-	{
-	  // while example is not of class cp
-	  cp = sorted_class[sc]; 			  
-	  if (no_filtered == 0 || !(filtered.get(i,cp))) 
-	    {			      
-	      if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I3 : " << idx << ", " << i << endl;
-		  }
-#endif
-		  *sortedLU_iter = min(*sortedLU_iter + left_update*eta_t,proj+1);
-		}
-	      ++sortedLU_iter;
-	      if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I4 : " << idx << ", " << i<< endl;
-		  }
-#endif
-		  *sortedLU_iter = max(*sortedLU_iter - right_update*eta_t,proj-1);
-		}
-	      ++sortedLU_iter;			      
-	    }
-	  else
-	    {
-	      sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
-	    }
-	  ++sc;
-	}
-      if (sc < sc_end) // test if we are done
+      while (sc == *class_iter)
 	{
 	  // example has class cp
 	  cp = sorted_class[sc]; 			  
-	  if (!params.remove_class_constraints || no_filtered == 0 || !(filtered.get(i,cp))) 
+	  if (!params.remove_class_constraints || !(filtered.get(i,cp))) 
 	    {			      
-	      if ((1 - proj + *sortedLU_iter) > 0)// I1 Condition  w*x < l(c)+1
+	      if (*sortedLU_iter > pm1)// I1 Condition  w*x < l(c)+1
 		{
 #ifdef PRINTI
 		  {
 		    cout << "I1 : " << idx << ", " << i<< endl;
 		  }
 #endif
-		  *sortedLU_iter = max(*sortedLU_iter - class_weight*eta_t,proj-1);
+		  *sortedLU_iter = max(*sortedLU_iter - class_weight, pm1);
 		} // end if
 	      
 	      ++sortedLU_iter;			      
 	      
-	      if ((1 + proj - *sortedLU_iter) > 0)//  I2 Condition  w*x > u(c)-1
+	      if (pp1 > *sortedLU_iter)//  I2 Condition  w*x > u(c)-1
 		{
 #ifdef PRINTI
 		  {
 		    cout << "I2 : " << idx << ", " << i << endl;
 		  }
 #endif
-		  *sortedLU_iter = min(*sortedLU_iter + class_weight*eta_t,proj+1);
+		  *sortedLU_iter = min(*sortedLU_iter + class_weight, pp1);
 		} // end if			      
 	      ++sortedLU_iter;
 	    }
@@ -657,11 +602,362 @@ void update_single_sortedLU( VectorXd& sortedLU,
 	  ++class_iter;
 	  ++sc;
 	}
-    } // while(sc<noClasses)
+      if (sc == sc_end)
+	{
+	  break;
+	}
+      // example is not of class cp
+      cp = sorted_class[sc]; 			  
+      if (!(filtered.get(i,cp))) 
+	{			      
+	  if (left_classes && (pp1 > *sortedLU_iter))// I3 Condition w*x > l(cp) - 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I3 : " << idx << ", " << i << endl;
+	      }
+#endif
+	      *sortedLU_iter = min(*sortedLU_iter + left_update, pp1);
+	    }
+	  ++sortedLU_iter;
+	  if (right_classes && (*sortedLU_iter > pm1)) //  I4 Condition  w*x < u(cp) + 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I4 : " << idx << ", " << i<< endl;
+	      }
+#endif
+	      *sortedLU_iter = max(*sortedLU_iter - right_update, pm1);
+	    }
+	  ++sortedLU_iter;			      
+	}
+      else
+	{
+	  sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
+	}
+      ++sc;
+    } // while(1)
+}
+
+
+// generates num_samples uniform samples between 0 and max-1 with replacement,
+//  and sorts them in ascending order  
+void get_ordered_sample(vector<int>& sample, int max, int num_samples)
+{
+  sample.resize(num_samples);
+  for (int i=0;i<num_samples;i++)
+    {
+      sample[i] = ((int)rand()) % max;
+    }
+  std::sort(sample.begin(),sample.end());
+}
+
+// internal function that initializes some counts and the class vectors 
+// used by compute_single_w_gradient_size_sample and update_single_sortedLU_sample 
+void init_ordered_class_list_sample(int& left_classes, double& left_update, 
+				    int& right_classes, double& right_update, 
+				    vector<int>& classes, 
+				    double class_weight, double other_weight,
+				    size_t i, const SparseMb& y, const VectorXi& nclasses,
+				    const vector<int>& class_order,
+				    int& sc_start, int& sc_end, const vector<int>& sc_sample)
+{
+#ifndef NDEBUG  
+  assert(sc_end < sc_sample.size());
+  assert(sc_sample.back() == y.cols());
+#endif
+  
+  left_classes = 0; //number of classes to the left of the current one
+  left_update = 0; // left_classes * other_weight
+  right_classes = nclasses.coeff(i); //number of classes to the right of the current one		  
+  right_update = other_weight * right_classes;
+  
+  // calling y.coeff is expensive so get the classes here
+  classes.resize(0);
+  for (SparseMb::InnerIterator it(y,i); it; ++it)
+    {
+      if (it.value())
+	{
+	  int c = class_order[it.col()];
+	  if ( sc_start > 0 && c < sc_sample[sc_start] ) 
+	    {
+	      left_classes++;
+	      left_update += other_weight;
+	      right_classes--;
+	      right_update -= other_weight;
+	    }
+	  else if (c < sc_sample[sc_end]) //noClasses will always be the last element of sc_sample and sc_end will always be < sc_sample.size(), so sc_sample[sc_end] is well defined. 
+	    {
+	      classes.push_back(c);
+	    }
+	  else if (c == sc_sample[sc_end])
+	    {
+	      // this is neaded to avoid having multiple samples of the same class appearing 
+	      // at the end of the segment. These samples need to be discarded from the current segment.
+	      // the class will be processed in the next segment
+	      while (sc_end >= sc_start && c == sc_sample[sc_end])
+		{
+		  sc_end--;
+		}
+	      sc_end++;
+	    }
+	}
+    }
+  classes.push_back(sc_sample[sc_end]+1); // this will always be the last. Done to make sure that classes has at least one element. the +1 is to handle ties if sampling is done with replacement
+  std::sort(classes.begin(),classes.end());
 }
   
 
 
+// function to calculate the multiplier of the gradient for w for a single example. 
+// subsampling the negative class constraints 
+
+double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
+					       const vector<int>& sc_sample,
+					       const double proj, const size_t i,
+					       const SparseMb& y, const VectorXi& nclasses, 
+					       int maxclasses, 
+					       const vector<int>& sorted_class,
+					       const vector<int>& class_order, 
+					       const VectorXd& sortedLU,
+					       const boolmatrix& filtered,
+					       double C1, double C2,
+					       const param_struct& params )
+{ 
+  double multiplier = 0.0;
+  int s, sc, cp;
+  int noClasses = y.cols();
+  double class_weight, other_weight, left_update, right_update;
+  vector<int> classes;
+  vector<int>::iterator class_iter;
+  int left_classes, right_classes;  
+
+  double pp1 = proj + 1;
+  double pm1 = proj - 1;
+
+  class_weight = C1;
+  other_weight = C2*noClasses*1.0/(sc_sample.size()-1); //-1 because we added noClasses at the end;
+  if (params.ml_wt_by_nclasses)
+    {
+      other_weight /= nclasses.coeff(i);
+    }
+  if (params.ml_wt_class_by_nclasses)
+    {
+      class_weight /= nclasses.coeff(i);
+    }
+
+  init_ordered_class_list_sample(left_classes, left_update, 
+				 right_classes, right_update, 
+				 classes, 
+				 class_weight, other_weight, 
+				 i, y, nclasses, class_order, 
+				 sc_start, sc_end, sc_sample);
+
+  s=sc_start;
+  class_iter = classes.begin();
+  int cls = *class_iter;
+  sc = sc_sample[s];
+  while (1)
+    {
+      while (cls <= sc)
+	{
+	  // example has class cp
+	  cp = sorted_class[cls];
+	  if (!params.remove_class_constraints || !(filtered.get(i,cp))) 
+	    {			      
+	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
+	      if (sortedLU[2*cls] > pm1)// I1 Condition  w*x < l(c)+1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I1 : " << i<< endl;
+		  }
+#endif
+		  multiplier -= class_weight;
+		} // end if
+	      
+	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
+	      if (pp1 > sortedLU[2*cls+1])//  I2 Condition  w*x > u(c)-1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I2 : " << i << endl;
+		  }
+#endif
+		  multiplier += class_weight;
+		} // end if			      
+	    }
+	  //update the left and right classes;
+	  ++left_classes;
+	  left_update += other_weight;
+	  --right_classes;
+	  right_update -= other_weight;	  
+	  while ( sc == cls)
+	    {
+	      // if a true class was sampled, advance
+	      sc = sc_sample[++s];  // because classes.back() = sc_samples[sc_end]+1, it has to be that the while loop terminates before s > sc_end
+	    }
+	  cls = *(++class_iter);
+	}
+      if (s == sc_end) // if we are done
+	{
+	  break;
+	}
+      // example is not of class cp
+      cp = sorted_class[sc]; 			  
+      if (!(filtered.get(i,cp))) 
+	{			      
+	  //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
+	  if (left_classes && (pp1 > sortedLU[2*sc])) // I3 Condition w*x > l(cp) - 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I3 : " << i << endl;
+	      }
+#endif
+	      multiplier += left_update; 
+	    }
+	  //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
+	  if (right_classes && (sortedLU[2*sc+1] > pm1)) //  I4 Condition  w*x < u(cp) + 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I4 : " << i<< endl;
+	      }
+#endif
+	      multiplier -= right_update;
+	    }		      
+	}
+      sc = sc_sample[++s];
+    } // while(1)
+  return multiplier;
+}
+
+// function to update L and U for a single example, given w. 
+// subsampling the negative classes
+
+void update_single_sortedLU_sample ( VectorXd& sortedLU,
+				     int sc_start, int sc_end,
+				     const vector<int>& sc_sample,
+				     const double proj, const size_t i,
+				     const SparseMb& y, const VectorXi& nclasses, 
+				     int maxclasses, 
+				     const vector<int>& sorted_class,
+				     const vector<int>& class_order, 
+				     const boolmatrix& filtered,
+				     double C1, double C2, const double eta_t,
+				     const param_struct& params)
+{
+  
+  int s, sc, cp;
+  int noClasses = y.cols();
+  double class_weight, other_weight, left_update, right_update;
+  vector<int> classes;
+  vector<int>::iterator class_iter;
+  int left_classes, right_classes;
+  double *sl;
+  double *su;
+
+  double pp1 = proj + 1;
+  double pm1 = proj - 1;
+
+  // absorbe the learning rate in C1 and C2
+  class_weight = C1*eta_t;
+  other_weight = C2*eta_t*noClasses*1.0/sc_sample.size();
+  if (params.ml_wt_by_nclasses)
+    {
+      other_weight /= nclasses.coeff(i);
+    }
+  if (params.ml_wt_class_by_nclasses)
+    {
+      class_weight /= nclasses.coeff(i);
+    }
+  
+  init_ordered_class_list_sample(left_classes, left_update, 
+				 right_classes, right_update, 
+				 classes, 
+				 class_weight, other_weight, 
+				 i, y, nclasses, class_order, 
+				 sc_start, sc_end, sc_sample);
+  
+  s=sc_start;
+  sc = sc_sample[s];
+  class_iter = classes.begin();
+  int cls = *class_iter;
+  while (1)
+    {
+      while (cls <= sc)
+	{
+	  // example has class cp
+	  cp = sorted_class[cls]; 			  
+	  sl = sortedLU.data() + 2*cls;
+	  su = sl + 1;
+	  if (!params.remove_class_constraints || !(filtered.get(i,cp))) 
+	    {			      
+	      if (*sl > pm1)// I1 Condition  w*x < l(c)+1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I1 : " << idx << ", " << i<< endl;
+		  }
+#endif
+		  *sl = max(*sl - class_weight, pm1);
+		} // end if
+	      if (pp1 > *su)//  I2 Condition  w*x > u(c)-1
+		{
+#ifdef PRINTI
+		  {
+		    cout << "I2 : " << idx << ", " << i << endl;
+		  }
+#endif
+		  *su = min(*su + class_weight, pp1);
+		} // end if			      
+	    }
+	  //update the left and right classes;
+	  ++left_classes;
+	  left_update += other_weight;
+	  --right_classes;
+	  right_update -= other_weight;
+	  while (sc == cls)
+	    {
+	      // if a true class was sampled, advance
+	      sc = sc_sample[++s]; // because classes.back() = sc_samples[sc_end]+1, it has to be that the while loop terminates before s > sc_end
+	    }
+	  cls = *(++class_iter);
+	}
+      if ( s == sc_end)
+	{
+	  break;
+	}    
+      // example is not of class cp
+      cp = sorted_class[sc]; 			  
+      sl = sortedLU.data() + 2*sc;
+      su = sl + 1 ;
+      if (!(filtered.get(i,cp))) 
+	{			      
+	  if (left_classes && (pp1 > *sl))// I3 Condition w*x > l(cp) - 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I3 : " << idx << ", " << i << endl;
+	      }
+#endif
+	      *sl = min(*sl + left_update, pp1);
+	    }
+	  if (right_classes && (*su > pm1)) //  I4 Condition  w*x < u(cp) + 1
+	    {
+#ifdef PRINTI
+	      {
+		cout << "I4 : " << idx << ", " << i<< endl;
+	      }
+#endif
+	      *su = max(*su - right_update, pm1);
+	    }
+	}
+      sc = sc_sample[++s];
+    } // while(1)
+}
+  
 
 
 
@@ -1038,14 +1334,14 @@ void proj_means(VectorXd& means, const VectorXi& nc,
 // grad are stored in order of the ranked classes
 // to minimize cash misses and false sharing 
 
-void getBoundGrad (VectorXd& grad, VectorXd& bound, 
+void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bound, 
 		   const size_t idx, const size_t allproj_idx, 
-		   const std::vector<int>& sorted_class, 
+		   const std::vector<int>& __restricted sorted_class, 
 		   const int sc_start, const int sc_end, 
-		   const std::vector<int>& classes, 
+		   const std::vector<int>& __restricted classes, 
 		   const double start_update, const double other_weight,
-		   const VectorXd& allproj,
-		   const bool none_filtered, const boolmatrix& filtered)
+		   const VectorXd& __restricted allproj,
+		   const bool none_filtered, const boolmatrix& __restricted filtered)
 {
   std::vector<int>::const_iterator class_iter = std::lower_bound(classes.begin(), classes.end(), sc_start);  
   double update = start_update + (class_iter - classes.begin())*other_weight;
@@ -1062,15 +1358,24 @@ void getBoundGrad (VectorXd& grad, VectorXd& bound,
 	  class_iter++;
 	  continue;
 	}		  
-      int cp = sorted_class[sc];
+      const double gsc = grad.coeff(sc);
+      // if (gsc >= 0 )
+      // 	{
+      // 	  const int cp = sorted_class[sc];
+      // 	  if (none_filtered || !(filtered.get(idx,cp)))
+      const int cp = sorted_class[sc];
       if (grad.coeff(sc) >= 0 && (none_filtered || !(filtered.get(idx,cp))))
 	{			      
+	  // const double ngsc = gsc - update;
+	  // grad.coeffRef(sc) = ngsc;
 	  grad.coeffRef(sc) -= update;
+	  //	      if (ngsc < 0)
 	  if (grad.coeff(sc) < 0)
 	    {
 	      bound.coeffRef(cp) = allproj.coeff(allproj_idx);
 	    }
 	}
+      //}
     }
 // #pragma omp critical
 //   {

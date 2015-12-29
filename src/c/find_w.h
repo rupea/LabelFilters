@@ -352,6 +352,40 @@ void update_single_sortedLU( VectorXd& sortedLU,
 			     const param_struct& params);
 
 
+// generates num_samples uniform samples between 0 and max-1 with replacement,
+//  and sorts them in ascending order  
+void get_ordered_sample(vector<int>& sample, int max, int num_samples);
+
+
+// function to calculate the multiplier of the gradient for w for a single example. 
+// subsampling the negative class constraints 
+double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
+					       const vector<int>& sc_sample,
+					       const double proj, const size_t i,
+					       const SparseMb& y, const VectorXi& nclasses, 
+					       int maxclasses, 
+					       const vector<int>& sorted_class,
+					       const vector<int>& class_order, 
+					       const VectorXd& sortedLU,
+					       const boolmatrix& filtered,
+					       double C1, double C2,
+					       const param_struct& params );
+
+// function to update L and U for a single example, given w. 
+// subsampling the negative classes
+void update_single_sortedLU_sample ( VectorXd& sortedLU,
+				     int sc_start, int sc_end,
+				     const vector<int>& sc_sample,
+				     const double proj, const size_t i,
+				     const SparseMb& y, const VectorXi& nclasses, 
+				     int maxclasses, 
+				     const vector<int>& sorted_class,
+				     const vector<int>& class_order, 
+				     const boolmatrix& filtered,
+				     double C1, double C2, const double eta_t,
+				     const param_struct& params);
+
+
 
 // function to compute the gradient and update w, L and U using safe updates that do not 
 // ofershoot
@@ -374,21 +408,48 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 
   double multiplier = 0;
     
+#ifndef NDEBUG
   // batch size should be 1
+  assert(params.batch_size == 1);
+  // WARNING: for now it assumes that norm(x) = 1!!!!!
+  assert(x.row(i).norm() == 1);
+#endif
+
   size_t i = ((size_t) rand()) % n;
   double proj = w.project_row(x,i);
-    
+  
+  vector<int> sample;
+  if (params.class_samples)
+    {
+      get_ordered_sample(sample, y.cols(), params.class_samples);
+      sample.push_back(y.cols()); // need the last entry of the sample to be the number of classes
+    }
+  
+  
 #pragma omp parallel for default(shared) reduction(+:multiplier)
   for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
       // the first chunks will have an extra iteration 
       int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
       int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
-      multiplier += compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
-						   proj, i,
-						   y, nclasses, maxclasses,
-						   sorted_class, class_order,
-						   sortedLU, filtered, C1, C2, params);
+      if (params.class_samples)
+	{
+	  multiplier += 
+	    compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
+						  sample,
+						  proj, i,
+						  y, nclasses, maxclasses,
+						  sorted_class, class_order,
+						  sortedLU, filtered, C1, C2, params);
+	}
+      else
+	{
+	  multiplier += compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
+						       proj, i,
+						       y, nclasses, maxclasses,
+						       sorted_class, class_order,
+						       sortedLU, filtered, C1, C2, params);
+	}
     }
   
   // make sure we do not overshoot with the update
@@ -406,18 +467,31 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 	  // the first chunks will have an extra iteration 
 	  int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
 	  int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
-	  new_multiplier += compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
-							   new_proj, i,
-							   y, nclasses, maxclasses,
-							   sorted_class, class_order,
-							   sortedLU, filtered, C1, C2, params);
+	  if (params.class_samples)
+	    {
+	      new_multiplier += 
+		compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
+						      sample,
+						      new_proj, i,
+						      y, nclasses, maxclasses,
+						      sorted_class, class_order,
+						      sortedLU, filtered, C1, C2, params);
+	    }
+	  else
+	    {
+	      new_multiplier += 
+		compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
+					       new_proj, i,
+					       y, nclasses, maxclasses,
+					       sorted_class, class_order,
+					       sortedLU, filtered, C1, C2, params);
+	    }
 	}
       eta = eta/2;
-    } while (multiplier*new_multiplier < 0);
-  
+    } while (multiplier*new_multiplier < -1e-5);
+
   // last eta did not overshooot so restore it
   eta = eta*2;
-  
   //update w
   if (params.avg_epoch && t >= params.avg_epoch)
     {
@@ -431,16 +505,29 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     }
   
   // update L and U with w fixed. 
+  // use new_proj since it is exactly the projection obtained with the new w
 #pragma omp parallel for  default(shared)
   for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
       int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
       int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
-      update_single_sortedLU(sortedLU, sc_start, sc_start+sc_incr, new_proj, i, 
-			     y, nclasses, maxclasses, sorted_class, class_order,
-			     filtered, C1, C2, eta_t, params);
-    
+      if (params.class_samples)
+	{
+	  update_single_sortedLU_sample(sortedLU, sc_start, sc_start+sc_incr, 
+					sample, new_proj, i, 
+					y, nclasses, maxclasses, 
+					sorted_class, class_order,
+					filtered, C1, C2, eta_t, params);
+	}
+      else
+	{
+	  update_single_sortedLU(sortedLU, sc_start, sc_start+sc_incr, new_proj, i, 
+				 y, nclasses, maxclasses, sorted_class, class_order,
+				 filtered, C1, C2, eta_t, params);
+	}
       // update the average LU
+      // need to do something special when samplin classes to avoid the O(noClasses) complexity. 
+      // for now we leave it like this since we almost always we optimize LU at the end
       if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
 	{
 	  // if we optimize the LU, we do not need to
@@ -600,7 +687,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
 {
   #ifdef PROFILE
-  ProfilerStart("find_w.profile");
+  ProfilerStart("init.profile");
   #endif
   
   double lambda = 1.0/params.C2;
@@ -653,25 +740,28 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   
   // how to split the work for gradient update iterations
 #ifdef _OPENMP
+  if (params.num_threads < 1)
+    {
+      omp_set_num_threads(omp_get_max_threads());
+    }
+  else
+    {
+      omp_set_num_threads(params.num_threads);
+    }  
   int total_chunks = omp_get_max_threads();
   int sc_chunks = total_chunks;// floor(sqrt(total_chunks));
   int idx_chunks = total_chunks/sc_chunks;
-  if (params.num_threads < 1)
-    omp_set_num_threads(omp_get_max_threads());
-  else
-    omp_set_num_threads(params.num_threads);
 #else
   int idx_chunks = 1;
   int sc_chunks = 1;
 #endif 
   MutexType* sc_locks = new MutexType [sc_chunks];
   MutexType* idx_locks = new MutexType [idx_chunks];
-  int sc_chunk_size = noClasses/sc_chunks;
-  int sc_remaining = noClasses % sc_chunks;
+  int sc_chunk_size = (params.class_samples?params.class_samples:noClasses)/sc_chunks;
+  int sc_remaining = (params.class_samples?params.class_samples:noClasses) % sc_chunks;
   int idx_chunk_size = batch_size/idx_chunks;
   int idx_remaining = batch_size % idx_chunks;
   
-
   init_nc(nc, nclasses, y);
   if (params.optimizeLU_epoch > 0)
     {
@@ -685,6 +775,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   unsigned long total_constraints = n*noClasses - (1-params.remove_class_constraints)*nc.sum();
   size_t no_filtered=0;
   int projection_dim = 0;
+  VectorXd vect;
   
   if (weights.cols() > no_projections)
     {
@@ -746,8 +837,10 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		  upper_bounds_avg.col(projection_dim) = u;
 		  // coppy w, lower_bound, upper_bound from the coresponding averaged terms. 
 		  // this way we do not spend time reoptimizing LU for non-averaged terms we probably won't use. 
-		  // The right way to handle this would be to know whether we want to return only hte averaged values or we also need the non-averaged ones. 
-		  weights.col(projection_dim) = w;
+		  // The right way to handle this would be to know whether we want to return only the averaged values or we also need the non-averaged ones. 
+		  
+		  w.toVectorXd(vect);
+		  weights.col(projection_dim) = vect;
 		  lower_bounds.col(projection_dim) = l;
 		  upper_bounds.col(projection_dim) = u;
 		}
@@ -808,7 +901,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       objective_val.conservativeResize(obj_idx_avg + 1000 + ((no_projections-projection_dim) * params.max_iter / params.report_avg_epoch));
     }
 
-  
+  cout << "start projection " << projection_dim << endl;
+  fflush(stdout);
   for(; projection_dim < no_projections; projection_dim++)
     {
             
@@ -845,10 +939,23 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       rank_classes(sorted_class, class_order, means);
       
       
+      cout << "start optimize LU" << endl;
+      fflush(stdout);
+
+#ifdef PROFILE
+      ProfilerStop();
+#endif
+
+
+#ifdef PROFILE
+      ProfilerStart("optimizeLU.profile");
+#endif
       if (params.optimizeLU_epoch > 0)
 	{
 	  optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
 	}	  
+      cout << "end optimize LU" << endl;
+      fflush(stdout);
 
       get_sortedLU(sortedLU, l, u, sorted_class);
 
@@ -862,6 +969,13 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
       print_report<EigenType>(projection_dim,batch_size, noClasses,C1,C2,lambda,w.size(),x);
 
+#ifdef PROFILE
+      ProfilerStop();
+#endif
+
+#ifdef PROFILE
+      ProfilerStart("learning.profile");
+#endif
 
       t = 0;		    
       while (t < params.max_iter)
@@ -1042,7 +1156,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
        
 	  
 	} // end while t
+#ifdef PROFILE
+      ProfilerStop();
+#endif
+
       
+#ifdef PROFILE
+      ProfilerStart("filtering.profile");
+#endif
+
       // define these here just in case I got some of the conditons wrong
       VectorXd projection, projection_avg;
 	
@@ -1166,8 +1288,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	    }
 	}
       
-      
-      VectorXd vect;
       w.toVectorXd(vect);
       weights.col(projection_dim) = vect;
       lower_bounds.col(projection_dim) = l;
@@ -1227,8 +1347,10 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
       //      C2*=((n-1)*noClasses)*1.0/no_remaining;
       //C1*=((n-1)*noClasses)*1.0/no_remaining;
       
-      
-        
+#ifdef PROFILE
+      ProfilerStop();
+#endif
+
     } // end for projection_dim
   
   cout << "\n---------------\n" << endl;
@@ -1240,9 +1362,9 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   delete[] sc_locks;
   delete[] idx_locks;
   
-  #ifdef PROFILE
-  ProfilerStop();
-  #endif
+  //  #ifdef PROFILE
+    // ProfilerStop();
+  // #endif
 };
 
 #endif

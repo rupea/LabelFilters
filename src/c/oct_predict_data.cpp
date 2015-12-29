@@ -65,7 +65,7 @@ DEFUN_DLD (oct_predict_data, args, nargout,
   ActiveDataSet* active;
   PredictionSet* predictions;
   size_t nact;
-  vector<size_t> no_active(wmat.cols());
+  VectorXsz no_active(wmat.cols());
   if(args(0).is_sparse_type())
     {
       // Sparse data
