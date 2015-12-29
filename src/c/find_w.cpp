@@ -19,6 +19,8 @@ using Eigen::VectorXi;
 using namespace std;
 
 
+#define __restricted /* __restricted seems to be an error */
+
 
 // ******************************
 // Convert to a STD vetor from Eigen Vector

@@ -1,5 +1,10 @@
 CXX ?= g++
+ifneq ($(wildcard /opt/boost-1.60),)
+BOOSTDIR ?= /opt/boost-1.60/include
+endif
+ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
+endif
 OPENMP ?= -fopenmp
 CPPFLAGS ?= -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
@@ -14,6 +19,15 @@ PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE 
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
 all: learn_projection evaluate_projection run_LPSR
+lib: settings libmcfilter.a
+settings:
+	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
+	echo "BOOSTDIR       = $(BOOSTDIR)"
+# Create a library of octave-free C++ code for the main functionality in MCFilter
+#   (find_w, filter, kmeans, LPSR)
+#   This should aid in producing an interface in lua [I hope]
+libmcfilter.a: find_w.o filter.o PredictionSet.o printing.o utils.o
+	$(AR) -vru $@ $^
 
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
