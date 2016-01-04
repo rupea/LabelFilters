@@ -2,36 +2,22 @@
 #define __UTILS_H
 
 #include "typedefs.h"
+#include <exception>
 
 using Eigen::VectorXd;
 
 
 // *********************************
 // functions and structures for sorting and keeping indeces
-// Should implement bound checking but it is faster this way.
-template<typename IntType>
-struct IndexComparator
-{
-  const VectorXd* v;
-  IndexComparator(const VectorXd* m)
-  {
-    v = m;
-  }
-  bool operator()(IntType i, IntType j)
-  {
-    return (v->coeff(i) < v->coeff(j));
-  }
-};
 
 template<typename IntType>
 void sort_index(const VectorXd& m, std::vector<IntType>& cranks)
 {
-  for (IntType i = 0; i < m.size(); i++)
-    {
-      cranks[i] = i;
-    }
-  IndexComparator<IntType> cmp(&m);
-  std::sort(cranks.begin(), cranks.end(), cmp);
+  if( cranks.size() != static_cast<size_t>(m.size()) )
+      throw std::runtime_error("ERROR: sort_index(vec,ranks): vec and ranks sizes must match");
+  std::iota(cranks.begin(), cranks.end(), IntType(0));
+  std::sort(cranks.begin(), cranks.end(), [&m](int const i, int const j)
+            {return m[i] < m[j];} );
 };
 
 

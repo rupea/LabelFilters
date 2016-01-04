@@ -98,7 +98,6 @@ int main(int,char**)
         break;
     case(2): // more difficult
         //params.max_iter       = nex*1000U;
-        params.max_iter       = nex*100000U;
         if(1){ // EITHER batch_size or optimizeLU_epoch MUST be one to converge to correct solution
             params.batch_size     = 1;          // REQUIRED (nex WILL NOT WORK)
             params.optimizeLU_epoch = nex;      // nex*10 didn't work
@@ -184,11 +183,9 @@ int main(int,char**)
 
   cout<<"  pre-run call to rand() returns "<<rand()<<endl;
   // these calls are important so that the compiler instantiates the right templates
-  SparseM xsp = x.sparseView();
   solve_optimization(weights,lower_bounds,upper_bounds,objective_val
                      ,w_avg,l_avg,u_avg,o_avg
-                     ,xsp
-                     ,y,params);
+                     ,x,y,params);
 
   cout<<" post-run call to rand() returns "<<rand()<<endl;
   cout<<" quick demo of 3 translations of a "<<x_msg<<" along the x axis"<<endl;

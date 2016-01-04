@@ -7,7 +7,7 @@ BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
 endif
 OPENMP ?= -fopenmp
 CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
-CPPFLAGS += -I$(BOOSTDIR)
+CPPFLAGS += -I$(BOOSTDIR) -std=c++11
 CPPFLAGS += -fopenmp
 # testing...
 MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
@@ -51,10 +51,12 @@ profile_kmeans:
 
 .cpp.o:
 	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
-.cpp.-dbg.o:
-	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
 
 ## extra stuff ######################### without octave ###################
+DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
+DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
+%-dbg.o: %.cpp
+	$(CXX) $(DBGFLAGS) -c $< -o $@
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
@@ -72,15 +74,17 @@ libmcfilter.a: find_w.o filter.o PredictionSet.o printing.o utils.o EigenIO.o pa
 	$(AR) -vru $@ $^
 libmcfilter-dbg.a: find_w-dbg.o filter-dbg.o PredictionSet-dbg.o printing-dbg.o utils-dbg.o EigenIO-dbg.o parameter-dbg.o
 	$(AR) -vru $@ $^
+# With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj: erik/demo-proj.cpp libmcfilter.a
 	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
 	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
+# With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
+# The following test throws if the solution is not sufficiently close to the correct answer.
+# Note: inside eigen, there are signed vs. unsigned issues (error=sign-compare)
 demo-quick: erik/demo-quick.cpp libmcfilter.a
-	$(CXX) -o $@ -std=c++11 -Wall -Werror -g -I. \
-		-march=native -ffast-math -O3 $(OPENMP) -I$(BOOSTDIR) \
-		$^ $(LDFLAGS)
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 
 clean: 
 	rm -f *.o learn_projection evaluate_projection run_kmeans demo-quick demo-proj demo-proj-dbg libmcfilter*.a

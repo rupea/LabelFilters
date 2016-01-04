@@ -12,6 +12,7 @@
 #include "printing.h"
 #include "utils.h"
 #include "find_w.h"
+//#include "boost/iterator/counting_iterator.hpp"
 
 using Eigen::VectorXd;
 using Eigen::VectorXi;
@@ -51,9 +52,16 @@ std::vector<int> get_classes(VectorXd& y)
 
 
 // *********************************
-// Ranks the classes to build the switches
+/** Ranks the classes to build the switches.
+ * \c sortKey   values to be sorted
+ * \c indices   of the sorted permutation of \c sortkey
+ * \c cranks    reverse permutation (cranks[indices[i]] == i)
+ */
 void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const VectorXd& sortkey)
 {
+  if( indices.size() != static_cast<size_t>(sortkey.size()) ||
+      cranks.size() != static_cast<size_t>(sortkey.size()) )
+      throw std::runtime_error("ERROR: rank_classes(indices,cranks,sortKey): indices and cranks must match size of sortKey");
   sort_index(sortkey, indices);
   for (int i = 0; i < sortkey.size(); i++)
     {
@@ -82,7 +90,7 @@ void get_lu (VectorXd& l, VectorXd& u, const VectorXd& sortedLU, const vector<in
 
 void get_sortedLU(VectorXd& sortedLU, const VectorXd& l, const VectorXd& u, const vector<int>& sorted_class)
 {
-  for (int i = 0; i < sorted_class.size(); i++)
+  for (size_t i = 0; i < sorted_class.size(); i++)
     {
       sortedLU.coeffRef(2*i) = l.coeff(sorted_class[i]);
       sortedLU.coeffRef(2*i+1) = u.coeff(sorted_class[i]);
@@ -150,7 +158,7 @@ void update_filtered(boolmatrix& filtered, const VectorXd& projection,
 {
   int noClasses = y.cols();			
   int c;
-  for (size_t i = 0; i < projection.size(); i++)
+  for (int i = 0; i < projection.size(); i++)
     {      
       double proj = projection.coeff(i);
       SparseMb::InnerIterator it(y,i);
@@ -240,7 +248,7 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 			const param_struct& params )
 {  
   int sc, cp;
-  int noClasses = y.cols();
+  //int noClasses = y.cols();
   size_t idx, i;
   double class_weight, other_weight, left_update, right_update;
   double tmp;
@@ -402,7 +410,7 @@ double compute_single_w_gradient_size ( int sc_start, int sc_end,
 { 
   double multiplier = 0.0;
   int sc, cp;
-  int noClasses = y.cols();
+  //int noClasses = y.cols();
   double class_weight, other_weight, left_update, right_update;
   vector<int> classes;
   vector<int>::iterator class_iter;
@@ -532,7 +540,7 @@ void update_single_sortedLU( VectorXd& sortedLU,
 {
 
   int sc, cp;
-  int noClasses = y.cols();
+  //int noClasses = y.cols();
   double class_weight, other_weight, left_update, right_update;
   vector<int> classes;
   vector<int>::iterator class_iter;
@@ -665,7 +673,7 @@ void init_ordered_class_list_sample(int& left_classes, double& left_update,
 				    int& sc_start, int& sc_end, const vector<int>& sc_sample)
 {
 #ifndef NDEBUG  
-  assert(sc_end < sc_sample.size());
+  assert(static_cast<size_t>(sc_end) < sc_sample.size());
   assert(sc_sample.back() == y.cols());
 #endif
   
@@ -1179,13 +1187,13 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
 				 double lambda, double C1, double C2,
 				 const param_struct& params)
 {
-  const int noClasses = y.cols();
+  //const int noClasses = y.cols();
   double obj_val = 0;
   //  size_t no_filtered = filtered.count();
   bool none_filtered = filtered.count()==0;
-  int maxclasses = nclasses.maxCoeff();
+  //int maxclasses = nclasses.maxCoeff();
 #pragma omp parallel for default(shared) reduction(+:obj_val)
-  for (size_t i = 0; i < projection.size(); i++)
+  for (int i = 0; i < projection.size(); i++)
     {
       obj_val += calculate_ex_objective_hinge(i, projection.coeff(i),  y,
 					      nclasses,
@@ -1309,7 +1317,7 @@ double set_eta(const param_struct& params, size_t t, double lambda)
 void proj_means(VectorXd& means, const VectorXi& nc,
 		const VectorXd& projection, const SparseMb& y)
 {
-  int noClasses = y.cols();
+  size_t noClasses = y.cols();
   size_t n = projection.size();
   size_t c,i,k;
   means.resize(noClasses);
@@ -1361,7 +1369,7 @@ void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bound,
 	  class_iter++;
 	  continue;
 	}		  
-      const double gsc = grad.coeff(sc);
+      //const double gsc = grad.coeff(sc);
       // if (gsc >= 0 )
       // 	{
       // 	  const int cp = sorted_class[sc];
@@ -1428,8 +1436,14 @@ void optimizeLU(VectorXd&l, VectorXd&u,
   allproj << (projection.array() - 1), (projection.array() + 1);
 
   bool none_filtered = filtered.count()==0;
-  std::vector<size_t> indices(2*n);
+  std::vector<size_t> indices(allproj.size());
   sort_index(allproj, indices);
+  //std::vector<size_t> indices( boost::counting_iterator<size_t>(0),
+  //                             boost::counting_iterator<size_t>(n+n));
+  //std::sort(indices.begin(), indices.end(),
+  //          [&allproj]( size_t const i, size_t const j )-> bool
+  //          { return allproj[i] < allproj[j]; });
+
   int min_chunk_size = 10000;
 #ifdef _OPENMP
   int max_n_chunks = omp_get_max_threads();
@@ -1451,7 +1465,7 @@ void optimizeLU(VectorXd&l, VectorXd&u,
       // to minimize cash misses and false sharing       
       VectorXd grad(noClasses);
       double classweight;
-      for (int sc = 0; sc <noClasses; sc++) 
+      for (size_t sc = 0; sc <noClasses; sc++) 
 	{
 	  // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
 	  classweight = wc.coeff(sorted_class[sc]);
@@ -1587,7 +1601,7 @@ void optimizeLU(VectorXd&l, VectorXd&u,
       // to minimize cash misses and false sharing       
       VectorXd grad(noClasses);
       double classweight;
-      for (int sc = 0; sc <noClasses; sc++) 
+      for (size_t sc = 0; sc <noClasses; sc++) 
 	{
 	  // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
 	  classweight = wc.coeff(sorted_class[sc]);
