@@ -13,6 +13,7 @@
 #include "mutexlock.h" 
 #include "utils.h"
 #include <cstdio>       // std::snprintf
+#include <iomanip>
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
@@ -145,7 +146,7 @@ void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc,
 	     const WeightVector& w,
 	     EigenType& x, const SparseMb& y)
 {
-  int noClasses = y.cols();
+  size_t noClasses = y.cols();
   size_t n = x.rows();
   size_t c,i,k;
   double pr;
@@ -413,11 +414,11 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 #ifndef NDEBUG
   // batch size should be 1
   assert(params.batch_size == 1);
-  // WARNING: for now it assumes that norm(x) = 1!!!!!
-  assert(x.row(i).norm() == 1);
 #endif
 
   size_t i = ((size_t) rand()) % n;
+  // WARNING: for now it assumes that norm(x) = 1!!!!!
+  assert(x.row(i).norm() == 1);
   double proj = w.project_row(x,i);
   
   vector<int> sample;
@@ -560,7 +561,7 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
 		      const VectorXi& nclasses, const int maxclasses,
 		      const std::vector<int>& sorted_class, const std::vector<int>& class_order,
 		      const boolmatrix& filtered,
-		      const int idx_chunks, const int sc_chunks, 
+		      const int idx_chunks, const size_t sc_chunks, 
 		      MutexType* idx_locks, MutexType* sc_locks,
 		      const int idx_chunk_size, const int idx_remaining,
 		      const size_t sc_chunk_size, const size_t sc_remaining,
@@ -595,15 +596,23 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
   multipliers.setZero();
   //  sortedLU_gradient.setZero(); 
   
-#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
+//#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
+//#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(1)
+//#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(1) if(idx_chunks > 1)
+//#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(2) if(idx_chunks > 1)
   for (int idx_chunk = 0; idx_chunk < idx_chunks; idx_chunk++)
-    for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
+  {
+    //VectorXd sortedLU_gradient_chunk;
+    //VectorXd multipliers_chunk;
+    //multipliers.setZero();
+
+    for (size_t sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
       {
 	// the first chunks will have an extra iteration 
 	size_t idx_start = idx_chunk*idx_chunk_size + (idx_chunk<idx_remaining?idx_chunk:idx_remaining);
 	size_t idx_incr = idx_chunk_size + (idx_chunk<idx_remaining);
 	// the first chunks will have an extra iteration 
-	int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+	size_t sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
 	int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
 	compute_gradients(multipliers_chunk, sortedLU_gradient_chunk,
 			  idx_start, idx_start+idx_incr, 
@@ -613,25 +622,26 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
 			  sortedLU, filtered, 
 			  C1, C2, params);
 	
-#pragma omp task default(none) shared(sc_chunk, idx_chunk, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
+//#pragma omp task default(none) shared(sc_chunk, idx_chunk, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
 	{
-#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
+//#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
 	  {
-	    idx_locks[idx_chunk].YieldLock();
+	    //idx_locks[idx_chunk].YieldLock();
 	    multipliers.segment(idx_start, idx_incr) += multipliers_chunk;
-	    idx_locks[idx_chunk].Unlock();
+	    //idx_locks[idx_chunk].Unlock();
 	  }		    			
-	  sc_locks[sc_chunk].YieldLock();
+	  //sc_locks[sc_chunk].YieldLock();
 	  // update the lower and upper bounds
 	  // divide by batch_size here because the gradients have 
 	  // not been averaged
 	  sortedLU.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk * (eta_t / batch_size); 
 	  //		  sortedLU_gradient.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk;
-	  sc_locks[sc_chunk].Unlock();
-#pragma omp taskwait		     
+	 //sc_locks[sc_chunk].Unlock();
+//#pragma omp taskwait		     
 	}
-#pragma omp taskwait 
+//#pragma omp taskwait 
       }
+  }
    
   //update w
   if (params.avg_epoch && t >= params.avg_epoch)
@@ -728,7 +738,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
   cout << "size y: " << y.rows() << " rows and " << y.cols() << " columns.\n";
 
-  const int noClasses = y.cols();
+  const size_t noClasses = y.cols();
   WeightVector w;
   VectorXd projection, projection_avg;
   VectorXd l(noClasses),u(noClasses);
@@ -760,21 +770,27 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   
   // how to split the work for gradient update iterations
 #ifdef _OPENMP
-  if (params.num_threads < 1)
-    {
-      omp_set_num_threads(omp_get_max_threads());
-    }
-  else
-    {
-      omp_set_num_threads(params.num_threads);
-    }  
-  int total_chunks = omp_get_max_threads();
-  int sc_chunks = total_chunks;// floor(sqrt(total_chunks));
-  int idx_chunks = total_chunks/sc_chunks;
+  int nthreads;
+  {
+      if (params.num_threads < 0)
+          nthreads = omp_get_num_procs();   // use # of CPUs
+      else if (params.num_threads == 0)
+          nthreads = omp_get_max_threads(); // use OMP_NUM_THREADS
+      else
+          nthreads = params.num_threads;
+  }
+  omp_set_num_threads( nthreads );
+  std::cout<<" solve_ with _OPENMP and params.num_threads set to "<<params.num_threads
+      <<", nthreads is "<<nthreads<<", and omp_max_threads is now "<<omp_get_max_threads()<<endl;
+  int total_chunks = nthreads; // NOTE: omp_get_num_threads==1 because we are not in an omp section
+  int sc_chunks = total_chunks;  // floor(sqrt(total_chunks));
+  int idx_chunks = total_chunks; //total_chunks/sc_chunks;
 #else
+  std::cout<<" no _OPENMP";
   int idx_chunks = 1;
   int sc_chunks = 1;
 #endif 
+  std::cout<<" idx_chunks="<<idx_chunks<<std::endl;
   MutexType* sc_locks = new MutexType [sc_chunks];
   MutexType* idx_locks = new MutexType [idx_chunks];
   int sc_chunk_size = (params.class_samples?params.class_samples:noClasses)/sc_chunks;
@@ -998,6 +1014,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 #endif
 
       t = 0;		    
+      if(PRINT_O){
+          cout<<"objective_val[  t   ]: value    w.norm\n"
+              <<"--------------------- -------  -------"<<endl;
+      }
+
       while (t < params.max_iter)
 	{
 	  t++;
@@ -1118,7 +1139,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 					   lambda, C1, C2, params); // save the objective value
 	      if(PRINT_O)
 		{
-		  cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
+		  cout << "objective_val[" <<setw(6)<<t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
 		}
 	    }
 	  
@@ -1304,7 +1325,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 				       lambda, C1, C2, params); // save the objective value
 	  if(PRINT_O)
 	    {
-	      cout << "objective_val[" << t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
+	      cout << "objective_val[" <<setw(6)<<t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
 	    }
 	}
       

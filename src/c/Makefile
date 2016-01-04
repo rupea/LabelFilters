@@ -6,13 +6,22 @@ ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
 endif
 OPENMP ?= -fopenmp
-CPPFLAGS ?= -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
+CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
+CPPFLAGS += -I$(BOOSTDIR)
+CPPFLAGS += -fopenmp
+# testing...
+MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
+#CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I.
+
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
 
 LDFLAGS ?= -L$(BOOSTDIR)/lib -lboost_program_options
+# testing
+#LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
+
 PROFILE_OPENMP = -fopenmp
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
@@ -42,8 +51,10 @@ profile_kmeans:
 
 .cpp.o:
 	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
+.cpp.-dbg.o:
+	$(CXX) $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
 
-## extra stuff
+## extra stuff ######################### without octave ###################
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
@@ -53,14 +64,23 @@ check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h para
 		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
 	done; \
 	echo "DONE checking standalone header compilation"
-lib: libmcfilter.a demo-proj
+lib: libmcfilter.a libmcfilter-dbg.a demo-proj
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
 libmcfilter.a: find_w.o filter.o PredictionSet.o printing.o utils.o EigenIO.o parameter.o
 	$(AR) -vru $@ $^
+libmcfilter-dbg.a: find_w-dbg.o filter-dbg.o PredictionSet-dbg.o printing-dbg.o utils-dbg.o EigenIO-dbg.o parameter-dbg.o
+	$(AR) -vru $@ $^
 demo-proj: erik/demo-proj.cpp libmcfilter.a
-	$(CXX) -o $@ $(CPPFLAGS) -I. $< libmcfilter.a
+	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
+	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
+demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
+	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
+demo-quick: erik/demo-quick.cpp libmcfilter.a
+	$(CXX) -o $@ -std=c++11 -Wall -Werror -g -I. \
+		-march=native -ffast-math -O3 $(OPENMP) -I$(BOOSTDIR) \
+		$^ $(LDFLAGS)
 
 clean: 
-	rm -f *.o learn_projection evaluate_projection run_kmeans
+	rm -f *.o learn_projection evaluate_projection run_kmeans demo-quick demo-proj demo-proj-dbg libmcfilter*.a

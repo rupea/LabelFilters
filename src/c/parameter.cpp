@@ -38,7 +38,7 @@ void print_parameter_usage()
   cout << "           ml_wt_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering other class contraints. [false]" << endl;
   cout << "           ml_wt_class_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering its class contraints.[false]" << endl;
   cout << "           seed - random seed. 0 for time dependent seed. [0]" << endl;
-  cout << "           num_threads - number of threads to run on. Negative value for architecture dependent maximum number of threads. [-1]" << endl;
+  cout << "           num_threads - number of threads to run on. Negative value for architecture dependent maximum number of threads. [0]" << endl;
   cout << "           finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [0]" << endl;
   cout << "           no_finite_diff_tests - number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. [1]" << endl;
   cout << "           finite_diff_test_delta - the size of the finite difference. [1e-2]" << endl;

@@ -57,6 +57,14 @@
 
 #include <mkl.h>
 #include <mkl_lapacke.h>
+
+#ifdef MKL_DOMAIN_BLAS
+// MKL_DOMAIN_BLAS is the newer name for MKL_BLAS
+#define EIGEN_MKL_DOMAIN_BLAS MKL_DOMAIN_BLAS
+#else
+#define EIGEN_MKL_DOMAIN_BLAS MKL_BLAS
+#endif
+
 #define EIGEN_MKL_VML_THRESHOLD 128
 
 namespace Eigen {

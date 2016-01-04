@@ -9,12 +9,15 @@ using Eigen::VectorXi;
 class WeightVector
 {
  private: 
-  const static double MIN_SCALE = 1e-4; // minimum value of the scale scalar, to 
-                                // avoid numerical instability. 
-  const static double MAX_SCALE = 1e+4; // maximum value of the scale scalar, to 
-                                // avoid numerical instability. 
-  const static double MAX_BETA = 1e+4; // maximum value of the beta scalar, to 
-                                // avoid numerical instability. 
+#if __cplusplus >= 201103L
+  static double constexpr MIN_SCALE = 1e-4; // min scale value, for numerical stability
+  static double constexpr MAX_SCALE = 1e+4; // max scale value, for numerical stability
+  static double constexpr MAX_BETA  = 1e+4; // max beta  value, for numerical stability
+#else
+  static double const MIN_SCALE = 1e-4; // min scale value, for numerical stability
+  static double const MAX_SCALE = 1e+4; // max scale value, for numerical stability
+  static double const MAX_BETA  = 1e+4; // max beta  value, for numerical stability
+#endif
   VectorXd my_weights;  // current weights of the last iteration
   double my_scale; // scalar to multiply the weights with. Makes 
                    // the gradient update to the weight vector due

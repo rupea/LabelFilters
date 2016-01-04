@@ -24,7 +24,7 @@ void print_progress(string s, int t, int max_t)
   int c = 1000;
   char buff[c];
   sprintf(buff,
-	  " > (%d\%) @%d                     ",
+	  " > (%d%%) @%d                     ",
 	  percent, t);
   str = str + buff;
   

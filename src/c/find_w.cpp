@@ -1283,6 +1283,7 @@ double set_eta(const param_struct& params, size_t t, double lambda)
     {
     case ETA_CONST: 
       eta_t = params.eta;
+      break;
     case ETA_SQRT:
       eta_t = params.eta/sqrt(t);
       break;
@@ -1293,7 +1294,7 @@ double set_eta(const param_struct& params, size_t t, double lambda)
       eta_t = params.eta/pow(1+params.eta*lambda*t,3*1.0/4);
       break;
     default:
-      cerr << "Eta option unknown" << endl;
+      cerr << "Eta option "<<params.eta_type<<" unknown" << endl;
       exit(-3);
     }
   if (eta_t < params.min_eta)
