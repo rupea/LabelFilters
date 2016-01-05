@@ -3,7 +3,8 @@
 
 #include "base/app_state.hpp"
 #include "script_lua/lua_interpreter.hpp"
-#include "base/argmap.hpp"
+//#include "base/argmap.hpp"
+#include "repo/args.hpp"
 
 #include <assert.h>
 #include <iostream>
@@ -83,33 +84,83 @@ namespace MILDE {
         }scr_CATCH;
     }
 
+#define MCSET(TYPE,PARM) do{ \
+    if( a.map().find( #PARM ) != a.map().cend() ){ \
+        TYPE p; \
+        a.get_##TYPE( true/*abort*/, #PARM, p ); \
+        x->d_params->PARM = p; \
+    } \
+}while(0)
+    /** Any keys in ArgMap: string->int|dbl|bool) replace any existing values */
     int script_MCparm::f_set()
     {
         scr_TRY( "<mcparm>:set({args}) -> <table:string->various>" ){
             scr_USR( scr_MCparm, x, ERR_LBL );
+            scr_ARGS( a, ERR_LBL );
+            MCSET(int,no_projections);
             return 1;
         }scr_CATCH;
     }
+#undef MCSET
 
-    /** TYPE=bool|dbl|int|str, KEY=item in \c param_struct, DEF=default param_struct. */
-#define ARGSET(MC,ARGMAP,TYPE,KEY,DEF) do{ \
-    if( MC->d_params->KEY != DEF.KEY ){ \
-        ARGMAP.set_##TYPE( #KEY , d_params->KEY ); \
-    }}
+    /** TYPE=bool|dbl|int|str, PARM=item in \c param_struct. */
+#define MCARGS_OLD(TYPE,PARM) do { \
+    bool const diff = x->d_params->PARM != def.PARM; \
+    if( all || diff ) \
+        p.set_ ## TYPE ( #PARM, x->d_params->PARM); \
+}while(0)
+    /** TYPE=bool|int|real4|<any milde type>, PARM=item in \c param_struct. */
+#define MCARGS(TYPE,PARM) do { \
+    bool const diff = x->d_params->PARM != def.PARM; \
+    if( all || diff ) \
+        p.set( #PARM, (TYPE)(x->d_params->PARM) ); \
+}while(0)
     int script_MCparm::f_get()
     {
-        scr_TRY( "<mcparm>:get() -> <table:string->various>" ){
+        scr_TRY( "<mcparm>:get([all:bool=false]) -> <table:string->various>" ){
             scr_USR( scr_MCparm, x, ERR_LBL );
-            param_struct def = set_default_params();
-            ArgMap p;
-            if( x->d_params->no_projections != def.no_projections ){
-                p.set_int("no_projections", x->d_params->no_projections);
+            bool all = false;
+            {   scr_BOOL( a, GOT_ALL );
+                scr_STK("<mcparm>:str( <verbose:bool> ) -> <cccstr>");
+                all = a;
             }
+GOT_ALL:
+            param_struct def = set_default_params();
+            //ArgMap p; Nope --- Args is more feature-rich
+            Args p;
+            MCARGS(uint4,no_projections);
+            MCARGS(real8,C1);
+            MCARGS(real8,C2);
+            MCARGS(uint8,max_iter);
+            MCARGS(uint8,batch_size);
+            MCARGS(int,update_type); // enum Update_Type
+            MCARGS(real8,eps);
+            MCARGS(int,eta_type); // enum Eta_Type
+            MCARGS(real8,min_eta);
+            MCARGS(uint4,avg_epoch);
+            MCARGS(uint4,reorder_epoch);
+            MCARGS(uint4,report_epoch);
+            MCARGS(uint4,report_avg_epoch);
+            MCARGS(uint4,optimizeLU_epoch);
+            MCARGS(bool,remove_constraints);
+            MCARGS(bool,remove_class_constraints);
+            MCARGS(int,reweight_lambda);
+            MCARGS(int,reorder_type); // enum Reorder_Type
+            MCARGS(bool,ml_wt_by_nclasses);
+            MCARGS(bool,ml_wt_class_by_nclasses);
+            MCARGS(int,num_threads);
+            MCARGS(int,seed);
+            MCARGS(uint4,finite_diff_test_epoch);
+            MCARGS(uint4,no_finite_diff_tests);
+            MCARGS(real8,finite_diff_test_delta);
+            MCARGS(bool,resume);
+            MCARGS(bool,reoptimize_LU);
+            MCARGS(int,class_samples);
             GAS.d_si->put_stack( p );
             return 1;
         }scr_CATCH;
     }
-#undef ARGSET
+#undef MCARGS
 
     int script_MCparm::f_str()
     {
@@ -131,7 +182,7 @@ GOT_VERBOSE:
                 if( verbose ) oss<<"(* = non-default)";
                 oss<<"\n";
 #define MCPARM(W,PARM,MSG) do { \
-    bool diff = x->d_params->PARM != def.PARM; \
+    bool const diff = x->d_params->PARM != def.PARM; \
     char const* defmark = (verbose? (diff? "* ":""): "* "); \
     if(diff) ++nNonDefault; \
     if(verbose || diff) { \
