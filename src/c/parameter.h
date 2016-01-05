@@ -1,7 +1,9 @@
 #ifndef __PARAMETER_H
 #define __PARAMETER_H
 
+#include <assert.h>
 #include <cstdlib>      // size_t
+#include <iostream>
 using std::size_t;
 
 enum Eta_Type 
@@ -11,7 +13,6 @@ enum Eta_Type
     ETA_LIN, // eta/(1+eta*lambda*t)
     ETA_3_4  // eta*(1+eta*lambda*t)^(-3/4)
   }; 
-
 enum Update_Type
   {
     MINIBATCH_SGD, //update w,L and U at the same time using minibatch SGD
@@ -24,6 +25,45 @@ enum Reorder_Type
     REORDER_PROJ_MEANS, // reorder by the means of the projection based on current w
     REORDER_RANGE_MIDPOINTS  // reorder by the mean of the range of the class (i.e. (u+l)/2 )
   };
+
+#define ENUM_CASE(NAME) case(NAME): name= #NAME; break
+template<typename OSTREAM> inline
+OSTREAM& operator<<(OSTREAM& os, enum Eta_Type const& e)
+{
+    char const *name=nullptr;
+    switch(e){
+        ENUM_CASE(ETA_CONST);
+        ENUM_CASE(ETA_SQRT);
+        ENUM_CASE(ETA_LIN);
+        ENUM_CASE(ETA_3_4);
+    }
+    assert(name != nullptr);
+    return os<<name;
+}
+template<typename OSTREAM> inline
+OSTREAM& operator<<(OSTREAM& os, enum Update_Type const& e)
+{
+    char const *name=nullptr;
+    switch(e){
+        ENUM_CASE(MINIBATCH_SGD);
+        ENUM_CASE(SAFE_SGD);
+    }
+    assert(name != nullptr);
+    return os<<name;
+}
+template<typename OSTREAM> inline
+OSTREAM& operator<<(OSTREAM& os, enum Reorder_Type const& e)
+{
+    char const *name=nullptr;
+    switch(e){
+        ENUM_CASE(REORDER_AVG_PROJ_MEANS);
+        ENUM_CASE(REORDER_PROJ_MEANS);
+        ENUM_CASE(REORDER_RANGE_MIDPOINTS);
+    }
+    assert(name != nullptr);
+    return os<<name;
+}
+#undef ENUM_CASE
 
 typedef struct
 {

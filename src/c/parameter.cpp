@@ -1,8 +1,48 @@
 
 #include "parameter.h"
+#include <assert.h>
 #include <iostream>
 
 using namespace std;
+
+#if 0
+#define ENUM_CASE(NAME) case(NAME): name= #NAME; break
+std::ostream& operator<<(std::ostream& os, enum Eta_Type const& e)
+{
+    char const *name=nullptr;
+    switch(e){
+        ENUM_CASE(ETA_CONST);
+        ENUM_CASE(ETA_SQRT);
+        ENUM_CASE(ETA_LIN);
+        ENUM_CASE(ETA_3_4);
+    }
+    assert(name != nullptr);
+    return os<<name;
+}
+std::ostream& operator<<(std::ostream& os, enum Update_Type const& e)
+{
+    char const *name=nullptr;
+    switch(e){
+        ENUM_CASE(MINIBATCH_SGD);
+        ENUM_CASE(SAFE_SGD);
+    }
+    assert(name != nullptr);
+    return os<<name;
+}
+std::ostream& operator<<(std::ostream& os, enum Reorder_Type const& e)
+{
+    char const *name=nullptr;
+    switch(e){
+        ENUM_CASE(REORDER_AVG_PROJ_MEANS);
+        ENUM_CASE(REORDER_PROJ_MEANS);
+        ENUM_CASE(REORDER_RANGE_MIDPOINTS);
+    }
+    assert(name != nullptr);
+    return os<<name;
+}
+#undef ENUM_CASE
+#endif
+
 
 void print_parameter_usage()
 {

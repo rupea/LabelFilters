@@ -18,7 +18,7 @@ MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS)) -ggdb3 -Wall -Werror
 
 LDFLAGS ?= -L$(BOOSTDIR)/lib -lboost_program_options
-LDFLAGS += -L$(MILDE_DIR)/lib -lmilde_core -lmilde_lua
+LDFLAGS += -L$(MILDE_DIR)/lib -Wl,--no-as-needed -lmilde_core -Wl,--no-as-needed -lmilde_lua
 # testing
 #LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
 
@@ -27,7 +27,8 @@ PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
-all: libmclua.a libmclua-dbg.a linkme
+.PHONY: lib
+all: lib linkme
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
 
@@ -36,11 +37,15 @@ profile_evaluate:
 
 
 %.o: %.cpp
-	$(CXX) -o $@ $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
+	$(CXX) -o $@ $(CPPFLAGS) -c $<
 %.i: %.cpp
-	$(CXX) -o $@ $(CPPFLAGS) $(OCTAVE_CFLAGS) -dD -E $<
+	$(CXX) -o $@ $(CPPFLAGS) -dD -E $<
 %-dbg.o: %.cpp
-	$(CXX) $(DBGFLAGS) -c $< -o $@
+	$(CXX) -o $@ $(DBGFLAGS) -c $<
+%.lo: %.cpp
+	$(CXX) -o $@ $(CPPFLAGS) -fPIC -c $<
+%-dbg.lo: %.cpp
+	$(CXX) -o $@ $(DBGFLAGS) -fPIC -c $<
 ../c/lib%.a:
 	cd ../c && $(MAKE) lib$*.a
 
@@ -54,17 +59,26 @@ check-headers:
 	done; \
 	echo "DONE checking standalone header compilation"
 
-lib: libmclua.a libmclua-dbg.a
-LIBMCLUA_FILES:=mclua.o
-libmclua.a: ../c/libmcfilter.a
-libmclua-dbg.a: ../c/libmcfilter-dbg.a
-libmclua.a: $(LIBMCLUA_FILES)
-	$(AR) -vru $@ $^
-libmclua-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIBMCLUA_FILES))
-	$(AR) -vru $@ $^
+#lib: libmclua.a libmclua-dbg.a
+lib: libmclua.so libmclua-dbg.so
+#LIBMCLUA_FILES:=mclua.o
+#libmclua.a: ../c/libmcfilter.a
+#libmclua-dbg.a: ../c/libmcfilter-dbg.a
+#libmclua.a: $(LIBMCLUA_FILES)
+#	$(AR) -vru $@ $^
+#libmclua-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIBMCLUA_FILES))
+#	$(AR) -vru $@ $^
+LIBMCLUA_SRC:=mclua.cpp
+libmclua.so: $(patsubst %.cpp,%.lo,$(LIBMCLUA_SRC))
+	$(CXX) -o $@ -shared $^
+libmclua-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIBMCLUA_SRC))
+	$(CXX) -o $@ -shared $^
+	rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
 
+# links, but don't know how to "run" lua from inside C++ code yet...
+#   For now, you can test as   make clean && make && lua_cpp parms.lua
 linkme: linkme.cpp
-	$(CXX) -o $@ $(CPPFLAGS) linkme.cpp mclua.cpp $(LDFLAGS)
+	$(CXX) -o $@ $(DBGFLAGS) -fPIC -O0 linkme.cpp -L. -Wl,-rpath,. -Wl,-rpath,../c -lmclua-dbg -L../c -lmcfilter $(LDFLAGS)
 
 clean: 
-	rm -f *.o linkme libmclua*.a *.i
+	rm -f *.o *.lo *.so linkme libmclua*.a *.i
