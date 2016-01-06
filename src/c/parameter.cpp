@@ -2,12 +2,13 @@
 #include "parameter.h"
 #include <assert.h>
 #include <iostream>
+#include <stdexcept>
+#include <cctype>       // std::toupper
 
 using namespace std;
 
-#if 0
 #define ENUM_CASE(NAME) case(NAME): name= #NAME; break
-std::ostream& operator<<(std::ostream& os, enum Eta_Type const& e)
+std::string tostring( enum Eta_Type const e )
 {
     char const *name=nullptr;
     switch(e){
@@ -17,9 +18,9 @@ std::ostream& operator<<(std::ostream& os, enum Eta_Type const& e)
         ENUM_CASE(ETA_3_4);
     }
     assert(name != nullptr);
-    return os<<name;
+    return name;
 }
-std::ostream& operator<<(std::ostream& os, enum Update_Type const& e)
+std::string tostring( enum Update_Type const e )
 {
     char const *name=nullptr;
     switch(e){
@@ -27,9 +28,9 @@ std::ostream& operator<<(std::ostream& os, enum Update_Type const& e)
         ENUM_CASE(SAFE_SGD);
     }
     assert(name != nullptr);
-    return os<<name;
+    return name;
 }
-std::ostream& operator<<(std::ostream& os, enum Reorder_Type const& e)
+std::string tostring( enum Reorder_Type const e )
 {
     char const *name=nullptr;
     switch(e){
@@ -38,10 +39,37 @@ std::ostream& operator<<(std::ostream& os, enum Reorder_Type const& e)
         ENUM_CASE(REORDER_RANGE_MIDPOINTS);
     }
     assert(name != nullptr);
-    return os<<name;
+    return name;
 }
 #undef ENUM_CASE
-#endif
+
+#define ENUM_FIND( NAME, VALUE ) do { \
+    for(auto &c: s) c = std::toupper(c); \
+    if( s.find(#NAME) != std::string::npos ) {e=VALUE; return;} \
+}while(0)
+void fromstring( std::string s, enum Eta_Type &e )
+{
+    ENUM_FIND(CONST, ETA_CONST);
+    ENUM_FIND(SQRT, ETA_SQRT);
+    ENUM_FIND(LIN, ETA_LIN);
+    ENUM_FIND(3_4, ETA_3_4);
+    throw std::runtime_error("Unrecognized string for MCfilter enum Eta_Type");
+}
+void fromstring( std::string s, enum Update_Type &e )
+{
+    //cout<<"fromstring("<<s<<", Update_type&="<<(int)e<<")"<<endl;
+    ENUM_FIND(BATCH, MINIBATCH_SGD);
+    ENUM_FIND(SAFE, SAFE_SGD);
+    throw runtime_error("Unrecognized string for MCfilter enum Update_Type");
+}
+void fromstring( std::string s, enum Reorder_Type &e )
+{
+    ENUM_FIND(AVG, REORDER_AVG_PROJ_MEANS);
+    ENUM_FIND(PROJ, REORDER_PROJ_MEANS);
+    ENUM_FIND(MID, REORDER_RANGE_MIDPOINTS);
+    throw runtime_error("Unrecognized string for MCfilter enum Reorder_Type");
+}
+#undef ENUM_FIND
 
 
 void print_parameter_usage()

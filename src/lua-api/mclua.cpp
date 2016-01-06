@@ -3,7 +3,7 @@
 
 #include "base/app_state.hpp"
 #include "script_lua/lua_interpreter.hpp"
-//#include "base/argmap.hpp"
+#include "base/argmap.hpp"
 #include "repo/args.hpp"
 
 #include <assert.h>
@@ -46,9 +46,10 @@ namespace MILDE {
 #define FUN(name) WRAP_FUN(name,script_MCparm::f_)
 FUN(__gc)
 FUN(type)
-FUN(get_no_projections)
-FUN(get)        // return all parameters as string->double table
-FUN(set)        // overwrite keys in supplied string->double table
+FUN(get)        // return all parameters as string->luatype table
+FUN(getargs)    // return all parameters as string->string table
+FUN(set)        // overwrite keys in supplied string->luatype table
+FUN(setargs)    // overwrite keys in supplied string->string table
 FUN(str)
 
 FUN(new)     // construct a default 'mcparm' parameter set
@@ -75,47 +76,133 @@ namespace MILDE {
         }scr_CATCH;
     }
 
-    int script_MCparm::f_get_no_projections()
-    {
-        scr_TRY( "<mcparm>:get_no_projections()-><int>" ){
-            scr_USR( scr_MCparm, x, ERR_LBL );
-            GAS.d_si->put_int( x->d_params->no_projections );
-            return 1;
-        }scr_CATCH;
-    }
-
-#define MCSET(TYPE,PARM) do{ \
-    if( a.map().find( #PARM ) != a.map().cend() ){ \
-        TYPE p; \
-        a.get_##TYPE( true/*abort*/, #PARM, p ); \
+    /** set \c param_struct::PARM to (MILDETYPE) args["PARM"] */
+#define MCSET(MILDETYPE,PARM) do{ \
+    if( args.map().find( #PARM ) != args.map().cend() ){ \
+        MILDETYPE p; \
+        args.get_##MILDETYPE( true/*abort*/, #PARM, p ); \
         x->d_params->PARM = p; \
     } \
 }while(0)
-    /** Any keys in ArgMap: string->int|dbl|bool) replace any existing values */
+    /** set, via CONV( (MILDETYPE)args["PARM"], \c param_struct::PARM ). */
+#define MCSET_ENUM(CONV,PARM) do{ \
+    cccstr* s = args.get( #PARM ); \
+    if( s != nullptr ) { \
+        string ss = *s; \
+        CONV( ss, x->d_params->PARM ); \
+    } \
+}while(0)
+    /** Any keys in ArgMap: string->int|dbl|bool|str replace any existing values */
+    int script_MCparm::f_setargs()
+    {
+        scr_TRY( "<mcparm>:set({args}) -> <table:string->various>" ){
+            scr_USR( scr_MCparm, x, ERR_LBL );
+            scr_ARGS( args, ERR_LBL );
+            MCSET(int,no_projections);
+            MCSET(real8,C1);
+            MCSET(real8,C2);
+            MCSET(uint8,max_iter);
+            MCSET(uint8,batch_size);
+            MCSET_ENUM(fromstring,update_type); // fromstring(args[key], enum&)
+            MCSET(real8,eps);
+            MCSET_ENUM(fromstring,eta_type); // string --> enum Eta_Type
+            MCSET(real8,min_eta);
+            MCSET(uint8,avg_epoch);
+            MCSET(uint8,reorder_epoch);
+            MCSET(uint8,report_epoch);
+            MCSET(uint8,report_avg_epoch);
+            MCSET(uint8,optimizeLU_epoch);
+            MCSET(bool,remove_constraints);
+            MCSET(bool,remove_class_constraints);
+            MCSET(int,reweight_lambda);
+            MCSET_ENUM(fromstring,reorder_type); // enum Reorder_Type
+            MCSET(bool,ml_wt_by_nclasses);
+            MCSET(bool,ml_wt_class_by_nclasses);
+            MCSET(int,num_threads);
+            MCSET(int,seed);
+            MCSET(uint8,finite_diff_test_epoch);
+            MCSET(uint8,no_finite_diff_tests);
+            MCSET(real8,finite_diff_test_delta);
+            MCSET(bool,resume);
+            MCSET(bool,reoptimize_LU);
+            MCSET(int,class_samples);
+            return 0;
+        }scr_CATCH;
+    }
+#undef MCSET_ENUM
+#undef MCSET
+
+#define MCSET(LUATYPE,CTYPE,CONV,PARM) do{ \
+    if( /*bool*/argmap.map().find( #PARM ) ){ \
+        CTYPE p; \
+        argmap.get_##LUATYPE( string(#PARM), p, false/*err_if_missing*/ ); \
+        x->d_params->PARM = CONV(p); \
+    } \
+}while(0)
+#define MCSET_enum(PARM) do{ \
+    string s = argmap.map().get( #PARM ); \
+    cout<<" argmap get("<<#PARM<<") --> string "<<s<<endl; \
+    if( s.size() ) { \
+        fromstring( s, x->d_params->PARM ); \
+    } \
+}while(0)
+#define MCSET_bool(PARM)   MCSET(bool,bool,          ,PARM)
+#define MCSET_int(PARM)    MCSET(int, int,           ,PARM)
+#define MCSET_size_t(PARM) MCSET(int, int,   (size_t),PARM)
+#define MCSET_double(PARM) MCSET(dbl, double,        ,PARM)
     int script_MCparm::f_set()
     {
         scr_TRY( "<mcparm>:set({args}) -> <table:string->various>" ){
             scr_USR( scr_MCparm, x, ERR_LBL );
-            scr_ARGS( a, ERR_LBL );
-            MCSET(int,no_projections);
+            scr_ARGMAP( argmap, ERR_LBL );
+            MCSET_int(    no_projections );
+            MCSET_double( C1 );
+            MCSET_double( C2 );
+            MCSET_size_t( max_iter );
+            MCSET_size_t( batch_size );
+            MCSET_enum(   update_type ); // tostring(enum Update_Type)
+            MCSET_double( eps );
+            MCSET_enum(   eta_type ); // enum Eta_Type
+            MCSET_double( min_eta );
+            MCSET_size_t( avg_epoch );
+            MCSET_size_t( reorder_epoch );
+            MCSET_size_t( report_epoch );
+            MCSET_size_t( report_avg_epoch );
+            MCSET_size_t( optimizeLU_epoch );
+            MCSET_bool(   remove_constraints );
+            MCSET_bool(   remove_class_constraints );
+            MCSET_int(    reweight_lambda );
+            MCSET_enum(   reorder_type ); // enum Reorder_Type
+            MCSET_bool(   ml_wt_by_nclasses );
+            MCSET_bool(   ml_wt_class_by_nclasses );
+            MCSET_int(    num_threads );
+            MCSET_int(    seed );
+            MCSET_size_t( finite_diff_test_epoch );
+            MCSET_size_t( no_finite_diff_tests );
+            MCSET_double( finite_diff_test_delta );
+            MCSET_bool(   resume );
+            MCSET_bool(   reoptimize_LU );
+            MCSET_int(    class_samples );
             return 1;
         }scr_CATCH;
     }
+#undef MCSET_double
+#undef MCSET_size_t
+#undef MCSET_int
+#undef MCSET_bool
+#undef MCSET_enum
 #undef MCSET
 
-    /** TYPE=bool|dbl|int|str, PARM=item in \c param_struct. */
-#define MCARGS_OLD(TYPE,PARM) do { \
-    bool const diff = x->d_params->PARM != def.PARM; \
-    if( all || diff ) \
-        p.set_ ## TYPE ( #PARM, x->d_params->PARM); \
-}while(0)
-    /** TYPE=bool|int|real4|<any milde type>, PARM=item in \c param_struct. */
+
+/** TYPE=bool|int|real4|<any milde type>, PARM=item in \c param_struct.
+ * Note that MILDE::Args stores all keys as <string>. */
 #define MCARGS(TYPE,PARM) do { \
     bool const diff = x->d_params->PARM != def.PARM; \
     if( all || diff ) \
         p.set( #PARM, (TYPE)(x->d_params->PARM) ); \
 }while(0)
-    int script_MCparm::f_get()
+
+    int script_MCparm::f_getargs()
     {
         scr_TRY( "<mcparm>:get([all:bool=false]) -> <table:string->various>" ){
             scr_USR( scr_MCparm, x, ERR_LBL );
@@ -126,8 +213,8 @@ namespace MILDE {
             }
 GOT_ALL:
             param_struct def = set_default_params();
-            //ArgMap p; Nope --- Args is more feature-rich
-            Args p;
+            Args p;      // --> all keys will actually be strings, MILDE types
+            // ArgMap p; // --> all keys will be closes lua base type, LUA types
             MCARGS(uint4,no_projections);
             MCARGS(real8,C1);
             MCARGS(real8,C2);
@@ -156,6 +243,61 @@ GOT_ALL:
             MCARGS(bool,resume);
             MCARGS(bool,reoptimize_LU);
             MCARGS(int,class_samples);
+            GAS.d_si->put_stack( p );
+            return 1;
+        }scr_CATCH;
+    }
+#undef MCARGS
+
+/** TYPE=bool|dbl|int|str, XFORM function applied to retrieved PARM in \c param_struct.
+ * Note that MILDE::ArgMap stores all keys as some base <lua type>. */
+#define MCARGS(TYPE,XFORM,PARM) do { \
+    bool const diff = x->d_params->PARM != def.PARM; \
+    if( all || diff ) \
+        p.set_ ## TYPE ( #PARM, XFORM(x->d_params->PARM)); \
+}while(0)
+
+    int script_MCparm::f_get()
+    {
+        scr_TRY( "<mcparm>:get([all:bool=false]) -> <table:string->various>" ){
+            scr_USR( scr_MCparm, x, ERR_LBL );
+            bool all = false;
+            {   scr_BOOL( a, GOT_ALL );
+                scr_STK("<mcparm>:str( <verbose:bool> ) -> <cccstr>");
+                all = a;
+            }
+GOT_ALL:
+            param_struct def = set_default_params();
+            // Args p; // --> all keys will actually be strings, MILDE types
+            ArgMap p;  // --> all keys will be closes lua base type, LUA types
+            MCARGS(int,,no_projections);
+            MCARGS(dbl,,C1);
+            MCARGS(dbl,,C2);
+            MCARGS(int,,max_iter);
+            MCARGS(int,,batch_size);
+            MCARGS(str,tostring,update_type); // tostring(enum Update_Type)
+            MCARGS(dbl,,eps);
+            MCARGS(str,tostring,eta_type); // enum Eta_Type
+            MCARGS(dbl,,min_eta);
+            MCARGS(int,,avg_epoch);
+            MCARGS(int,,reorder_epoch);
+            MCARGS(int,,report_epoch);
+            MCARGS(int,,report_avg_epoch);
+            MCARGS(int,,optimizeLU_epoch);
+            MCARGS(bool,,remove_constraints);
+            MCARGS(bool,,remove_class_constraints);
+            MCARGS(int,,reweight_lambda);
+            MCARGS(str,tostring,reorder_type); // enum Reorder_Type
+            MCARGS(bool,,ml_wt_by_nclasses);
+            MCARGS(bool,,ml_wt_class_by_nclasses);
+            MCARGS(int,,num_threads);
+            MCARGS(int,,seed);
+            MCARGS(int,,finite_diff_test_epoch);
+            MCARGS(int,,no_finite_diff_tests);
+            MCARGS(dbl,,finite_diff_test_delta);
+            MCARGS(bool,,resume);
+            MCARGS(bool,,reoptimize_LU);
+            MCARGS(int,,class_samples);
             GAS.d_si->put_stack( p );
             return 1;
         }scr_CATCH;
@@ -253,9 +395,10 @@ GOT_VERBOSE:
 static const struct luaL_Reg lua_mcparm_lib_m [] = {
     LUA_FUN(__gc),
     LUA_FUN(type),
-    LUA_FUN(get_no_projections),
     LUA_FUN(get),
+    LUA_FUN(getargs),
     LUA_FUN(set),
+    LUA_FUN(setargs),
     LUA_FUN(str),
     {0,0}
 };
@@ -263,6 +406,7 @@ static const struct luaL_Reg lua_mc_lib_f [] = {
     LUA_FUN(new)
 };
 
+// needs libraries milde_core and mcfilter
 extern "C" DLLEXP int luaopen_mcparm( lua_State *)
 {
     MILDE_li()->register_class( OBJNAME(scr_MCparm), "mcparm", lua_mcparm_lib_m );

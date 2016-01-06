@@ -3,8 +3,10 @@
 
 #include <assert.h>
 #include <cstdlib>      // size_t
-#include <iostream>
+#include <string>
 using std::size_t;
+
+// -------- enum constants
 
 enum Eta_Type 
   {
@@ -26,44 +28,25 @@ enum Reorder_Type
     REORDER_RANGE_MIDPOINTS  // reorder by the mean of the range of the class (i.e. (u+l)/2 )
   };
 
-#define ENUM_CASE(NAME) case(NAME): name= #NAME; break
+// ------- enum conversions & I/O
+
+/** enum --> string */
+std::string tostring( enum Eta_Type const e );
+std::string tostring( enum Update_Type const e );
+std::string tostring( enum Reorder_Type const e );
+/** throw runtime_error if invalid string. Matches on some substring. */
+void fromstring( std::string s, enum Eta_Type &e );
+void fromstring( std::string s, enum Update_Type &e );
+void fromstring( std::string s, enum Reorder_Type &e );
+/** ostreams write enums as strings */
 template<typename OSTREAM> inline
-OSTREAM& operator<<(OSTREAM& os, enum Eta_Type const& e)
-{
-    char const *name=nullptr;
-    switch(e){
-        ENUM_CASE(ETA_CONST);
-        ENUM_CASE(ETA_SQRT);
-        ENUM_CASE(ETA_LIN);
-        ENUM_CASE(ETA_3_4);
-    }
-    assert(name != nullptr);
-    return os<<name;
-}
+OSTREAM& operator<<(OSTREAM& os, enum Eta_Type const e) { return os<<tostring(e); }
 template<typename OSTREAM> inline
-OSTREAM& operator<<(OSTREAM& os, enum Update_Type const& e)
-{
-    char const *name=nullptr;
-    switch(e){
-        ENUM_CASE(MINIBATCH_SGD);
-        ENUM_CASE(SAFE_SGD);
-    }
-    assert(name != nullptr);
-    return os<<name;
-}
+OSTREAM& operator<<(OSTREAM& os, enum Update_Type const e) { return os<<tostring(e); }
 template<typename OSTREAM> inline
-OSTREAM& operator<<(OSTREAM& os, enum Reorder_Type const& e)
-{
-    char const *name=nullptr;
-    switch(e){
-        ENUM_CASE(REORDER_AVG_PROJ_MEANS);
-        ENUM_CASE(REORDER_PROJ_MEANS);
-        ENUM_CASE(REORDER_RANGE_MIDPOINTS);
-    }
-    assert(name != nullptr);
-    return os<<name;
-}
-#undef ENUM_CASE
+OSTREAM& operator<<(OSTREAM& os, enum Reorder_Type const e) { return os<<tostring(e); }
+
+// --------- parameter structure
 
 typedef struct
 {

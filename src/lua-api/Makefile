@@ -5,6 +5,12 @@ endif
 ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
 endif
+
+MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
+CURRENT_DIR := $(notdir $(patsubst %/,%,$(dir $(MKFILE_PATH))))
+# the directory above this makefile...
+MCSRC_DIR := $(patsubst %/,%,$(dir $(patsubst %/,%,$(dir $(MKFILE_PATH)))))
+
 OPENMP ?= -fopenmp
 # - removed -ffastmath (interferes with isnan for milde compilation)
 CPPFLAGS ?= -march=native -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
@@ -52,6 +58,9 @@ profile_evaluate:
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
+	echo "MKFILE_PATH    = $(MKFILE_PATH)"
+	echo "CURRENT_DIR    = $(CURRENT_DIR)"
+	echo "MCSRC_DIR      = $(MCSRC_DIR)"
 check-headers:
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
@@ -69,10 +78,24 @@ lib: libmclua.so libmclua-dbg.so
 #libmclua-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIBMCLUA_FILES))
 #	$(AR) -vru $@ $^
 LIBMCLUA_SRC:=mclua.cpp
+
+# To ease linking, wire the mcfilter library & path into the lua library
+# (so that require('mcparm') will auto-load libmcfilter.so without doing
+#  complicated song and dance in lua)
+# rpath setting stored within libmclua*.so should be an absolute path
+#  TODO: eventually, perhaps to some milde install directory?
+DEP_LIB_DIR:=-Wl,-rpath,$(MCSRC_DIR)/c -L../c
+
+# Note:
+#       mcparm.so can link to EITHER libmclua.so OR libmclua-dbg.so
+# Then if the lua_CPATH includes ".", you can require 'mcparm', which will:
+# 1) load the lua api from mcparms.so and
+# 2) link to the libmcfilter compiled at corresponding debug level
 libmclua.so: $(patsubst %.cpp,%.lo,$(LIBMCLUA_SRC))
-	$(CXX) -o $@ -shared $^
+	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter
+	# rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
 libmclua-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIBMCLUA_SRC))
-	$(CXX) -o $@ -shared $^
+	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter-dbg
 	rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
 
 # links, but don't know how to "run" lua from inside C++ code yet...
