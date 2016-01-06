@@ -54,6 +54,7 @@ profile_kmeans:
 	$(CXX) -o $@ $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
 
 ## extra stuff ######################### without octave ###################
+.PHONY: settings check-headers lib libs-only
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 %-dbg.o: %.cpp
@@ -71,8 +72,9 @@ check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h para
 		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
 	done; \
 	echo "DONE checking standalone header compilation"
-lib: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so demo-proj
-LIB_CPPFILES:=find_w.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp
+lib: libs-only demo-proj demo-quick
+libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
+LIB_CPPFILES:=find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
@@ -95,8 +97,8 @@ demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
 # The following test throws if the solution is not sufficiently close to the correct answer.
 # Note: inside eigen, there are signed vs. unsigned issues (error=sign-compare)
-demo-quick: libmcfilter.a
-demo-quick: erik/demo-quick.cpp libmcfilter.a
+demo-quick: | libmcfilter-dbg.a
+demo-quick: erik/demo-quick.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 
 clean: 

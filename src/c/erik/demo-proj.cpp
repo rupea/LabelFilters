@@ -1,6 +1,7 @@
 /** \file
  * learn projections using only C++ */
 #include "../find_w.h"
+#include "utils.h"              // labelVec2Mat
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #ifdef _OPENMP

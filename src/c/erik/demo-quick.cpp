@@ -3,6 +3,7 @@
 #include "../find_w.h"
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
+#include "utils.h"
 #ifdef _OPENMP
 #include <omp.h>
 #endif
