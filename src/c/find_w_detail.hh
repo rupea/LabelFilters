@@ -7,6 +7,7 @@
 #include "find_w_detail.h"                      // internal functions
 #include <boost/numeric/conversion/bounds.hpp>  // boost::numeric::bounds<T>
 //#include <boost/limits.hpp>     // boost::numeric::bounds<T>
+//#include <iosfwd>                             // std::cerr
 #include <iostream>                             // std::cerr
 
     template<typename EigenType>

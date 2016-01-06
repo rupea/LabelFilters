@@ -81,5 +81,37 @@ namespace MILDE {
         static int f_new();  // return a default-constructed "param_struct"
     };
 
+    /** Actually, should create a solver class that, besides \c solve_optimization,
+     * provides write|read_binary|ascii of internal state.
+     * - Internal state should be stored in short|full format
+     *   - first store time t and time t state like eta, C1, C2, ...
+     *   - then store
+     *     - either short restart data from time-averaged {w,l,u,objective}
+     *     - or long restart data that adds {w,l,u,obj} at time "t"
+     */
+    struct script_MCsolve {
+        static int f___gc();
+        /** Run an initialized solver, and then save restart data.
+         * - Inputs describe where final data should be saved
+         *  - [ rfile_avg               : restart filename for _avg data
+         *  - [, rfile ]]               : restart filename for time t data
+         */
+        static int f_solve();
+        /** construct a solver, possibly resuming an old calculation.
+         * - Inputs:
+         *      - repo, parms           : start from random conditions
+         *      - [, rfile_avg          : and given restart = restart_avg
+         *      - [, rfile ]]           : and, oh, use time t data instead
+         *   - where rfile* are filenames for binary restart data
+         * - restart data files contain:
+         *   - DenseM weights
+         *   - DenseM lower_bounds
+         *   - DenseM upper_bounds
+         *   - VectorXd objective_val
+         * - and restart dimensions must agree with repo sizing.
+         */     
+        static int f_solver();
+    };
+
 }//MILDE::
 #endif // MCLUA_H
