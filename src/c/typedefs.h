@@ -5,6 +5,10 @@
 #include "Eigen/Sparse"
 #include <boost/dynamic_bitset.hpp>
 
+using   Eigen::VectorXd;
+using   Eigen::VectorXi;
+//using   Eigen::RowVectorXd;
+//using   Eigen::ColVectorXd;
 typedef Eigen::Matrix<size_t, Eigen::Dynamic, 1> VectorXsz;
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> DenseM;
 typedef Eigen::Matrix<double, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor> DenseColM;

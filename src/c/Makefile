@@ -65,7 +65,7 @@ DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
-check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h utils.h WeightVector.h
+check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w_.hh
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
 		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
