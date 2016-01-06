@@ -10,6 +10,10 @@
 #include "constants.h"          // PRINT_O setting
 #include "printing.h"           // print_report, print_progress
 
+#ifdef PROFILE 
+#include <gperftools/profiler.h> 
+#endif
+
 #include <iomanip>
 
 // --------------- inline template definition to solve optimization problem ----------------
