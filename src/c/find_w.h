@@ -40,46 +40,39 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                         const param_struct& params);
 
 #if 1 // proposed for lua api.
-template< class EigenType >
-class MCSolver {
-public:
+/** Corresponds to data stored in an MCFilter "solution" file.
+ * - Contains:
+ *   - dimensionality data & "short" or "long" format spec
+ *   - \c param_struct of last call to MCsolveMCsolver::solve()
+ *   - some <em>final iteration</em> values
+ *   - {w,l,u,obj} data outputs of time-average solution
+ *   - [opt. if fmt=="long"] {w,l,u,obj} of final iteration
+ * - during MCsolver::solve, we need the "long" format,
+ *   but the solution can still be saved to disk in "short" 
+ */
+class MCsoln {
+    enum Fmt : char { SHORT, LONG };
 
-    /** Initialize with given input data.
-     * If resume data is OK (readable, compatible with x, y) invoke
-     * solve_optimization with appropriate initialization.
-     *
-     * TODO: fix \b \c solve_optimization so proper resume can be done.
-     *       Initially just copy solve_optimization code until we can
-     *       deprecate the original (which is needed for the octave api).
+    /** Construct to begin a solution from scratch.
+     * - Unknown hdr dims filled in during solve (know training data)
+     * - Avg weights set to random values
      */
-    MCSolver( EigenType const& x, SparseMb const& y,
-              char const* rfile = nullptr);
-    ~MCSolver();
+    MCsoln();
 
-private:
-    /// \name dimensionality constants for binary save/restart data.
-    /// These always match the matrix/vector data
-    //@{
-    size_t d;                   ///< d is x.cols example dimensionality
-    size_t nProj;               ///< w is d x nProj
-    size_t nClass;              ///< l and u are nClass x nProj, objective[nClass]
-    std::string fmt;            ///< "short"(avg only) or "long" (avg + time-t data)
-    //@}
-    /// \name restart constants pertinent to <em>final iteration t</em>
-    /// These can optionally be used to resume/extend a previous solution.
-    /// There should be a param_struct::resume setting to ignore or use these.
-    //@{
-    unsigned long t;    ///< iteration number
-    double C1;          ///< regularization constant
-    double C2;          ///< regularization constant
-    double lambda;      ///< factor governing decay of C1 or C2
-    double eta_t;       ///< learning rate
-    // probably more
-    //@}
+    /** Construct from solution file. */
+    MCsoln( char const* solnfile );
 
+    /// \name i/o
+    //@{
+    void read_ascii( std::istream& is );
+    void read_binary( std::istream& is );
+    void write_ascii( std::ostream& is );
+    void write_binary( std::ostream& is );
+#if 0
     /** read/write dimensionality and final iteration t settings.
-     * This header data is just a few bytes, so even if we never resume/continue
-     * the optimization, it's cheap to keep around. */
+     * - Header data is just a few bytes, so even if we never resume/continue
+     *   the optimization, it's cheap to keep around.
+     */
     void rfile_hdr_ascii( std::istream& is );
     void rfile_hdr_binary( std::istream& is );
     void rfile_hdr_ascii( std::ostream& is );
@@ -95,9 +88,85 @@ private:
     void rfile_data_binary( std::istream& is, std::string const fmt );
     void rfile_data_ascii( std::ostream& is, std::string const fmt );
     void rfile_data_binary( std::ostream& is, std::string const fmt );
+#endif
+    //@}
 
+    /// \name dimensionality constants for binary save/restart data.
+    /// These always match the matrix/vector data
+    //@{
+    uint32_t d;                         ///< d is x.cols example dimensionality
+    uint32_t nProj;                     ///< w is d x nProj
+    uint32_t nClass;                    ///< l and u are nClass x nProj, objective[nClass]
+    std::string fname;                  ///< name of solution file (or empty)
+    enum Fmt fmt;                       ///< "short"(avg only) or "long" (avg + time-t data)
+    //@}
+
+    /// \name parameters used for last/current call to MCsolver::solve(...)
+    //@{
+    param_struct parms;
+    //@}
+
+    /// \name restart constants pertinent to <em>final iteration t</em>.
+    /// - These can be used to resume/extend a previous solution.
+    /// - Is there a param_struct::resume setting to ignore or use these?
+    //@{
+    uint64_t t;                         ///< iteration number
+    double C1;                          ///< regularization constant
+    double C2;                          ///< regularization constant
+    double lambda;                      ///< factor governing decay of C1 or C2
+    double eta_t;                       ///< learning rate
+    // add more, moving the solve_optimization local vars up here ...
+    //@}
+
+    /// \name Fmt==SHORT data.
+    //@{
 public:
-    int solve( char const* rfile = nullptr, char const* fmt="short" );
+    DenseM weights_avg;                 ///< [ d x nProj ] time-avg'd projection matrix
+    DenseM lower_bounds_avg;            ///< [ nClass x nProj ]
+    DenseM upper_bounds_avg;            ///< [ nClass x nProj ]
+    //VectorXd& objective_val_avg; // hmmm. this is optional, I guess
+    //@}
+    /// \name Fmt==LONG data.
+    /// - Optional -- can be written/read as empty vectors
+    /// - resized as neces
+    //@{
+    VectorXd& objective_val_avg;        ///< [ nClass ] objective values
+
+    DenseM weights;                     ///< final iteration data
+    DenseM lower_bounds;                ///< final iteration data
+    DenseM upper_bounds;                ///< final iteration data
+    VectorXd& objective_val;            ///< final iteration data
+    //@}
+
+};
+
+class MCsolver : public MCsoln {
+public:
+
+    /** Initialize with given input data.
+     * If resume data is OK (readable, compatible with x, y) invoke
+     * solve_optimization with appropriate initialization.
+     *
+     * TODO: fix \b \c solve_optimization so proper resume can be done.
+     *       Initially just copy solve_optimization code until we can
+     *       deprecate the original (which is needed for the octave api).
+     */
+    MCsolver( char const* solnfile = nullptr );
+    ~MCsolver();
+
+    /** solve for MCFilter's optimal multi-class discriminating projections.
+     * \p x     training data, row-wise examples of dimension MCsoln::d
+     * \p y     data classes, (should this be a vector? why a bool matrix?)
+     * \p parms [opt.] parameters that overwrite MCsoln::parms
+     * - if constructed with a solnfile, \throw if x/y dimensions are bad
+     *   - o/w use x and y dims to initialize MCsoln data
+     * - if \c p==nullptr, then use existing MCsoln::parms
+     * \sa vectorToLabel to convert from y VectorXi of class numbers.
+     * \internal
+     * - Is there any benefit from y as vector of class numbers?
+     */
+    template< typename EIGENTYPE >
+        int solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* = nullptr );
 };
 #endif // proposed
 #endif // __FIND_W_H

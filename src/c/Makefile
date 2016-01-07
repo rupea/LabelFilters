@@ -66,13 +66,18 @@ DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
-check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w_.hh
+check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
 		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
 	done; \
 	echo "DONE checking standalone header compilation"
 lib: libs-only demo-proj demo-quick
+test: lib demo-printing demo-io do-tests
+do-tests: | lib demo-printing demo-io
+	./demo-quick > demo-quick.log 2>&1
+	./demo-printing > demo-printing.log 2>&1
+	./demo-io > demo-io.log 2>&1
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 LIB_CPPFILES:=find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
@@ -100,6 +105,11 @@ demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
 demo-quick: | libmcfilter-dbg.a
 demo-quick: erik/demo-quick.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
+demo-printing: erik/demo-printing.cpp
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+demo-io: erik/demo-io.cpp libmcfilter-dbg.a
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 
 clean: 
 	rm -f *.o *.lo learn_projection evaluate_projection run_kmeans demo-quick demo-proj demo-proj-dbg libmcfilter*.a libmcfilter*.so
+	rm -f demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log

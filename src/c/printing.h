@@ -3,10 +3,25 @@
 
 #include "typedefs.h"
 #include <string>
+//#include <iosfwd>
 #include <iostream>
 
 //using Eigen::VectorXd;
 //using namespace std;
+
+namespace detail {
+    template<typename T> inline std::ostream& io_txt( std::ostream& os, T const& x, char const* ws="\n" );
+    template<typename T> inline std::istream& io_txt( std::istream& is, T& x );
+    template<typename T> inline std::ostream& io_bin( std::ostream& os, T const& x );
+    template<typename T> inline std::istream& io_bin( std::istream& is, T& x );
+
+    // specializations
+    //   strings as length + blob (no intervening space)
+    template<> std::ostream& io_txt( std::ostream& os, std::string const& x, char const* /*ws="\n"*/ );
+    template<> std::istream& io_txt( std::istream& is, std::string& x );
+    template<> std::ostream& io_bin( std::ostream& os, std::string const& x );
+    template<> std::istream& io_bin( std::istream& is, std::string& x );
+}
 
 // *******************************
 // Prints the progress bar

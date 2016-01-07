@@ -214,7 +214,7 @@ int main(int,char**)
   weights.colwise().normalize();
   switch( problem ){
     case(0):
-        for(int i=0U; i<params.no_projections; ++i){
+        for(uint32_t i=0U; i<params.no_projections; ++i){
             if( fabs(weights(0,i)) < 0.99 || fabs(weights(1,i)) > 0.1 || fabs(weights(2,i)) > 0.1 ){
                 throw std::runtime_error(" Incorrect solution for problem 0");
             }
@@ -222,7 +222,7 @@ int main(int,char**)
         break;
     case(1): ;// fall-through
     case(2):
-        for(int i=0U; i<params.no_projections; ++i){
+        for(uint32_t i=0U; i<params.no_projections; ++i){
             if( fabs(weights(0,i)+weights(2,i)) > 0.1 || fabs(weights(1,i)) > 0.1 ){
                 throw std::runtime_error(" Incorrect solution for problem 1");
             }
