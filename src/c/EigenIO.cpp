@@ -6,11 +6,9 @@
 //#include <octave/parse.h>
 //#include <octave/toplev.h>
 #include "EigenIO.h"
-#include "typedefs.h"
-//#include "EigenOctave.h"
-#include "Eigen/Sparse"
+
+#include "printing.hh"
 #include <iostream>
-#include <ostream>
 #include <fstream>
 #include <stdlib.h>
 #include <string>

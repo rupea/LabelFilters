@@ -61,4 +61,87 @@ namespace detail {
     }
 }
 
+template <typename Block, typename Alloc> inline
+  void save_bitvector(std::ostream& out, const boost::dynamic_bitset<Block, Alloc>& bs)
+{
+  using namespace std;
+  size_t num_bits = bs.size();
+  size_t num_blocks = bs.num_blocks();
+  std::vector<Block> blocks(num_blocks);
+  to_block_range(bs, blocks.begin());  
+  out.write((char*)&num_bits, sizeof(size_t));
+  if (out.fail())
+    {
+      cerr << "Error writing file" << endl;
+    }
+  out.write((char*)&num_blocks, sizeof(size_t));
+  if (out.fail())
+    {
+      cerr << "Error writing file" << endl;
+    }
+  out.write((char*)(&(blocks[0])), num_blocks*sizeof(Block));  
+  if (out.fail())
+    {
+      cerr << "Error writing file" << endl;
+    }
+}
+
+template <typename Block, typename Alloc> inline
+  int load_bitvector(std::istream& in, boost::dynamic_bitset<Block, Alloc>& bs)
+{
+  using namespace std;
+  size_t num_bits,num_blocks;
+  in.read((char*)&num_bits, sizeof(size_t));
+  if (in.fail())
+    {
+      cerr << "Error reading file" << endl;
+      return -1;
+    }
+  in.read((char*)&num_blocks, sizeof(size_t));
+  if (in.fail())
+    {
+      cerr << "Error reading file" << endl;
+      return -1;
+    }
+  std::vector<Block> blocks(num_blocks);
+  in.read((char*)(&(blocks[0])), num_blocks*sizeof(Block));
+  if (in.fail())
+    {
+      cerr << "Error reading file" << endl;
+      return -1;
+    }
+  bs.resize(num_bits);
+  from_block_range(blocks.begin(), blocks.end(), bs);
+  bs.resize(num_bits);
+  return 0;
+}
+
+    template<typename EigenType> inline
+void print_mat_size(const EigenType& mat)
+{
+    using namespace std;
+    cout << "(" << mat.rows() << ", " << mat.cols() << ")";
+}
+    template<> inline
+void print_mat_size(const Eigen::VectorXd& mat)
+{
+    using namespace std;
+    cout << "(" << mat.size() << ")";
+}
+
+
+    template<typename EigenType> inline
+void print_report(const int projection_dim, const int batch_size,
+                  const int noClasses, const double C1, const double C2, const double lambda, const int w_size,
+                  const EigenType& x)
+{
+    using namespace std;
+    cout << "projection_dim: " << projection_dim << ", batch_size: "
+        << batch_size << ", noClasses: " << noClasses << ", C1: " << C1
+        << ", C2: " << C2 << ", lambda: " << lambda << ", size w: " << w_size << ", ";
+    print_report(x);
+    cout << "\n-----------------------------\n";
+
+}
+
 #endif // PRINTING_HH

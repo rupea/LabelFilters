@@ -6,6 +6,7 @@
 #include "EigenOctave.h"
 
 using Eigen::MatrixXd;
+using namespace std;
 
 DEFUN_DLD (oct_normalize_data, args, nargout,
     "returns the normalized data")
@@ -21,12 +22,12 @@ DEFUN_DLD (oct_normalize_data, args, nargout,
 
         if(opt(0,0)==1)
           {
-	    cout << "normalize";fflush(stdout);
+	    cout << "normalize";cout.flush();
             normalize_row(x);
           }
         else
           {
-	    cout << "normalize_col";fflush(stdout);
+	    cout << "normalize_col";cout.flush();
 	    normalize_col(x);
           }
 

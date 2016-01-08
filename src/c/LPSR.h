@@ -5,10 +5,12 @@
 #include "evaluate.h"
 #include "utils.h"
 #include "EigenIO.h"
+#include <boost/dynamic_bitset.hpp>
 
 
-ActiveDataSet* counting_heuristic(const SparseMb& y, const VectorXi& assignments, int k, int C, bool verbose)
+inline ActiveDataSet* counting_heuristic(const SparseMb& y, const VectorXi& assignments, int k, int C, bool verbose)
 {
+  using boost::dynamic_bitset;
 
   ActiveDataSet* active = new ActiveDataSet(k);
   size_t n = y.rows();
@@ -51,7 +53,7 @@ ActiveDataSet* counting_heuristic(const SparseMb& y, const VectorXi& assignments
   return active;
 }
 
-template <typename Eigentype>
+template <typename Eigentype> inline
 ActiveDataSet* getactive_LPSR_counting(size_t& nact, const Eigentype& x, const DenseColM& centers, const ActiveDataSet& active_classes, bool spherical, bool verbose = false)
 {
   size_t n = x.rows();
@@ -70,7 +72,7 @@ ActiveDataSet* getactive_LPSR_counting(size_t& nact, const Eigentype& x, const D
 }
 
 
-template <typename EigenType>
+template <typename EigenType> inline
 void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y, 
 			  const string& ova_file, int chunks,
 			  const DenseColM& centers, const ActiveDataSet& active_classes,
@@ -86,6 +88,7 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 			  size_t& nact_final, double& act_prc_final, 
 			  double& total_time_final)
 {
+  using boost::dynamic_bitset;
   assert(chunks > 0);
   double time_chunk;
   nact_final = 0;
@@ -187,7 +190,7 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 	      {
 		// dynamic_bitset assumes that the most significatnt bit is the last one, so the
 		// shifting is reversed from what one would normally think
-		dynamic_bitset<> a = *(active[i]) >> start_class;
+                boost::dynamic_bitset<> a = *(active[i]) >> start_class;
 		a.resize(chunk_size);
 		active_chunk_valid->at(i) = new dynamic_bitset<>(a);
 		//active_chunk_valid[i]->resize(chunk_size);
@@ -299,7 +302,7 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 
 
 
-template <typename EigenType>
+template <typename EigenType> inline
 void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y, 
 			  const string& ova_file, int chunks,
 			  const DenseColM& centers, const ActiveDataSet& active_classes,
@@ -322,7 +325,7 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 
 
 
-template <typename EigenType>
+template <typename EigenType> inline
 void train_LPSR(DenseColM& centers, ActiveDataSet*& active_classes, 
 		const EigenType& x, const SparseMb& y, int C, int iterations, bool spherical, bool verbose=false)
 {

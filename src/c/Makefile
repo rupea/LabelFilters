@@ -14,10 +14,17 @@ CPPFLAGS += -pipe
 MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
 #CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I.
 
+ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
+endif
+ifneq ($(wildcard /usr/include/octave-3.8.2),)
+OCTAVEDIR ?= /usr
+endif
+
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone
-OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
+HDF5_INC ?= -I/usr/include/hdf5/serial
+OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave $(HDF5_INC)
 
 LDFLAGS ?= -L$(BOOSTDIR)/lib -lboost_program_options
 # testing
@@ -35,7 +42,7 @@ profile_learnproj:
 profile_evaluate: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
-learn_projection: learn_projection.o find_w.o printing.o EigenOctave.o utils.o parameter.o
+learn_projection: learn_projection.o find_w.o find_w_detail.o printing.o EigenOctave.o utils.o parameter.o
 	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o learn_projection $^
 
 evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
@@ -66,12 +73,18 @@ DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
-check-headers: boolmatrix.h EigenIO.h evaluate.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh
+check-headers: boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
 		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
 	done; \
 	echo "DONE checking standalone header compilation"
+check-oct-headers: EigenOctave.h
+	for header in $^; do \
+		echo "Checking standalone compile of $$header..."; \
+		$(CXX) -c $$header $(CPPFLAGS) $(OCTAVE_CFLAGS) -o /dev/null; \
+	done; \
+	echo "DONE checking octave-related standalone header compilation"
 lib: libs-only demo-proj demo-quick
 test: lib demo-printing demo-io do-tests
 do-tests: | lib demo-printing demo-io

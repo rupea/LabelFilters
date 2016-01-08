@@ -8,7 +8,7 @@
 #include "find_w_detail.hh"     // declarations and template definitions
 
 #include "constants.h"          // PRINT_O setting
-#include "printing.h"           // print_report, print_progress
+#include "printing.hh"          // print_report, print_progress
 
 #ifdef PROFILE 
 #include <gperftools/profiler.h> 

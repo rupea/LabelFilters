@@ -2,7 +2,7 @@
 #include <octave/parse.h> 
 #include <octave/oct-map.h>
 //#include <octave/variables.h> 
-#include <octave/builtin-defun-decls.h>
+#include <octave/builtin-defun-decls.h> // Fload
 #include <iostream>
 #include <vector>
 #include <stdio.h>
@@ -14,9 +14,10 @@
 #include "constants.h"
 #include "typedefs.h"
 #include "WeightVector.h"
-#include "printing.h"
+#include "printing.hh"
 #include "utils.h"
-#include "find_w.h"
+#include "find_w.hh"
+//#include "find_w_detail.hh"
 #include "EigenOctave.h"
 
 
@@ -119,7 +120,7 @@ int main(int argc, char * argv[])
   params.eta = 0.01;
   params.min_eta = 0;
   params.class_samples = 3000;
-  params.reweight_lambda = 2;
+  params.reweight_lambda = REWEIGHT_ALL;
   params.num_threads = 1;
   params.no_projections = 1;
 

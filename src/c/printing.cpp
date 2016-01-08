@@ -36,11 +36,6 @@ void print_progress(string s, int t, int max_t)
     }
 }
 
-void print_mat_size(const Eigen::VectorXd& mat)
-{
-  cout << "(" << mat.size() << ")";
-}
-
 /********* template functions are implemented in the header
 template<typename EigenType>
 void print_mat_size(const EigenType& mat);

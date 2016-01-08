@@ -1,13 +1,13 @@
 #ifndef __PRINTING_H
 #define __PRINTING_H
+/** \file
+ * IO helpers -- not endian-safe, but please use these with portably-sized types.
+ */
 
 #include "typedefs.h"
+#include <boost/dynamic_bitset.hpp>
 #include <string>
-//#include <iosfwd>
-#include <iostream>
-
-//using Eigen::VectorXd;
-//using namespace std;
+#include <iosfwd>
 
 namespace detail {
     template<typename T> inline std::ostream& io_txt( std::ostream& os, T const& x, char const* ws="\n" );
@@ -23,35 +23,26 @@ namespace detail {
     template<> std::istream& io_bin( std::istream& is, std::string& x );
 }
 
-// *******************************
-// Prints the progress bar
+// from EigenIO.h -- actually this is generic, not related to Eigen
+// TODO portable types
+template <typename Block, typename Alloc>
+  void save_bitvector(std::ostream& out, const boost::dynamic_bitset<Block, Alloc>& bs);
+
+template <typename Block, typename Alloc>
+  int load_bitvector(std::istream& in, boost::dynamic_bitset<Block, Alloc>& bs);
+
+/** Prints the progress bar */
 void print_progress(std::string s, int t, int max_t);
 
-void print_mat_size(const Eigen::VectorXd& mat);
-
-template<typename EigenType>
-void print_mat_size(const EigenType& mat)
-{
-  using namespace std;
-  cout << "(" << mat.rows() << ", " << mat.cols() << ")";
-}
+/** "(rows,cols)" -- ok for Vector or Matrix EigenType */
+template<typename EigenType> inline void print_mat_size(const EigenType& mat);
 
 void print_report(const SparseM& x);
 
 void print_report(const DenseM& x);
 
-
-template<typename EigenType>
+template<typename EigenType> inline
 void print_report(const int projection_dim, const int batch_size,
 		  const int noClasses, const double C1, const double C2, const double lambda, const int w_size,
-		  const EigenType& x)
-{
-  using namespace std;
-  cout << "projection_dim: " << projection_dim << ", batch_size: "
-       << batch_size << ", noClasses: " << noClasses << ", C1: " << C1
-       << ", C2: " << C2 << ", lambda: " << lambda << ", size w: " << w_size << ", ";
-  print_report(x);
-  cout << "\n-----------------------------\n";
-
-}
+		  const EigenType& x);
 #endif

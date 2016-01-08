@@ -1,28 +1,52 @@
 #ifndef __EIGENOCTAVE_H
 #define __EIGENOCTAVE_H
-#include "typedefs.h"
 
-using Eigen::VectorXd;
-using Eigen::VectorXi;
+#include "typedefs.h"   // pulls in Eigen Dense and Sparse types
 
-using namespace std;
+#include <octave/oct.h>
+// NOTE: octave has its own matrix and array types, apart from Eigen:
+//    int32NDArray Matrix SparseMatrix ...
 
-void write_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose = false)
+#include <stdexcept>
+
+// TODO most of these have NOTHING to do with octave (move to EigenUtil.h or EigenIO.h ?)
+
+/** this DOES use octave */
+void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const std::string& filename, bool verbose);
+
+inline void write_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const std::string& filename, bool verbose = false)
 {
-    cerr<<" write_projections code TO BE WRITTEN"<<endl;
-    exit(-1);
+    throw std::runtime_error("Unimplemented: write_projections");
 }
 
-void read_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose = false)
+inline void read_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const std::string& filename, bool verbose = false)
 {
-    cerr<<" read_projections code TO BE WRITTEN"<<endl;
-    exit(-1);
+    throw std::runtime_error("Unimplemented: write_projections");
 }
 
+
+Matrix       toMatrix(const DenseM& data);
+SparseMatrix toMatrix(const SparseM &mat);
+
+int32NDArray toIntArray(const VectorXi& eigenVec);
+int64NDArray toInt64Array(const VectorXsz& eigenVec);
+
+VectorXd toEigenVec(const FloatNDArray& data);
+
+template<typename DenseMatType> DenseMatType                           toEigenMat(const FloatNDArray& data);
+template<typename DenseMatType> DenseMatType                           toEigenMat(const NDArray& data);
+template<typename Scalar> Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data);
+/** converts data from a cell array of vectors of the same length to
+ * a eigen dense matrix, with each vector representing a column of the
+ * matrix. Assumes the vectors are row vectors (maybe this can be relaxed)
+ * to do: include checks to make sure data is in the right format
+ * The result will be very large so we might want to avoid copying it. */
 void toEigenMat(DenseColMf& m, const Cell& data);
 
+// ------------------------- inline template impls ----------------------
+
 // templetize this and maybe use MatrixBase to avoid code dupplication
-template<typename DenseMatType>
+template<typename DenseMatType> inline 
 DenseMatType toEigenMat(const FloatNDArray& data) {
   dim_vector datasize = data.dims();
 
@@ -35,8 +59,8 @@ DenseMatType toEigenMat(const FloatNDArray& data) {
   return m;
 }
 
-// templetize this and maybe use MatrixBase to avoid code dupplication
-template<typename DenseMatType>
+// maybe use MatrixBase to avoid code dupplication
+template<typename DenseMatType> inline 
 DenseMatType toEigenMat(const NDArray& data) {
   dim_vector datasize = data.dims();
 
@@ -50,8 +74,9 @@ DenseMatType toEigenMat(const NDArray& data) {
 }
 
 
-template<typename Scalar>
+template<typename Scalar> inline
 Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data) {
+  using namespace std;
   dim_vector datasize = data.dims();
   
   std::cout << data.rows() << ", " << data.cols() << std::endl;
@@ -79,15 +104,5 @@ Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& da
   return m;
 };
 
-
-
-VectorXd toEigenVec(const FloatNDArray& data);
-
-int32NDArray toIntArray(const VectorXi& eigenVec);
-int64NDArray toInt64Array(const VectorXsz& eigenVec);
-
-Matrix toMatrix(const DenseM& data);
-
-SparseMatrix toMatrix(const SparseM &mat);
 
 #endif

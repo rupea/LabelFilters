@@ -4,12 +4,10 @@
 #include <typeinfo>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
-#include "find_w.h"
+#include "find_w.hh"
 #include "EigenOctave.h"
-//#include "parameter.h"
 
-using Eigen::VectorXd;
-
+using namespace std;
 
 void print_usage()
 {
@@ -189,7 +187,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
       tmp = parameters.contents("reweight_lambda");
       if (tmp.is_defined())
 	{
-	  params.reweight_lambda=tmp.int_value();
+	  params.reweight_lambda=static_cast<enum Reweight_Type>(tmp.int_value());
 	}
       tmp = parameters.contents("ml_wt_by_nclasses");
       if (tmp.is_defined())
