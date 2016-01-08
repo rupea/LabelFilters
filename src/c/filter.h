@@ -4,9 +4,6 @@
 #include "Eigen/Dense"
 #include <boost/dynamic_bitset.hpp>
 #include <vector>
-//using Eigen::VectorXd;
-//using namespace boost;
-//using namespace std;
 
 class Filter
 {

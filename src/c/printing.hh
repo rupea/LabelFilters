@@ -4,6 +4,8 @@
 #include "printing.h"
 #include <iostream>
 #include <stdexcept>
+#include <boost/function_output_iterator.hpp>
+#include <boost/iterator/function_input_iterator.hpp>
 
 namespace detail {
     template<typename T>
@@ -59,6 +61,61 @@ namespace detail {
         if(is.fail()) throw std::underflow_error("failed std::istream-->string-data");
         return is;
     }
+
+    // -------- helpers for boost iterator adapters --------
+    /** unary function that outputs binary 'T' to an ostream (no err check) */
+    template<typename T> struct OutBinary {
+        OutBinary( std::ostream& os ) : os(os) {}
+        void operator()( T const& t ) { os.write( reinterpret_cast<char const*>(&t), sizeof(T) ); }
+        std::ostream& os;
+    };
+    /** nullary function returning next binary 'T' from an istream (no err check) */
+    template<typename T> struct InBinary {
+        typedef T result_type;
+        InBinary( std::istream& is ) : is(is) {}
+        result_type operator()() { T t; is.read( reinterpret_cast<char*>(&t), sizeof(T) ); return t; }
+        std::istream& is;
+    };
+    // -------- boost::dynamic_bitset I/O --------------
+#define TBITSET template<typename Block, typename Alloc> inline
+#define BITSET  boost::dynamic_bitset<Block,Alloc>
+#if 0 // Oh, dynamic_bitset << and >> are provided, so default impl is OK
+    TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws/*="\n"*/ ){
+        using namespace std;
+        os<<x<<ws;
+        if(os.fail()) throw std::overflow_error("failed txt dynamic_bitset-->std::ostream");
+        return os;
+    }
+    TBITSET std::istream& io_txt( std::istream& is, BITSET      & x ){
+        using namespace std;
+        is>>x;
+        if(is.fail()) throw std::underflow_error("failed txt std::istream-->dynamic_bitset");
+        return is;
+    }
+#endif
+    TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& bs ){
+        using namespace boost;
+        io_bin(os, (uint64_t)(bs.size()));
+        io_bin(os, (uint64_t)(bs.num_blocks()));
+        to_block_range(bs, make_function_output_iterator(OutBinary< Block >(os)));
+        if(os.fail()) throw std::overflow_error("failed bitset-data-->std::ostream");
+        return os;
+        }
+    TBITSET std::istream& io_bin( std::istream& is, BITSET      & bs ){
+        using namespace boost;
+        uint64_t nbits, nblocks;
+        io_bin(is, nbits);
+        io_bin(is, nblocks);
+        bs.resize( nbits );
+        InBinary<Block> in(is);
+        from_block_range( make_function_input_iterator(in,uint64_t{0}),
+                          make_function_input_iterator(in,nblocks),
+                          bs );
+        if(is.fail()) throw std::underflow_error("failed std::istream-->bitset-data");
+        return is;
+    }
+#undef BITSET
+#undef TBITSET
 }
 
 template <typename Block, typename Alloc> inline

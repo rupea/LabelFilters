@@ -11,9 +11,9 @@
 
 namespace detail {
     template<typename T> inline std::ostream& io_txt( std::ostream& os, T const& x, char const* ws="\n" );
-    template<typename T> inline std::istream& io_txt( std::istream& is, T& x );
+    template<typename T> inline std::istream& io_txt( std::istream& is, T      & x );
     template<typename T> inline std::ostream& io_bin( std::ostream& os, T const& x );
-    template<typename T> inline std::istream& io_bin( std::istream& is, T& x );
+    template<typename T> inline std::istream& io_bin( std::istream& is, T      & x );
 
     // specializations
     //   strings as length + blob (no intervening space)
@@ -21,6 +21,17 @@ namespace detail {
     template<> std::istream& io_txt( std::istream& is, std::string& x );
     template<> std::ostream& io_bin( std::ostream& os, std::string const& x );
     template<> std::istream& io_bin( std::istream& is, std::string& x );
+
+#define TBITSET template<typename Block, typename Alloc>
+#define BITSET  boost::dynamic_bitset<Block,Alloc>
+    // dynamic_bitset has >>, << so default io_txt should be just fine
+    // BUT boost << does not skipws, so...
+    //TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws="\n" );
+    //TBITSET std::istream& io_txt( std::istream& is, BITSET      & x );
+    TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& x );
+    TBITSET std::istream& io_bin( std::istream& is, BITSET      & x );
+#undef BITSET
+#undef TBITSET
 }
 
 // from EigenIO.h -- actually this is generic, not related to Eigen
