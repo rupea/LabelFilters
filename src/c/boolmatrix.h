@@ -20,19 +20,21 @@ class boolmatrix
   size_t count() const {return _count;}
   size_t rows() const {return _nrow;}
   size_t cols() const {return _ncol;}
+  boost::dynamic_bitset<>      &  base() const {return *_data;} ///< exposed for internal I/O routines
+  boost::dynamic_bitset<> const& cbase() const {return *_data;} ///< exposed for internal I/O routines
  private:
-  boost::dynamic_bitset<>* _data;
-  size_t _nrow;
-  size_t _ncol;
-  size_t _count;
+  boost::dynamic_bitset<>* const _data; // this ptr value never changes
+  size_t const _nrow;
+  size_t const _ncol;
+  size_t _count;        ///< count of set bits
 };
 
 inline boolmatrix::boolmatrix(size_t n, size_t m)
+    : _data( new boost::dynamic_bitset<> (n*m) ),
+    _nrow ( n ),
+    _ncol ( m ),
+    _count ( 0 )
 {
-  _data = new boost::dynamic_bitset<> (n*m);
-  _nrow = n;
-  _ncol = m;
-  _count = 0;
 }
 
 inline boolmatrix::~boolmatrix()
@@ -53,7 +55,8 @@ inline void boolmatrix::set(size_t i, size_t j)
 inline void boolmatrix::set(size_t i, size_t j, bool val)
 {
   bool prev = _data->test_set(i*_ncol + j, val);
-  _count += val?(!prev):-(prev);
+  _count += val?(!prev):-(prev);        // XXX signedness, then consider _count += (int)val - (int)prev
+  // unary-minus of a bool -- is this really -1 ???
 }
 
 inline void boolmatrix::findFirst(size_t& i, size_t& j) const

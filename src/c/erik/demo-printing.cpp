@@ -21,6 +21,46 @@ int main(int,char**)
         cout<<"bitset: size="<<bs.size()<<" nblocks="<<bs.num_blocks()<<" text "<<bs;
         cout<<endl;
     }
+    if(1){
+        DenseM m;
+        m.setRandom(2,3);
+        cout<<" a random matrix... ---> DenseM.bin"<<endl;
+        cout<<m<<endl;
+        stringstream ss;
+        ss<<m;                  // OK
+        ofstream ofs("DenseM.bin");
+        eigen_io_bin(ofs,m);
+        ofs.close();
+    }
+    if(1){
+        cout<<"reading from DenseM.bin..."<<endl;
+        DenseM n(2,3);
+        n.setZero();
+        {
+            ifstream ifs("DenseM.bin");
+            eigen_io_bin(ifs,n);
+            ifs.close();
+        }
+        cout<<" done reading DenseM.bin"<<endl;
+        cout<<" read bin --->\n"<<n<<endl;
+        //ss>>n;                  // Eigen does NOT provide this
+        // error message is confusing:  cannot bind ‘std::basic_istream<char>’ lvalue to ...&&
+        //cout<<n<<endl;
+    }
+    if(1){
+        boolmatrix m(22,33);
+        m.set(2,3); m.set(2,4);
+        ofstream ofs("boolmatrix.bin");
+        io_bin(ofs,m);
+        ofs.close();
+        ifstream ifs("boolmatrix.bin");
+        boolmatrix n(22,33);    // boolmatrix dims never change
+        io_bin(ifs,n);
+        ifs.close();
+        assert( n.cbase() == m.cbase() );       // cbase returns the const boost::dynamic_bitset "base"
+    }
+
+
 
     typedef struct {
         uint32_t u;
