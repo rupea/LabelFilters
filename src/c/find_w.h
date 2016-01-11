@@ -148,7 +148,7 @@ public:
 /** for debug tests: write to sstream, read from sstream, throw if error detected */
 void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsoln::Len len);
 
-class MCsolver : public MCsoln {
+class MCsolver : private MCsoln {
 public:
 
     /** Initialize with given input data.
@@ -162,6 +162,13 @@ public:
     MCsolver( char const* solnfile = nullptr );
     ~MCsolver();
 
+    param_struct const& getParms() const {return this->parms;}
+    MCsoln       const& getSoln()  const {return *this;}
+    void read( std::istream& is )
+    { MCsoln::read(is); }
+    void write( std::ostream& os, enum Fmt fmt=BINARY, enum Len len=SHORT ) const
+    { MCsoln::write(os,fmt,len); }
+
     /** solve for MCFilter's optimal multi-class discriminating projections.
      * \p x     training data, row-wise examples of dimension MCsoln::d
      * \p y     data classes, (should this be a vector? why a bool matrix?)
@@ -172,9 +179,12 @@ public:
      * \sa vectorToLabel to convert from y VectorXi of class numbers.
      * \internal
      * - Is there any benefit from y as vector of class numbers?
+     *
+     * - NOTE: EIGENTYPE DenseM and SparseM are provided by the default library,
+     *         so you only need find_w.hh if you have some \em strange type
      */
     template< typename EIGENTYPE >
-        int solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* = nullptr );
+        void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* const params_arg = nullptr );
 };
 #endif // proposed
 #endif // __FIND_W_H

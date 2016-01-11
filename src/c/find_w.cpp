@@ -27,6 +27,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                         const SparseMb& y,
                         const param_struct& params);
 
+template
+void MCsolver::solve( DenseM const& x, SparseMb const& y, param_struct const* const params_arg );
+template
+void MCsolver::solve( SparseM const& x, SparseMb const& y, param_struct const* const params_arg );
+
 // -------- MCsoln I/O --------
 using namespace std;
 using namespace detail;     // see printing.h

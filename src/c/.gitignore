@@ -12,10 +12,10 @@ demo-io.log
 demo-printing
 demo-printing.log
 demo-quick.log
-test.bin
 test.txt
-parms.bin
 parms.txt
+DenseM.txt
+VectorXd.txt
 evaluate_projection
 learn_projection
 oct_evaluate_model.oct
