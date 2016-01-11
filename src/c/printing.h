@@ -35,10 +35,18 @@ namespace detail {
 #undef BITSET
 #undef TBITSET
 
+    // std::array (fixed-size array, so size N is not part of stream)
+#define TARRAY template<class T, std::size_t N>
+    TARRAY std::ostream& io_txt( std::ostream& os, std::array<T,N> const& x, char const* ws="\n" );
+    TARRAY std::istream& io_txt( std::istream& is, std::array<T,N>      & x );
+    TARRAY std::ostream& io_bin( std::ostream& os, std::array<T,N> const& x );
+    TARRAY std::istream& io_bin( std::istream& is, std::array<T,N>      & x );
+#undef TARRAY
+
     /** boolmatrix i/o.
      * - boolmatrix is NOT dynamically sized, so on input, the "dimensions"
      *   MUST already be known. So:
-     *   - [*] DO NOT store rows, cols ...
+     *   - [*] DO NOT store rows, cols --> trivial equiv. of i/o with boolmatrix::[c]base()
      *   - or STORE them and use throw on mismatch. */
     template<> std::ostream& io_txt( std::ostream& os, boolmatrix const& x, char const* ws/*="\n"*/ );
     template<> std::istream& io_txt( std::istream& is, boolmatrix& x );
@@ -48,12 +56,25 @@ namespace detail {
     // Eigen DENSE matrix/vector/array
     // Note: RAW data i/o only -- transpose flags etc. will not be stored) Also see
     // http://stackoverflow.com/questions/22725867/eigen-type-deduction-in-template-specialization-of-base-class
+    /** \name Eigen I/O
+     * - Eigen I/O for matrices [vectors] always with prepended row,col dimension.
+     * - If dimensions known before-hand \em could have a different set of I/O routines
+     * - Vectors get stored as single-column matrix.
+     */
+    //@{
 #define TMATRIX template<typename Derived>
 #define MATRIX  Eigen::PlainObjectBase< Derived >
     TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x );
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x );
+    /** text with prepended dimensions.
+     * - io_txt \em might compile for operator<<
+     *   - but won't output the dimensions
+     * - and operator>> is missing. */
+    TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws="\n" );
+    TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x );
 #undef MATRIX
 #undef TMATRIX
+    //@}
 }
 
 // from EigenIO.h -- actually this is generic, not related to Eigen

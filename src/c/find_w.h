@@ -4,6 +4,7 @@
 #include "typedefs.h"
 #include "parameter.h"
 #include <iosfwd>
+#include  <array>
 
 /**
  * Solve the optimization using the gradient descent on hinge loss.
@@ -46,12 +47,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
  *   - \c param_struct of last call to MCsolveMCsolver::solve()
  *   - some <em>final iteration</em> values
  *   - {w,l,u,obj} data outputs of time-average solution
- *   - [opt. if fmt=="long"] {w,l,u,obj} of final iteration
+ *   - [opt. if len=="long"] {w,l,u,obj} of final iteration
  * - during MCsolver::solve, we need the "long" format,
  *   but the solution can still be saved to disk in "short" 
  */
 class MCsoln {
-    enum Fmt : char { SHORT, LONG };
+public:
+    enum Len : char { /*default*/SHORT, LONG };
+    enum Fmt : char { /*default*/BINARY, TEXT };
 
     /** Construct to begin a solution from scratch.
      * - Unknown hdr dims filled in during solve (know training data)
@@ -62,43 +65,34 @@ class MCsoln {
     /** Construct from solution file. */
     MCsoln( char const* solnfile );
 
-    /// \name i/o
+    /// \name i/o, throw on error
     //@{
+public:
+    void read( std::istream& is );
+    void write( std::ostream& os, enum Fmt fmt=BINARY, enum Len len=SHORT ) const;
+
+private: // after the 4-byte magic header we specialize I/O routines
     void read_ascii( std::istream& is );
     void read_binary( std::istream& is );
-    void write_ascii( std::ostream& is );
-    void write_binary( std::ostream& is );
-#if 0
-    /** read/write dimensionality and final iteration t settings.
-     * - Header data is just a few bytes, so even if we never resume/continue
-     *   the optimization, it's cheap to keep around.
-     */
-    void rfile_hdr_ascii( std::istream& is );
-    void rfile_hdr_binary( std::istream& is );
-    void rfile_hdr_ascii( std::ostream& is );
-    void rfile_hdr_binary( std::ostream& is );
-    /** read/write binary {w,l,u,obj} data blob[s].
-     * - If \c fmt == <em>"short"</em> then read/write just time-averaged data blob
-     * - If \c fmt == <em>"long"</em> then read the unaveraged version of the blob too.
-     *   - <em>"long"</em> is about TWICE as long as <em>"short"</em> !
-     *   - reading <em>"long"</em> ignores missing <em>"long"</em> data.
-     *   - i.e. init the time t data equiv to the time-averaged data
-     */
-    void rfile_data_ascii( std::istream& is, std::string const fmt );
-    void rfile_data_binary( std::istream& is, std::string const fmt );
-    void rfile_data_ascii( std::ostream& is, std::string const fmt );
-    void rfile_data_binary( std::ostream& is, std::string const fmt );
-#endif
+    void write_ascii( std::ostream& is, enum Len len=SHORT ) const;
+    void write_binary( std::ostream& is, enum Len len=SHORT ) const;
+    static std::array<char,4> magicTxt; ///< MCst text?
+    static std::array<char,4> magicBin; ///< MCsb binary?
+    static std::array<char,4> magicCnt; ///< MCsc continue?
+    static std::array<char,4> magicEof; ///< MCsz eof?
+public:
     //@}
-
-    /// \name dimensionality constants for binary save/restart data.
+    // -------- data layout --------
+    /// \name header, esp dimensionality constants for binary save/restart data.
     /// These always match the matrix/vector data
     //@{
+private:
+    mutable std::array<char,4> magicHdr;        ///< required -- MCst / MCsb text or binary ?
+public:
     uint32_t d;                         ///< d is x.cols example dimensionality
     uint32_t nProj;                     ///< w is d x nProj
     uint32_t nClass;                    ///< l and u are nClass x nProj, objective[nClass]
     std::string fname;                  ///< name of solution file (or empty)
-    enum Fmt fmt;                       ///< "short"(avg only) or "long" (avg + time-t data)
     //@}
 
     /// \name parameters used for last/current call to MCsolver::solve(...)
@@ -118,27 +112,41 @@ class MCsoln {
     // add more, moving the solve_optimization local vars up here ...
     //@}
 
-    /// \name Fmt==SHORT data.
+    /// \name Len==SHORT data.
     //@{
+private:
+    mutable std::array<char,4> magicData;                  ///< MCsc
 public:
     DenseM weights_avg;                 ///< [ d x nProj ] time-avg'd projection matrix
     DenseM lower_bounds_avg;            ///< [ nClass x nProj ]
     DenseM upper_bounds_avg;            ///< [ nClass x nProj ]
+private:
+    mutable std::array<char,4> magicEof1;                  ///< MCs{c|z}
+public:
     //VectorXd& objective_val_avg; // hmmm. this is optional, I guess
     //@}
-    /// \name Fmt==LONG data.
+    /// \name Len==LONG data.
     /// - Optional -- can be written/read as empty vectors
     /// - resized as neces
     //@{
-    VectorXd& objective_val_avg;        ///< [ nClass ] objective values
+    VectorXd objective_val_avg;         ///< [ nClass ] objective values
+private:
+    mutable std::array<char,4> magicEof2;                  ///< MCs{c|z} no enum Len for ending here [yet]
+public:
 
     DenseM weights;                     ///< final iteration data
     DenseM lower_bounds;                ///< final iteration data
     DenseM upper_bounds;                ///< final iteration data
-    VectorXd& objective_val;            ///< final iteration data
+    VectorXd objective_val;             ///< final iteration data
+private:
+    mutable std::array<char,4> magicEof3;                  ///< MCsz
+public:
     //@}
 
 };
+
+/** for debug tests: write to sstream, read from sstream, throw if error detected */
+void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsoln::Len len);
 
 class MCsolver : public MCsoln {
 public:

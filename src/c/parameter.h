@@ -33,7 +33,7 @@ enum Reweight_Type
 {
     REWEIGHT_NONE,      ///< do not diminish any
     REWEIGHT_LAMBDA,    ///< diminish lambda only [*]
-    REWEIGHT_ALL        ///< diminish lambda and C1, increase C2
+    REWEIGHT_ALL        ///< diminish lambda and C1 ", increase C2" <-- NOT DONE !!!"
 };
 
 

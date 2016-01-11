@@ -118,6 +118,39 @@ namespace detail {
     }
 #undef BITSET
 #undef TBITSET
+#define TARRAY template<class T, std::size_t N> inline
+    TARRAY std::ostream& io_txt( std::ostream& os, std::array<T,N> const& x, char const* ws/*="\n"*/ ){
+        for(auto const& t: x ) io_txt(os,t,ws);
+        return os;
+    }
+    TARRAY std::istream& io_txt( std::istream& is, std::array<T,N>      & x ){
+        for(auto & t: x) io_txt(is,t);
+        return is;
+    }
+    TARRAY std::ostream& io_bin( std::ostream& os, std::array<T,N> const& x ){
+        for(auto const& t: x) io_bin(os,t);
+        return os;
+    }
+    TARRAY std::istream& io_bin( std::istream& is, std::array<T,N>      & x ){
+        for(auto & t: x) io_bin(is,t);
+        return is;
+    }
+    // specialization array<char,N> does not need space between every char
+    template< std::size_t N > inline
+        std::ostream& io_txt( std::ostream& os, std::array<char,N> const& x, char const* ws/*="\n"*/ ){
+            io_bin( os, x );
+            os<<ws;
+            return os;
+        }
+    template< std::size_t N > inline
+        std::istream& io_txt( std::istream& is, std::array<char,N>      & x ){
+            is>>std::skipws;
+            io_bin( is, x );
+            return is;
+        }
+
+#undef TARRAY
+
     template<> inline std::ostream& io_txt( std::ostream& os, boolmatrix const& x, char const* ws/*="\n"*/ ){
         io_txt(os, x.cbase(), ws);
         return os;
@@ -137,9 +170,40 @@ namespace detail {
 
 #define TMATRIX template<typename Derived>
 #define MATRIX  Eigen::PlainObjectBase< Derived >
+#if 1
+    // Ohoh, but compiler needs help to resolve template types...
+    TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws/*="\n"*/ ){
+        using namespace std;
+        uint64_t rows = x.rows();
+        uint64_t cols = x.cols();
+        //cout<<" eigen_io_txt( "<<rows<<" x "<<cols<<" ): ";
+        os<<x.rows()<<' '<<x.cols();
+        size_t const sz = size_t(rows)*size_t(cols);
+        typename MATRIX::Scalar const* data = x.data();
+        for(size_t i=0U; i<sz; ++i)
+            os << ' ' << *data++;
+        os<<ws;
+        return os;
+    }
+    TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x ){
+        using namespace std;
+        // is.operator>>( MATRIX ) is NOT AVAILABLE in Eigen
+        //cout<<" eigen_io_txt MATRIX-input ";
+        uint64_t rows,cols;
+        io_txt(is,rows);
+        io_txt(is,cols);
+        //cout<<" \trows "<<rows<<" cols "<<cols<<endl;
+        x.resize(rows,cols);
+        size_t const sz = size_t(rows)*size_t(cols);
+        typename MATRIX::Scalar * data = x.data();
+        for(size_t i=0U; i<sz; ++i)
+            is >> *data++;
+        return is;
+    }
+#endif
     TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x ){
         using namespace std;
-        cout<<" MATRIX-output rows "<<x.rows()<<" cols "<<x.cols()<<endl;
+        //cout<<" MATRIX-output rows "<<x.rows()<<" cols "<<x.cols()<<endl;
         // well, actually rows,cols are of typename MATRIX::INDEX
         uint64_t rows = x.rows();
         uint64_t cols = x.cols();
@@ -150,11 +214,11 @@ namespace detail {
     }
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x ){
         using namespace std;
-        cout<<" MATRIX-input"<<endl;
+        //cout<<" MATRIX-input"<<endl;
         uint64_t rows,cols;
         io_bin(is,rows);
         io_bin(is,cols);
-        cout<<" \trows "<<rows<<" cols "<<cols<<endl;
+        //cout<<" \trows "<<rows<<" cols "<<cols<<endl;
         x.resize(rows,cols);
         io_bin(is,(void*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
         return is;

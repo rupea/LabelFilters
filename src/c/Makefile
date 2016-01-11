@@ -125,4 +125,5 @@ demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 
 clean: 
 	rm -f *.o *.lo learn_projection evaluate_projection run_kmeans demo-quick demo-proj demo-proj-dbg libmcfilter*.a libmcfilter*.so
-	rm -f demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log
+	rm -f demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log run_LPSR
+	$(MAKE) -f Makefile.octave clean

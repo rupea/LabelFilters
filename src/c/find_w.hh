@@ -217,11 +217,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                 // if weighting is done, the number is different
                 // eliminating one example -class pair removes nclass(exmple) potential
                 // if the class not among the classes of the example
-                if (params.reweight_lambda)
+                if (params.reweight_lambda != REWEIGHT_NONE)
                 {
                     long int no_remaining = total_constraints - no_filtered;
                     lambda = no_remaining*1.0/(total_constraints*params.C2);
-                    if (params.reweight_lambda == 2)
+                    if (params.reweight_lambda == REWEIGHT_ALL)
                     {
                         C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                     }
@@ -687,11 +687,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
             // if weighting is done, the number is different
             // eliminating one example -class pair removes nclass(exmple) potential
             // if the class not among the classes of the example
-            if (params.reweight_lambda)
+            if (params.reweight_lambda != REWEIGHT_NONE)
             {
                 long int no_remaining = total_constraints - no_filtered;
                 lambda = no_remaining*1.0/(total_constraints*params.C2);
-                if (params.reweight_lambda == 2)
+                if (params.reweight_lambda == REWEIGHT_ALL)
                 {
                     C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                 }

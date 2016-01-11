@@ -1,4 +1,6 @@
 demo-proj
+*.bin
+*.diff
 demo-proj-dbg
 demo-proj-O3
 demo-quick
@@ -23,3 +25,13 @@ oct_normalize_data.oct
 oct_predict_data.oct
 oct_project_data.oct
 run_LPSR
+demo-proj.O3
+demo-proj.O3.log
+demo-proj.native
+demo-proj.native.log
+demo-proj.omp1.log
+demo-proj.omp4.log
+demo-proj.omp4a.log
+demo-proj.omp4b.log
+demo-proj.omp4c.log
+

@@ -33,19 +33,103 @@ int main(int,char**)
         ofs.close();
     }
     if(1){
-        cout<<"reading from DenseM.bin..."<<endl;
+        cout<<"reading from DenseM.bin...";
         DenseM n(2,3);
         n.setZero();
         {
-            ifstream ifs("DenseM.bin");
+            ifstream ifs; ifs.open("DenseM.bin");
             eigen_io_bin(ifs,n);
             ifs.close();
         }
-        cout<<" done reading DenseM.bin"<<endl;
+        cout<<" done reading DenseM.bin ";
         cout<<" read bin --->\n"<<n<<endl;
         //ss>>n;                  // Eigen does NOT provide this
         // error message is confusing:  cannot bind ‘std::basic_istream<char>’ lvalue to ...&&
         //cout<<n<<endl;
+    }
+    if(1){
+        DenseM m;
+        m.setRandom(2,3);
+        cout<<"\na random matrix... ---> DenseM.txt"<<endl;
+        cout<<m<<endl;  // NOT enough -- it does not output the dimensions
+        eigen_io_txt(cout,m);
+        stringstream ss;
+        ss<<m;                  // OK
+        {
+            ofstream ofs("DenseM.txt");
+            eigen_io_txt(ofs,m);  // WRONG: does not save size
+            ofs.close();
+        }
+        cout<<"reading from DenseM.txt...";
+        DenseM n(2,3);
+        n.setZero();
+        //cout<<" orig n(2,3) --->\n"<<n<<endl;
+        {
+            ifstream ifs("DenseM.txt");
+            eigen_io_txt(ifs,n);
+            ifs.close();
+        }
+        cout<<" done reading DenseM.txt ";
+        cout<<" read txt --->\n"<<n<<endl;
+        //ss>>n;                  // Eigen does NOT provide this
+        // error message is confusing:  cannot bind ‘std::basic_istream<char>’ lvalue to ...&&
+        //cout<<n<<endl;
+        assert(n.rows() == m.rows());
+        assert(n.cols() == m.cols());
+        for(uint32_t r=0U; r<m.rows(); ++r)
+            for(uint32_t c=0U; c<m.cols(); ++c)
+                assert( fabs(m(r,c)-n(r,c))<1.e-6 );
+    }
+    if(1){
+        VectorXd m;
+        m.setRandom(3);
+        cout<<"\na random vector... ---> VectorXd.txt "<<endl;
+        cout<<m.transpose()<<endl;  // NOT enough -- it does not output the dimensions
+        eigen_io_txt(cout,m);
+        stringstream ss;
+        ss<<m;                  // OK
+        {
+            ofstream ofs("VectorXd.txt");
+            eigen_io_txt(ofs,m);  // WRONG: does not save size
+            ofs.close();
+        }
+        cout<<"reading from VectorXd.txt...";
+        VectorXd n(3);
+        n.setZero();
+        //cout<<" orig n(3).transpose() ---> "<<n.transpose()<<endl;
+        {
+            ifstream ifs("VectorXd.txt");
+            eigen_io_txt(ifs,n);
+            ifs.close();
+        }
+        cout<<" done reading VectorXd.txt";
+        cout<<" ---> n.transpose =\n"<<n.transpose()<<endl;
+        assert(n.size() == m.size());
+        for(uint32_t i=0U; i<m.size(); ++i) assert( fabs(m[i]-n[i])<1.e-6 );
+    }
+    if(1){
+        VectorXd m;
+        m.setRandom(3);
+        cout<<"\na random vector... ---> VectorXd.bin, ";
+        cout<<"m.transpose = "<<m.transpose()<<endl;  // NOT enough -- no dims output
+        {
+            ofstream ofs("VectorXd.bin");
+            eigen_io_bin(ofs,m);  // WRONG: does not save size
+            ofs.close();
+        }
+        cout<<"reading from VectorXd.bin...";
+        VectorXd n(2);
+        n.setZero();
+        //cout<<" orig n(2).transpose() ---> "<<n.transpose()<<endl;
+        {
+            ifstream ifs("VectorXd.bin");
+            eigen_io_bin(ifs,n);
+            ifs.close();
+        }
+        cout<<" done reading VectorXd.bin ";
+        cout<<" read bin ---> n.transpose = "<<n.transpose()<<endl;
+        assert(n.size() == m.size());
+        for(uint32_t i=0U; i<m.size(); ++i) assert( fabs(m[i]-n[i])<1.e-6 );
     }
     if(1){
         boolmatrix m(22,33);
