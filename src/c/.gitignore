@@ -12,6 +12,8 @@ demo-io.log
 demo-printing
 demo-printing.log
 demo-quick.log
+demo-mcsolver
+demo-mcsolver.log
 test.txt
 parms.txt
 DenseM.txt

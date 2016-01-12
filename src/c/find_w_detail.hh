@@ -5,76 +5,91 @@
  */
 
 #include "find_w_detail.h"                      // internal functions
-#include <boost/numeric/conversion/bounds.hpp>  // boost::numeric::bounds<T>
+//#include <boost/numeric/conversion/bounds.hpp>  // boost::numeric::bounds<T>
 //#include <boost/limits.hpp>     // boost::numeric::bounds<T>
 //#include <iosfwd>                             // std::cerr
 #include <iostream>                             // std::cerr
 
+/** initialize projection vector \c w prior to calculating \c weights[*,projection_dim].
+ * \p w         WeightedVector for SGD iterations
+ * \p x         nExamples x d training data (each row is one input vector)
+ * \p y         bool matrix of class info
+ * \p nc        number of examples in each class
+ * \p weights   d x projections matrix of col-wise projection vectors
+ * \p projection_dim the column of weights for which we are initializing \c w
+ */
     template<typename EigenType>
-void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc,
-             const WeightVector& w,
-             EigenType& x, const SparseMb& y)
+void init_w( WeightVector& w,
+             EigenType const& x, SparseMb const& y, VectorXi const& nc,
+             DenseM const& weights, int const projection_dim)
 {
-    size_t noClasses = y.cols();
-    size_t n = x.rows();
-    size_t c,i,k;
-    double pr;
-    means.resize(noClasses);
-    means.setZero();
-    for (k = 0; k < noClasses; k++)
-    {
-        // need /10 because octave gives an error when reading the saved file otherwise.
-        // this should not be a problem. If this is a problem then we have bigger issues
-        l(k)=boost::numeric::bounds<double>::highest()/10;
-        u(k)=boost::numeric::bounds<double>::lowest()/10;
-    }
-    VectorXd projection;
-    w.project(projection,x);
-    for (i=0;i<n;i++)
-    {
-        for (SparseMb::InnerIterator it(y,i);it;++it)
-        {
-            if (it.value())
-            {
-                c = it.col();
-                pr = projection.coeff(i);
-                means(c)+=pr;
+    using namespace std;
+    //cout<<" init_w : rand"; cout.flush();
+    int const d = x.cols();
+    int const noClasses = y.cols();
+    assert( projection_dim < weights.cols() );
 
-                l(c)=pr<l(c)?pr:l(c);
-                u(c)=pr>u(c)?pr:u(c);
-            }
+    VectorXd init(d);
+    //init.setZero();
+    init.setRandom(); init.normalize();
+
+    if(1){
+        //cout<<" + vector-between-2-classes"; cout.flush();
+        // initialize w as vector between the means of two random classes.
+        // should find cleverer initialization schemes
+        int c1, c2, tries=0;
+        do{
+            c1 = ((int) rand()) % noClasses;
+            ++tries;
+        }while( nc(c1) == 0 && tries < 10 );
+        do{
+            c2 = ((int) rand()) % noClasses;
+            ++tries;
+        }while( (nc(c2) == 0 || c2 == c1) && tries < 50 );
+        if( nc(c1) > 0 && nc(c2) > 0 && c2 != c1 ){
+            VectorXd difference;
+            difference_means(difference,x,y,nc,c1,c2);
+            //cout<<" init["<<init.rows()<<"x"<<init.cols()<<"]"
+            //    <<" difference["<<difference.rows()<<"x"<<difference.cols()<<"]"; cout.flush();
+            assert( difference.rows() == init.rows() );
+            assert( difference.cols() == init.cols() );
+            init.array() += difference.array()*(10.0/difference.norm()); // 10 ? perhaps match margins?
         }
     }
-    for (k = 0; k < noClasses; k++)
-    {
-        means(k) /= nc(k);
+
+    if(1){ // I think starting w should be ~ orthogonal to previous projections.
+        //cout<<" + orthogal to prev"; cout.flush();
+        // orthogonalize to current projection dirns w[*, col<projection_dim]
+        project_orthogonal( init, weights, projection_dim );
+        double inorm = init.norm();
+        if( init.norm() < 1.e-6 ) {init.setRandom(); init.normalize();}
+        else                      {init *= (1.0 / inorm);}
     }
+    //cout<<endl;
+
+    w = WeightVector(init);
+    // w.setRandom(); // initialize to a random value
 }
 
     template<typename EigenType>
 void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y, const VectorXi& nc, const int c1, const int c2)
 {
-    size_t d = x.cols();
-    size_t n = x.rows();
+    size_t const d = x.cols();
+    size_t const n = x.rows();
     difference.resize(d);
     difference.setZero();
-    for (size_t row=0;row<n;row++)
-    {
-        if (y.coeff(row,c1))
-        {
+    double wt1 = 1.0 / nc(c1);
+    double wt2 = 1.0 / nc(c2);
+    for (size_t row=0;row<n; ++row) {
+        if (y.coeff(row,c1)) {
             typename EigenType::InnerIterator it(x,row);
             for (; it; ++it)
-            {
-                difference.coeffRef(it.col())+=(it.value()/nc(c1));
-            }
+                difference.coeffRef(it.col())+=it.value()*wt1;
         }
-        if (y.coeff(row,c2))
-        {
+        if (y.coeff(row,c2)) {
             typename EigenType::InnerIterator it(x,row);
             for (; it; ++it)
-            {
-                difference.coeffRef(it.col())-=(it.value()/nc(c2));
-            }
+                difference.coeffRef(it.col())-=it.value()*wt2;
         }
     }
 }
@@ -311,10 +326,9 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
                           const VectorXi& nclasses, const int maxclasses,
                           const std::vector<int>& sorted_class, const std::vector<int>& class_order,
                           const boolmatrix& filtered,
-                          const int idx_chunks, const size_t sc_chunks,
+                          const size_t sc_chunks, const size_t sc_chunk_size, const size_t sc_remaining,
+                          const int idx_chunks, const int idx_chunk_size, const int idx_remaining,
                           MutexType* idx_locks, MutexType* sc_locks,
-                          const int idx_chunk_size, const int idx_remaining,
-                          const size_t sc_chunk_size, const size_t sc_remaining,
                           const param_struct& params)
 {
     // use statics to avoid the cost of alocation at each iteration?

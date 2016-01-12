@@ -169,29 +169,29 @@ int main(int,char**)
 
   // Starting off a new calculation:
   srand(rand_seed);
+
+  cout<<"  pre-run call to rand() returns "<<rand()<<endl;
 #if 0
-  int const k = 5U;             // number of classes
-  int const p = params.no_projections;
-  //DenseM weights(d,p), lower_bounds(k,p), upper_bounds(k,p);
-  //DenseM w_avg(d,p), l_avg(k,p), u_avg(k,p);
-  //VectorXd objective_val, o_avg;
-  weights.setRandom();
-  lower_bounds.setZero();
-  upper_bounds.setZero();
-  w_avg.setRandom();    // ???
-  l_avg.setZero();
-  u_avg.setZero();
-#else
+  // these calls are important so that the compiler instantiates the right templates
   DenseM weights, lower_bounds, upper_bounds;
   DenseM w_avg, l_avg, u_avg;
   VectorXd objective_val, o_avg;
-#endif
-
-  cout<<"  pre-run call to rand() returns "<<rand()<<endl;
-  // these calls are important so that the compiler instantiates the right templates
   solve_optimization(weights,lower_bounds,upper_bounds,objective_val
                      ,w_avg,l_avg,u_avg,o_avg
                      ,x,y,params);
+#else
+  MCsolver mc;
+  mc.solve( x, y, &params );
+  MCsoln      & soln = mc.getSoln();
+  DenseM      & weights = soln.weights;
+  DenseM const& lower_bounds = soln.lower_bounds;
+  DenseM const& upper_bounds = soln.upper_bounds;
+  //DenseM const& w_avg = soln.weights_avg;
+  //DenseM const& l_avg = soln.lower_bounds_avg;
+  //DenseM const& u_avg = soln.upper_bounds_avg;
+  //VectorXd const& objective_val = soln.objective_val;
+  //VectorXd const& objective_val_avg = soln.objective_val_avg;
+#endif
 
   cout<<" post-run call to rand() returns "<<rand()<<endl;
   cout<<" quick demo of 3 translations of a "<<x_msg<<" along the x axis"<<endl;

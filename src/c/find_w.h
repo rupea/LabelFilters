@@ -16,11 +16,11 @@
  *  \p weights          inout: d x p matrix, init setRandom
  *  \p lower_bounds     inout: k x p matrix, init setZero
  *  \p upper_bounds     inout: k x p matrix, init setZero
- *  \p objective_val    out:  VectorXd(k)
+ *  \p objective_val    out:  VectorXd(k...) (a growing history)
  *  \p w_avg            inout: d x p matrix, init setRandom
  *  \p l_avg            inout: k x p matrix, init setZero
  *  \p u_avg            inout: k x p matrix, init setZero
- *  \p object_val_avg   out: VectorXd(k)
+ *  \p object_val_avg   out: VectorXd(k) (a growing history)
  *  \p x                in: X x d, X d-dim training examples
  *  \p y                in: X x 1, X labels of each training example
  *  \p params           many parameters, eg from set_default_params()
@@ -62,8 +62,8 @@ public:
      */
     MCsoln();
 
-    /** Construct from solution file. */
-    MCsoln( char const* solnfile );
+    // /** Construct from solution file. */
+    // MCsoln( char const* solnfile );
 
     /// \name i/o, throw on error
     //@{
@@ -148,6 +148,13 @@ public:
 /** for debug tests: write to sstream, read from sstream, throw if error detected */
 void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsoln::Len len);
 
+/** Provide a simpler API for solving.
+ * - The long \c solve template is now in a 'detail' header,
+ * - The library explicitly instiates for input data \c DenseM and SparseM.
+ * - So no long headers are required to compile if you link with the library.
+ *
+ * - \b NOTE: eventually, one might move some of the other utility routines here ?
+ */
 class MCsolver : private MCsoln {
 public:
 
@@ -159,11 +166,12 @@ public:
      *       Initially just copy solve_optimization code until we can
      *       deprecate the original (which is needed for the octave api).
      */
-    MCsolver( char const* solnfile = nullptr );
+    MCsolver( char const* const solnfile = nullptr );
     ~MCsolver();
 
     param_struct const& getParms() const {return this->parms;}
     MCsoln       const& getSoln()  const {return *this;}
+    MCsoln            & getSoln()        {return *this;}
     void read( std::istream& is )
     { MCsoln::read(is); }
     void write( std::ostream& os, enum Fmt fmt=BINARY, enum Len len=SHORT ) const
@@ -180,8 +188,8 @@ public:
      * \internal
      * - Is there any benefit from y as vector of class numbers?
      *
-     * - NOTE: EIGENTYPE DenseM and SparseM are provided by the default library,
-     *         so you only need find_w.hh if you have some \em strange type
+     * - NOTE: EIGENTYPE \c DenseM and \c SparseM are provided by the default library.
+     *   - Please only include \c find_w_detail.hh for \em strange 'x' types.
      */
     template< typename EIGENTYPE >
         void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* const params_arg = nullptr );

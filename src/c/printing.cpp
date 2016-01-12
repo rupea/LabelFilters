@@ -41,14 +41,30 @@ template<typename EigenType>
 void print_mat_size(const EigenType& mat);
 **********/
 
-void print_report(const SparseM& x)
+std::string print_report(const SparseM& x)
 {
+  ostringstream oss;
   int nnz = x.nonZeros();
-  cout << "x:non-zeros: " << nnz << ", avg. nnz/row: " << nnz / x.rows();
+  oss << "x:non-zeros: " << nnz << ", avg. nnz/row: " << nnz / x.rows();
+  return oss.str();
 }
 
-void print_report(const DenseM& x)
+std::string print_report(const DenseM& x)
 {
+  return std::string();
+}
+
+void print_report(const int projection_dim, const int batch_size,
+                  const int noClasses, const double C1, const double C2, const double lambda, const int w_size,
+                  std::string x_report) //const EigenType& x)
+{
+    using namespace std;
+    cout << "projection_dim: " << projection_dim << ", batch_size: "
+        << batch_size << ", noClasses: " << noClasses << ", C1: " << C1
+        << ", C2: " << C2 << ", lambda: " << lambda << ", size w: " << w_size;
+    if(x_report.size()) cout<< ", "<<x_report; // print_report(x);
+    cout << "\n-----------------------------\n";
+
 }
 
 /********* template functions are implemented in the header

@@ -82,7 +82,7 @@ typedef struct
   bool remove_class_constraints; ///< whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. 
   Reweight_Type reweight_lambda; ///< whether to diminish lambda (increase C1 and C2) as constraints are eliminated;
   Reorder_Type reorder_type; ///< whether to rank the classes by the mean of the projected examples or by the midpoint of its [l,u] interval (i.e. (u+l)/2).
-  bool ml_wt_by_nclasses; ///< whether to weight an example by the number of classes it belongs to when conssidering other class contraints. 
+  bool ml_wt_by_nclasses; ///< whether to weight an example by the number of classes it belongs to when conssidering other class contraints
   bool ml_wt_class_by_nclasses; ///< whether to weight an example by the number of classes it belongs to when conssidering its class contraints. 
   uint32_t num_threads; ///< number of threads to run on (0 for max threads)
   uint32_t seed; ///< the random seed. if 0 then ititialized from time.

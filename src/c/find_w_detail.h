@@ -9,15 +9,23 @@
 
 // ------------- templated for input data = SparseM or DenseM -----------------
 
+    template<typename EigenType>
+void init_w( WeightVector& w,
+             EigenType const& x, SparseMb const& y, VectorXi const& nc,
+             DenseM const& weights, int const projection_dim);
+
+#if 0
 /** Initializes the lower and upper bound */
 template<typename EigenType>
 void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc,
-	     const WeightVector& w,
-	     EigenType& x, const SparseMb& y);
+             const WeightVector& w,
+             EigenType& x, const SparseMb& y);
+#endif
 
 /** function to calculate the difference vector beween the mean vectors of two classes */
 template<typename EigenType>
-  void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y, const VectorXi& nc, const int c1, const int c2);
+void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y,
+                      const VectorXi& nc, const int c1, const int c2);
 
 
 /** check the gradient calculation using finite differences */
@@ -56,10 +64,9 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
 		      const VectorXi& nclasses, const int maxclasses,
 		      const std::vector<int>& sorted_class, const std::vector<int>& class_order,
 		      const boolmatrix& filtered,
-		      const int idx_chunks, const size_t sc_chunks,
-		      MutexType* idx_locks, MutexType* sc_locks,
-		      const int idx_chunk_size, const int idx_remaining,
-		      const size_t sc_chunk_size, const size_t sc_remaining,
+                      const size_t sc_chunks, const size_t sc_chunk_size, const size_t sc_remaining,
+                      const int idx_chunks, const int idx_chunk_size, const int idx_remaining,
+                      MutexType* idx_locks, MutexType* sc_locks,
 		      const param_struct& params);
 //
 // ******************************
@@ -70,8 +77,8 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
 // this might be a costly operation that might be not needed
 // we'll implement this when we get there
 
-// void project_orthogonal(VectorXd& w, const DenseM& weights,
-// 			const size_t& projection_dim);
+void project_orthogonal( VectorXd& w, const DenseM& weights,
+			 const int& projection_dim);
 
 /** function to set eta for each iteration */
 double set_eta(param_struct const& params, size_t t, double lambda);
@@ -79,6 +86,13 @@ double set_eta(param_struct const& params, size_t t, double lambda);
 /** Compute the means of the classes of the projected data */
 void proj_means(VectorXd& means, const VectorXi& nc,
 		const VectorXd& projection, const SparseMb& y);
+
+/** Initialize l, u and means.
+ * \p projection is the projection of every example x onto w
+ */
+void init_lu( VectorXd& l, VectorXd& u, VectorXd& means,
+              enum Reorder_Type const reorder_type, VectorXd const& projection,
+              SparseMb const& y, VectorXi const& nc );
 
 /** Update the filtered constraints */
 void update_filtered(boolmatrix& filtered, const VectorXd& projection,

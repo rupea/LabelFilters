@@ -73,7 +73,7 @@ DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
-check-headers: boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h
+check-headers: mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
 		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
@@ -91,6 +91,7 @@ do-tests: | lib demo-printing demo-io
 	./demo-quick > demo-quick.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
+	./demo-mcsolver > demo-mcsolver.log 2>&1
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 LIB_CPPFILES:=find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
@@ -117,6 +118,9 @@ demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
 # Note: inside eigen, there are signed vs. unsigned issues (error=sign-compare)
 demo-quick: | libmcfilter-dbg.a
 demo-quick: erik/demo-quick.cpp libmcfilter-dbg.a
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
+demo-mcsolver: | libmcfilter-dbg.a
+demo-mcsolver: erik/demo-mcsolver.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 demo-printing: erik/demo-printing.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^

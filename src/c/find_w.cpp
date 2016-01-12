@@ -1,7 +1,11 @@
 
 #include "find_w.hh"            // get template definition of the solve_optimization problem
+#include "mcsolver.hh"          // template impl of MCsolver version
 #include <stdexcept>
+#include <fstream>
+#include <sstream>
 
+using namespace std;
 
 // Explicitly instantiate templates into the library
 
@@ -26,6 +30,30 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                         const SparseM& x,                // <-------- EigenType
                         const SparseMb& y,
                         const param_struct& params);
+
+// Complete some of the class declarations before instantiating MCsolver
+MCsolver::MCsolver(char const* const solnfile /*= nullptr*/)
+: MCsoln()
+    // private "solve" variables here TODO
+{
+    if( solnfile ){
+        ifstream ifs(solnfile);
+        if( ifs.good() ) try{
+            this->read( ifs );
+        }catch(std::exception const& e){
+            ostringstream err;
+            err<<"ERROR: unrecoverable error reading MCsoln from file "<<solnfile;
+            throw(runtime_error(err.str()));
+        }
+    }
+}
+MCsolver::~MCsolver()
+{
+    cout<<" ~MCsolver--TODO: where to write the MCsoln ?"<<endl;
+}
+
+
+// Explicitly instantiate MCsolver into the library
 
 template
 void MCsolver::solve( DenseM const& x, SparseMb const& y, param_struct const* const params_arg );

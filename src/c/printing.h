@@ -91,12 +91,11 @@ void print_progress(std::string s, int t, int max_t);
 /** "(rows,cols)" -- ok for Vector or Matrix EigenType */
 template<typename EigenType> inline void print_mat_size(const EigenType& mat);
 
-void print_report(const SparseM& x);
+std::string print_report(const SparseM& x);     ///< nnz for sparse matrix
 
-void print_report(const DenseM& x);
+std::string print_report(const DenseM& x);      ///< empty string
 
-template<typename EigenType> inline
 void print_report(const int projection_dim, const int batch_size,
 		  const int noClasses, const double C1, const double C2, const double lambda, const int w_size,
-		  const EigenType& x);
+		  std::string x_report);
 #endif
