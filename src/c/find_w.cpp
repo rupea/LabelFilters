@@ -122,11 +122,15 @@ void MCsoln::read( std::istream& is ){
 // private post-magicHdr I/O routines ...
 #define CHK_MAT_DIM(MAT,R,C,ERRMSG) do { \
     if( MAT.rows() != (R) || MAT.cols() != (C) ){ \
-        throw std::runtime_error(ERRMSG); \
+        std::ostringstream oss; \
+        oss<<ERRMSG<<"\n\tmatrix["<<MAT.rows()<<"x"<<MAT.cols()<<"] expected ["<<(R)<<"x"<<(C)<<"]\n"; \
+        throw std::runtime_error(oss.str()); \
     }}while(0)
 #define CHK_VEC_DIM(VEC,SZ,ERRMSG) do { \
     if( VEC.size() != (SZ) ) { \
-        throw std::runtime_error(ERRMSG); \
+        std::ostringstream oss; \
+        oss<<ERRMSG<<"\n\tvector["<<VEC.size()<<"] expected ["<<(SZ)<<"]\n"; \
+        throw std::runtime_error(oss.str()); \
     }}while(0)
 #define RETHROW( ERRMSG ) std::cerr<<e.what(); throw std::runtime_error(ERRMSG)
 
@@ -154,8 +158,8 @@ void MCsoln::write_ascii( std::ostream& os, enum Len len/*=SHORT*/ ) const
 #define IO_VEC( OS, VEC, SZ, ERRMSG ) do {eigen_io_txt(OS,VEC); CHK_VEC_DIM( VEC,SZ,ERRMSG );}while(0)
     try{
         IO_MAT(os, weights_avg , d     , nProj, "Bad weights_avg dimensions");
-        IO_MAT(os, lower_bounds, nClass, nProj, "Bad weights_avg dimensions");
-        IO_MAT(os, upper_bounds, nClass, nProj, "Bad weights_avg dimensions");
+        IO_MAT(os, lower_bounds_avg, nClass, nProj, "Bad weights_avg dimensions");
+        IO_MAT(os, upper_bounds_avg, nClass, nProj, "Bad weights_avg dimensions");
         magicEof1 = magicEof;
         io_txt(os,magicEof1);
     } catch(exception const& e){ RETHROW("MCsoln SHORT data read error"); }

@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <exception>
 #include <cstdint>
+#include <fstream>
 using namespace std;
 
 /** given a d-dimensional \c corner, and a list of d d-dimensional
@@ -171,7 +172,8 @@ int main(int,char**)
   srand(rand_seed);
 
   cout<<"  pre-run call to rand() returns "<<rand()<<endl;
-#if 0
+#define USE_MCSOLVER 1
+#if ! USE_MCSOLVER
   // these calls are important so that the compiler instantiates the right templates
   DenseM weights, lower_bounds, upper_bounds;
   DenseM w_avg, l_avg, u_avg;
@@ -235,6 +237,26 @@ int main(int,char**)
         break;
   }
   cout<<" Solution was correct enough (GOOD)"<<endl;
+#if USE_MCSOLVER
+  cout<<" Saving to file 'demo.soln'"<<endl;
+  try{
+      ofstream ofs("demo.soln");
+      soln.write( ofs, MCsoln::TEXT, MCsoln::SHORT );
+      ofs.close();
+  }catch(std::exception const& what){
+      cout<<"OHOH! Error during text write of demo.soln"<<endl;
+      throw(what);
+  }
+  cout<<" Saving to file 'demo-bin.soln'"<<endl;
+  try{
+      ofstream ofs("demo-bin.soln");
+      soln.write( ofs, MCsoln::BINARY, MCsoln::SHORT );
+      ofs.close();
+  }catch(std::exception const& what){
+      cout<<"OHOH! Error during binary write of demo.soln"<<endl;
+      throw(what);
+  }
+#endif
 
 
 #if 0

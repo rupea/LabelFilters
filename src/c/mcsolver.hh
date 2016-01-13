@@ -33,7 +33,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     ProfilerStart("init.profile");
 #endif
 
-    const	int nProj = params.no_projections;
+    this->nProj = params.no_projections;
+    this->d = x.cols();
     cout << "nProj: " << nProj << endl;
     const size_t n = x.rows();
     const size_t batch_size = (params.batch_size < 1 || params.batch_size > n) ? (size_t) n : params.batch_size;
@@ -43,7 +44,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         assert(batch_size == 1);
     }
 
-    /*const size_t*/this-> d = x.cols();
     //std::vector<int> classes = get_classes(y);
     cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
     cout << "size y: " << y.rows() << " rows and " << y.cols() << " columns.\n";

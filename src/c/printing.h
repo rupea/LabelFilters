@@ -26,32 +26,43 @@ namespace detail {
     template<> std::ostream& io_bin( std::ostream& os, std::string const& x );
     template<> std::istream& io_bin( std::istream& is, std::string& x );
 
-    // boost::dynamic_bitset
+    /** \name dynamic_bitset i/o
+     * beware that boost and io_txt do BIG-ENDIAN output !!! */
+    //@{
 #define TBITSET template<typename Block, typename Alloc>
 #define BITSET  boost::dynamic_bitset<Block,Alloc>
-    // io_txt defaults are OK for dynamic_bitset
+    /** io_txt default impl OK for dynamic_bitset, but \b beware boost i/o is \b BIG-ENDIAN, <EM>msb first</EM> */
+    //TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws="\n" );
+    //TBITSET std::istream& io_txt( std::istream& is, BITSET      & x );
     TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& x );
     TBITSET std::istream& io_bin( std::istream& is, BITSET      & x );
 #undef BITSET
 #undef TBITSET
+    //@}
 
-    // std::array (fixed-size array, so size N is not part of stream)
+    /** \name std::array<T,N> i/o
+     * specialized for array<char,N> to remove intervening ws. */
+    //@{
 #define TARRAY template<class T, std::size_t N>
+    // std::array (fixed-size array, so size N is not part of stream)
     TARRAY std::ostream& io_txt( std::ostream& os, std::array<T,N> const& x, char const* ws="\n" );
     TARRAY std::istream& io_txt( std::istream& is, std::array<T,N>      & x );
     TARRAY std::ostream& io_bin( std::ostream& os, std::array<T,N> const& x );
     TARRAY std::istream& io_bin( std::istream& is, std::array<T,N>      & x );
 #undef TARRAY
+    //@}
 
-    /** boolmatrix i/o.
+    /** \name boolmatrix i/o.
      * - boolmatrix is NOT dynamically sized, so on input, the "dimensions"
      *   MUST already be known. So:
      *   - [*] DO NOT store rows, cols --> trivial equiv. of i/o with boolmatrix::[c]base()
      *   - or STORE them and use throw on mismatch. */
+    //@{
     template<> std::ostream& io_txt( std::ostream& os, boolmatrix const& x, char const* ws/*="\n"*/ );
     template<> std::istream& io_txt( std::istream& is, boolmatrix& x );
     template<> std::ostream& io_bin( std::ostream& os, boolmatrix const& x );
     template<> std::istream& io_bin( std::istream& is, boolmatrix& x );
+    //@}
 
     // Eigen DENSE matrix/vector/array
     // Note: RAW data i/o only -- transpose flags etc. will not be stored) Also see
@@ -60,6 +71,7 @@ namespace detail {
      * - Eigen I/O for matrices [vectors] always with prepended row,col dimension.
      * - If dimensions known before-hand \em could have a different set of I/O routines
      * - Vectors get stored as single-column matrix.
+     * \todo Eigen sparse i/o in printing.h
      */
     //@{
 #define TMATRIX template<typename Derived>

@@ -3,6 +3,8 @@
 
 #include <assert.h>
 #include <fstream>
+#include <array>
+#include <sstream>
 
 using namespace std;
 using namespace detail;         // io_txt, io_bin
@@ -15,11 +17,93 @@ string bits73b="1110000000000000000000010000001000000000000000000001110000000000
 int main(int,char**)
 {
     if(1){
-        dynamic_bitset<> bs(bits73b);
-        stringstream iss(" \n\t 000111\n  12");
-        iss>>bs;
-        cout<<"bitset: size="<<bs.size()<<" nblocks="<<bs.num_blocks()<<" text "<<bs;
+        std::array<int,3> a={1,2,3};
+        cout<<" std::array<int,3> -->"; for(auto& x: a) cout<<' '<<x; cout.flush();
+        cout<<" io_txt-->"; cout.flush(); io_txt(cout,a," "); cout<<' '; cout.flush();
+        std::array<int,3> b;
+        stringstream ss;
+        io_txt(static_cast<ostream&>(ss),a," ");        // ws=" " shortens printout
+
+        cout<<" ss="<<ss.rdbuf(); cout.flush();
+        ss.clear(); ss.seekg(0); //rewind ss
+
+        io_txt(static_cast<istream&>(ss),b);
+        for(uint32_t i=0U; i<b.size(); ++i) assert( b[i] == a[i] );
+        cout<<" OK"<<endl;
+    }
+    if(1){
+        std::array<char,3> a={'y','a','h'};
+        cout<<" std::array<char,3> a = "; for(auto& x: a) cout<<' '<<x; cout.flush();
+        cout<<" io_txt-->"; cout.flush(); io_txt(cout,a); cout<<' '; cout.flush();
+        std::array<char,3> b;
+        stringstream ss;
+        io_txt(static_cast<ostream&>(ss),a," ");
+
+        cout<<" ss.str()="<<ss.str(); cout.flush();
+        //cout<<" ss.rdbuf()="<<ss.rdbuf(); cout.flush(); // not nice, since REQUIRE rewind to re-use
+        //ss.clear(); ss.seekg(0); //rewind ss, REQUIRED after rdbuf has been emptied
+
+        io_txt(static_cast<istream&>(ss),b);
+        //cout<<" ... b  = "; for(auto& x: b) cout<<' '<<x; cout.flush();
+        cout<<" ... b  = "; for(uint32_t i=0U; i<b.size(); ++i) cout<<" b["<<i<<"]="<<b[i]; cout<<" "; cout.flush();
+        for(uint32_t i=0U; i<3U; ++i) assert( b[i] == a[i] );
+
+        //ss.clear(); ss.seekg(0);                // rewind
+        cout<<" rdbuf --> "<<ss.str();  // still full-length -- rewind not necessary for str()
+        cout<<" rdbuf --> "<<ss.str();  // still full-length
+        cout<<" OK"<<endl;
+    }
+    if(1){
+        dynamic_bitset<> a(5);
+        a[0] = false;
+        a[1] = false;
+        a[2] = true;
+        a[3] = true;
+        a[4] = true;
+        assert( a[0]==0 ); assert( a[1]==0 ); assert( a[2]==1 ); assert( a[3]==1 ); assert( a[4]==1 );
+        cout<<"dynamic_bitset<> a = 00011(little-endian): TEXT I/O IS BIG_ENDIAN";
+        cout<<" --> operator<< : "<<a<<' '; cout.flush();
+        cout<<" io_txt : "; io_txt(cout,a," "); cout.flush();
+        cout<<" to_string : "; string s; to_string(a,s); cout<<s; cout.flush();
         cout<<endl;
+        dynamic_bitset<> b;
+        stringstream ss;
+        io_txt(static_cast<ostream&>(ss),a);
+        io_txt(static_cast<istream&>(ss),b);
+        for(uint32_t i=0U; i<5U; ++i) assert( b[i] == a[i] );
+        cout<<" OK1"; cout.flush();
+        // try again, with same stringstream
+        dynamic_bitset<> c;
+        ss.clear(); ss.seekg(0);                        // without "rewind" --> segfault
+        io_txt(static_cast<istream&>(ss),c); 
+        for(uint32_t i=0U; i<5U; ++i) assert( c[i] == a[i] );
+        cout<<" OK"<<endl;
+    }
+    if(1){
+        dynamic_bitset<> bs(bits73b);
+        stringstream iss(" \n\t 100111\n  12"); // NOTE will be read in as BIG-ENDIAN
+        iss>>bs;
+        //for(uint32_t i=0U; i<bs.size(); ++i) cout<<" bs["<<i<<"] = "<<bs[i]<<endl; // confirm big-endian
+        cout<<"bitset: size="<<bs.size()<<" nblocks="<<bs.num_blocks()<<" text "<<bs;
+        cout<<" io_txt "; io_txt(cout,bs); 
+        assert( bs.size() == 6 );
+        assert( bs[0] == 1 );
+        assert( bs[1] == 1 );
+        assert( bs[2] == 1 );
+        assert( bs[3] == 0 );
+        assert( bs[4] == 0 );
+        assert( bs[5] == 1 );
+        cout<<" OK"<<endl;
+    }
+    if(1){
+        dynamic_bitset<> a(bits73b);
+        cout<<" boost::dynamic_bitset<> a(bits73) -->"; for(uint32_t i=0U; i<a.size(); ++i) cout<<a[i]; cout.flush();
+        dynamic_bitset<> b;
+        stringstream ss;
+        io_txt(static_cast<ostream&>(ss),a);
+        io_txt(static_cast<istream&>(ss),b);
+        for(uint32_t i=0U; i<b.size(); ++i) assert( b[i] == a[i] );
+        cout<<" OK"<<endl;
     }
     if(1){
         DenseM m;

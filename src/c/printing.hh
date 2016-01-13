@@ -84,13 +84,16 @@ namespace detail {
 #if 0 // Oh, dynamic_bitset << and >> are provided, so default impl is OK
     TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws/*="\n"*/ ){
         using namespace std;
-        os<<x<<ws;
+        std::cout<<" io_txt(os,BS,ws) "; std::cout.flush();
+        os<<x<<ws;    // ---------> reverse of expected output.  x[0] is output LAST !
+        //for(size_t i=0U; i<x.size(); ++i) os<<x[i];     // XXX slow?
+        //os<<ws;
         if(os.fail()) throw std::overflow_error("failed txt dynamic_bitset-->std::ostream");
         return os;
     }
     TBITSET std::istream& io_txt( std::istream& is, BITSET      & x ){
         using namespace std;
-        is>>x;
+        is>>x;        // big-endian output.  Little-endian seems more natural.
         if(is.fail()) throw std::underflow_error("failed txt std::istream-->dynamic_bitset");
         return is;
     }
@@ -128,6 +131,7 @@ namespace detail {
         return is;
     }
     TARRAY std::ostream& io_bin( std::ostream& os, std::array<T,N> const& x ){
+        //std::cout<<" io_bin(os,array<T,"<<N<<">"; std::cout.flush();
         for(auto const& t: x) io_bin(os,t);
         return os;
     }
@@ -136,8 +140,10 @@ namespace detail {
         return is;
     }
     // specialization array<char,N> does not need space between every char
+    // Note: specialization must respecify the default for ws
     template< std::size_t N > inline
-        std::ostream& io_txt( std::ostream& os, std::array<char,N> const& x, char const* ws/*="\n"*/ ){
+        std::ostream& io_txt( std::ostream& os, std::array<char,N> const& x, char const* ws="\n" ){
+            //std::cout<<" io_txt(os,array<char,"<<N<<">,ws)"; std::cout.flush();
             io_bin( os, x );
             os<<ws;
             return os;
