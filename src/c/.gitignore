@@ -14,9 +14,12 @@ demo-printing.log
 demo-quick.log
 demo-mcsolver
 demo-mcsolver.log
+demo.soln
+demo-bin.soln
 test.txt
 parms.txt
 DenseM.txt
+SparseM.txt
 VectorXd.txt
 evaluate_projection
 learn_projection

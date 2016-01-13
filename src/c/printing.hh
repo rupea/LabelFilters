@@ -176,7 +176,6 @@ namespace detail {
 
 #define TMATRIX template<typename Derived>
 #define MATRIX  Eigen::PlainObjectBase< Derived >
-#if 1
     // Ohoh, but compiler needs help to resolve template types...
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws/*="\n"*/ ){
         using namespace std;
@@ -206,7 +205,6 @@ namespace detail {
             is >> *data++;
         return is;
     }
-#endif
     TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x ){
         using namespace std;
         //cout<<" MATRIX-output rows "<<x.rows()<<" cols "<<x.cols()<<endl;
@@ -227,6 +225,197 @@ namespace detail {
         //cout<<" \trows "<<rows<<" cols "<<cols<<endl;
         x.resize(rows,cols);
         io_bin(is,(void*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
+        return is;
+    }
+#undef MATRIX
+#undef TMATRIX
+//#define TMATRIX template<typename Derived>
+//#define MATRIX  Eigen::SparseMatrixBase< Derived >
+#define TMATRIX template<typename Scalar, int Options, typename Index>
+#define MATRIX  Eigen::SparseMatrix< Scalar, Options, Index >
+    TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws/*="\n"*/ ){
+        using namespace std;
+        //cout<<" eigen_io_txt-SPARSE-"<<(x.isCompressed()? "compressed ":"uncompressed "); cout.flush();
+        if( x.isCompressed() ){
+            os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
+            int const nData = x.outerIndexPtr()[ x.outerSize() ];
+            os<<' '<<nData; os.flush();       // makes input 'reserve' efficient
+
+            os<<"\n\t"; //os<<"outerIndexPtr[] ";
+            for(int i=0U; i<x.outerSize()   + 1   ; ++i) os<<" "<<x.outerIndexPtr()[i];
+
+            os<<"\n\t"; //os<<"innerIndexPtr[] ";
+            for(int i=0U; i< nData; ++i) os<<" "<<x.innerIndexPtr()[i];
+
+            os<<"\n\t"; //os<<"valuePtr[] ";
+            for(int i=0U; i< nData; ++i) os<<" "<<x.valuePtr()[i];
+        }else{
+            // after MATRIX::compress(), innerNonZerPtr() returns NULL, so cannot use the following
+            os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
+            int const nData = x.nonZeros();           // not required
+            os<<' '<<nData; os.flush();
+            os<<"\n\t"; //os<<"outerIndexPtr[] ";
+            typename MATRIX::Index inzSum = 0U;
+            for(int i=0U; i<x.outerSize()   + 1   ; ++i){
+                //os<<" <"<<x.outerIndexPtr()[i]<<"> "; // outerIndex includes unused memory slots
+                os<<" "<<inzSum; os.flush();
+                inzSum += x.innerNonZeroPtr()[i];
+            }
+            os<<"\n\t"; //os<<"innerIndexPtr[] ";
+            for(int i=0U; i<x.outerSize(); ++i)
+                for(typename MATRIX::InnerIterator it(x,i); it; ++it)
+                    os<<" "<<it.col(); os.flush();
+            os<<"\n\t"; //os<<"valuePtr[] ";
+            for(int i=0U; i<x.outerSize(); ++i)
+                for(typename MATRIX::InnerIterator it(x,i); it; ++it)
+                    os<<" "<<it.value(); os.flush();
+        }
+        os<<ws;
+        return os;
+    }
+    TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x ){
+        using namespace std;
+        // is.operator>>( MATRIX ) is NOT AVAILABLE in Eigen
+        //cout<<" eigen_io_txt SparseM-input "<<endl;
+        size_t rows,cols,nData;
+        io_txt(is,rows);
+        io_txt(is,cols);
+        io_txt(is,nData);
+        //cout<<"\trows "<<rows<<" cols "<<cols<<endl;
+        x.resize(rows,cols);
+        x.setZero();
+        x.makeCompressed();
+        x.reserve( nData );
+        for(size_t i=0U; i<rows+1U; ++i){
+            io_txt( is, x.outerIndexPtr()[i] );
+            //cout<<" oip["<<i<<"]="<<x.outerIndexPtr()[i]<<endl;
+        }
+        size_t osz = x.outerIndexPtr()[rows];
+        for(size_t i=0U; i<osz; ++i){
+            io_txt( is, x.innerIndexPtr()[i] );
+            //cout<<" iip["<<i<<"]="<<x.innerIndexPtr()[i]<<endl;
+        }
+        for(size_t i=0U; i<osz; ++i){
+            io_txt( is, x.valuePtr()[i] );
+            //cout<<" val["<<i<<"]="<<x.valuePtr()[i]<<endl;
+        }
+
+        return is;
+    }
+    TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x ){
+        using namespace std;
+        //cout<<" SPARSE-binary-output rows "<<x.rows()<<" cols "<<x.cols()<<" isCompressed()="<<x.isCompressed()<<endl;
+        typedef float Real;     // we will convert to 'real' for binary i/o (maybe save space)
+        typedef uint64_t Idx;
+#define IDX_IO(IDX) do{ Idx idx=static_cast<Idx>(IDX); io_bin(os,idx); \
+    /*cout<<" idx "<<idx<<endl;*/ \
+}while(0);
+#define REAL_IO(REAL) do{ Real r=static_cast<Real>(REAL); io_bin(os,r); \
+    /*cout<<" oval "<<r<<endl;*/ \
+}while(0);
+        if( x.isCompressed() ){
+            //cout<<" TEST COMPRESSED SPARSE BINARY OUTPUT"<<endl; cout.flush();
+            //os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
+            Idx const rows = x.outerSize();
+            Idx const cols = x.innerSize();
+            io_bin(os,rows);
+            io_bin(os,cols);
+            //os<<' '<<nData; os.flush();       // makes input 'reserve' efficient
+            Idx const nData = x.outerIndexPtr()[ x.outerSize() ]; // # of possibly non-zero items
+            io_bin(os,nData);
+            //os<<"\n\t"; //os<<"outerIndexPtr[] ";
+            //for(int i=0U; i<x.outerSize()   + 1   ; ++i) os<<" "<<x.outerIndexPtr()[i];
+            for(Idx i=0U; i<rows  + 1   ; ++i) IDX_IO(x.outerIndexPtr()[i]);
+
+            //os<<"\n\t"; //os<<"innerIndexPtr[] ";
+            //for(int i=0U; i< nData; ++i) os<<" "<<x.innerIndexPtr()[i];
+            // XXX can be a single i/o if no type conversion.
+            for(Idx i=0U; i< nData; ++i) IDX_IO(x.innerIndexPtr()[i]);
+
+            //os<<"\n\t"; //os<<"valuePtr[] ";
+            //for(int i=0U; i< nData; ++i) os<<" "<<x.valuePtr()[i];
+            // XXX can be a single i/o if no type conversion.
+            for(Idx i=0U; i< nData; ++i) REAL_IO(x.valuePtr()[i]);
+        }else{
+            //cout<<" TEST UNCOMPRESSED SPARSE BINARY OUTPUT"<<endl; cout.flush();
+            // after MATRIX::compress(), innerNonZerPtr() returns NULL, so cannot use the following
+            //os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
+            Idx const rows = x.outerSize();
+            Idx const cols = x.innerSize();
+            //cout<<" o x c "<<rows<<" x "<<cols; cout.flush();
+            io_bin(os,rows);
+            io_bin(os,cols);
+            //int const nData = x.nonZeros();           // not required
+            //os<<' '<<nData; os.flush();       // makes input 'reserve' efficient
+            Idx const nData = x.nonZeros();
+            //cout<<" nData="<<nData; cout.flush();
+            io_bin(os,nData);
+            //typename MATRIX::Index inzSum;
+            Idx inzSum=0U;
+            //os<<"\n\t"; //os<<"outerIndexPtr[] ";
+            for(int i=0U; i<x.outerSize()   + 1   ; ++i){
+                //os<<" "<<inzSum; os.flush();
+                //io_bin(os,inzSum);
+                IDX_IO(inzSum);
+                inzSum += static_cast<Idx>(x.innerNonZeroPtr()[i]);     // Index-->Idx (unsigned, known size)
+            }
+            //os<<"\n\t"; //os<<"innerIndexPtr[] ";
+            for(int i=0U; i<x.outerSize(); ++i)
+                for(typename MATRIX::InnerIterator it(x,i); it; ++it){
+                    //os<<" "<<it.col(); os.flush();
+                    IDX_IO(it.col());
+                }
+            //os<<"\n\t"; //os<<"valuePtr[] ";
+            for(int i=0U; i<x.outerSize(); ++i)
+                for(typename MATRIX::InnerIterator it(x,i); it; ++it){
+                    //os<<" "<<it.value(); os.flush();
+                    REAL_IO(it.value());
+                }
+        }
+#undef REAL_IO
+#undef IDX_IO
+        return os;
+    }
+    TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x ){
+        using namespace std;
+        //cout<<" SPARSE-binary-input"<<endl;
+        //io_bin(is,(void*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
+        typedef float Real;     // we will convert to 'real' for binary i/o (maybe save space)
+        typedef uint64_t Idx;
+        Idx tmp;
+        Real val;
+#define NEXT_IDX (io_bin(is,tmp), static_cast<typename MATRIX::Index>(tmp))
+#define NEXT_VAL (io_bin(is,val), val)
+        Idx rows,cols,nData;
+        io_bin(is,rows);
+        io_bin(is,cols);
+        io_bin(is,nData);
+        //cout<<"\trows "<<rows<<" cols "<<cols<<endl;
+        x.resize(rows,cols);
+        x.setZero();
+        x.makeCompressed();
+        x.reserve( nData );
+        //cout<<" sparse binary input o x i = "<<rows<<" x "<<cols<<" nData="<<nData<<endl;
+
+        auto idxp = x.outerIndexPtr();
+        for(size_t i=0U; i<rows+1U; ++i){
+            *idxp++ = NEXT_IDX;
+            //cout<<" oip["<<i<<"]="<<x.outerIndexPtr()[i]<<endl;
+        }
+        size_t osz = x.outerIndexPtr()[rows];
+        assert( osz == nData );
+        idxp = x.innerIndexPtr();
+        for(size_t i=0U; i<osz; ++i){
+            *idxp++ = NEXT_IDX;
+            //cout<<" iip["<<i<<"]="<<x.innerIndexPtr()[i]<<endl;
+        }
+        auto valp = x.valuePtr();
+        for(size_t i=0U; i<osz; ++i){
+            *valp++ = NEXT_VAL;
+            //cout<<" val["<<i<<"]="<<x.valuePtr()[i]<<endl;
+        }
+#undef NEXT_VAL
+#undef NEXT_IDX
         return is;
     }
 #undef MATRIX

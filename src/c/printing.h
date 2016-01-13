@@ -27,11 +27,11 @@ namespace detail {
     template<> std::istream& io_bin( std::istream& is, std::string& x );
 
     /** \name dynamic_bitset i/o
-     * beware that boost and io_txt do BIG-ENDIAN output !!! */
+     * \b beware that boost and io_txt do BIG-ENDIAN output, </em>msb first</em> */
     //@{
 #define TBITSET template<typename Block, typename Alloc>
 #define BITSET  boost::dynamic_bitset<Block,Alloc>
-    /** io_txt default impl OK for dynamic_bitset, but \b beware boost i/o is \b BIG-ENDIAN, <EM>msb first</EM> */
+    // boost provides a big-endian operator<< and operator>>, so default impl works
     //TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws="\n" );
     //TBITSET std::istream& io_txt( std::istream& is, BITSET      & x );
     TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& x );
@@ -67,21 +67,37 @@ namespace detail {
     // Eigen DENSE matrix/vector/array
     // Note: RAW data i/o only -- transpose flags etc. will not be stored) Also see
     // http://stackoverflow.com/questions/22725867/eigen-type-deduction-in-template-specialization-of-base-class
-    /** \name Eigen I/O
+    /** \name Eigen Dense I/O
      * - Eigen I/O for matrices [vectors] always with prepended row,col dimension.
      * - If dimensions known before-hand \em could have a different set of I/O routines
-     * - Vectors get stored as single-column matrix.
-     * \todo Eigen sparse i/o in printing.h
+     * - Vectors get stored as single-column matrix
+     * - txt i/o prepends matrix dimension (unlike operators <<, >>)
+     * - \b Unsupported: binary i/o is coerced to/from float
+     * - \b Unsupported: special flags for matrix (sym, etc.)
+     * - \b Unsupported: retaining matrix properties (sym, row-wise, ...)
      */
     //@{
 #define TMATRIX template<typename Derived>
 #define MATRIX  Eigen::PlainObjectBase< Derived >
     TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x );
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x );
-    /** text with prepended dimensions.
-     * - io_txt \em might compile for operator<<
-     *   - but won't output the dimensions
-     * - and operator>> is missing. */
+    TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws="\n" );
+    TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x );
+#undef MATRIX
+#undef TMATRIX
+    //@}
+    /** \name Eigen Sparse I/O
+     * - binary i/o is coerced to/from float
+     * - output via Outer/InnerIterator (compressed) + innerNonZeroPtr (uncompressed)
+     * - input always forms a compressed matrix
+     * - \b Unsupported: special types of sparse matrix (sym,...)
+     * - \b Unsupported: retaining matrix properties (sym, row-wise, ...)
+     */
+    //@{
+#define TMATRIX template<typename Scalar, int Options, typename Index>
+#define MATRIX  Eigen::SparseMatrix< Scalar, Options, Index >
+    TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x );
+    TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x );
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws="\n" );
     TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x );
 #undef MATRIX

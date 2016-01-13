@@ -226,7 +226,142 @@ int main(int,char**)
         io_bin(ifs,n);
         ifs.close();
         assert( n.cbase() == m.cbase() );       // cbase returns the const boost::dynamic_bitset "base"
+        cout<<" boolmatrix.bin --- OK"<<endl;
     }
+    if(1){
+        cout<<"\na sparse matrix... ---> SparseM.txt"<<endl;
+        int const cols=4;
+        SparseM m(2,cols);                         // ROW-major
+        m.reserve(VectorXi::Constant(cols,3));     // reserve mem for 2 nz per ROW
+        m.insert(0,1)=0.1;
+        m.insert(0,3)=0.3;
+        m.insert(1,0)=1.0;
+        m.insert(1,2)=1.2;
+        if(1){ // visualize the text format, should be identical for compressed or not
+            //cout<<m<<endl;  // no matching function, or assertion
+            eigen_io_txt(cout,m);
+            m.makeCompressed();     // different way to output...
+            eigen_io_txt(cout,m);
+        }
+        if(0){ // Eigen operator<< is quite verbose, skip
+            stringstream ss;
+            ss<<m;                  // OK
+            cout<<" ss.str() --> "<<ss.str()<<endl;
+        }
+        {
+            ofstream ofs("SparseM.txt");
+            eigen_io_txt(ofs,m);  // WRONG: does not save size
+            ofs.close();
+        }
+        cout<<"reading from SparseM.txt..."; cout.flush();
+        SparseM n(2,3);
+        n.setZero();
+        //cout<<" orig n(2,3) --->\n"<<n<<endl;
+        {
+            ifstream ifs("SparseM.txt");
+            eigen_io_txt(ifs,n);
+            ifs.close();
+        }
+        cout<<" done reading SparseM.txt ";
+        //cout<<" read txt --->\n"<<n<<endl;
+        //ss>>n;                  // Eigen does NOT provide this
+        // error message is confusing:  cannot bind ‘std::basic_istream<char>’ lvalue to ...&&
+        //cout<<n<<endl;
+        assert(n.rows() == m.rows());
+        assert(n.cols() == m.cols());
+        for(int r=0U; r<m.rows(); ++r)
+            for(int c=0U; c<m.cols(); ++c)
+                assert( fabs(m.coeff(r,c)-n.coeff(r,c))<1.e-6 );
+        cout<<" SparseM.txt read back identical -- OK"<<endl;
+    }
+    if(1){
+        stringstream ss;
+        ostream& os=ss;
+        io_bin(os,1.11f);
+        io_bin(os,2.22);
+        io_bin(os,3.33f);
+        istream& is=ss;
+        float f1; io_bin(is,f1);
+        double d; io_bin(is,d);
+        float f2; io_bin(is,f2);
+        assert( fabs(f1-1.11f)<1.e-6 );
+        assert( fabs(d -2.22 )<1.e-6 );
+        assert( fabs(f2-3.33f)<1.e-6 );
+    }
+
+    if(1){
+        cout<<"\na sparse uncompressed matrix... ---> SparseM.bin"<<endl;
+        int const cols=4;
+        SparseM m(2,cols);                         // ROW-major
+        m.reserve(VectorXi::Constant(cols,3));     // reserve mem for 2 nz per ROW
+        m.insert(0,1)=0.1;
+        m.insert(0,3)=0.3;
+        m.insert(1,0)=1.0;
+        m.insert(1,2)=1.2;
+        {
+            ofstream ofs("SparseM.bin");
+            eigen_io_bin(ofs,m);  // WRONG: does not save size
+            ofs.close();
+        }
+        cout<<"reading from SparseM.bin..."; cout.flush();
+        SparseM n(13,13); // ignored
+        n.setZero();
+        //cout<<" orig n(2,3) --->\n"<<n<<endl;
+        {
+            ifstream ifs("SparseM.bin");
+            eigen_io_bin(ifs,n);
+            ifs.close();
+        }
+        cout<<" done reading SparseM.bin ";
+        //cout<<" read bin --->\n"<<n<<endl;
+        //ss>>n;                  // Eigen does NOT provide this
+        // error message is confusing:  cannot bind ‘std::basic_istream<char>’ lvalue to ...&&
+        //cout<<n<<endl;
+        assert(n.rows() == m.rows());
+        assert(n.cols() == m.cols());
+        for(int r=0U; r<m.rows(); ++r)
+            for(int c=0U; c<m.cols(); ++c)
+                assert( fabs(m.coeff(r,c)-n.coeff(r,c))<1.e-6 );
+        cout<<" SparseM.bin read back identical -- OK"<<endl;
+    }
+    if(1){
+        cout<<"\na sparse compressed matrix... ---> SparseM.bin"<<endl;
+        int const cols=4;
+        SparseM m(2,cols);                         // ROW-major
+        m.reserve(VectorXi::Constant(cols,3));     // reserve mem for 2 nz per ROW
+        m.insert(0,1)=0.1;
+        m.insert(0,3)=0.3;
+        m.insert(1,0)=1.0;
+        m.insert(1,2)=1.2;
+        m.makeCompressed();     // different way to output...
+        assert( m.isCompressed() );
+        {
+            ofstream ofs("SparseM.bin");
+            eigen_io_bin(ofs,m);  // WRONG: does not save size
+            ofs.close();
+        }
+        cout<<"reading from SparseM.bin..."; cout.flush();
+        SparseM n(13,13); // ignored
+        n.setZero();
+        //cout<<" orig n(2,3) --->\n"<<n<<endl;
+        {
+            ifstream ifs("SparseM.bin");
+            eigen_io_bin(ifs,n);
+            ifs.close();
+        }
+        cout<<" done reading SparseM.bin ";
+        //cout<<" read bin --->\n"<<n<<endl;
+        //ss>>n;                  // Eigen does NOT provide this
+        // error message is confusing:  cannot bind ‘std::basic_istream<char>’ lvalue to ...&&
+        //cout<<n<<endl;
+        assert(n.rows() == m.rows());
+        assert(n.cols() == m.cols());
+        for(int r=0U; r<m.rows(); ++r)
+            for(int c=0U; c<m.cols(); ++c)
+                assert( fabs(m.coeff(r,c)-n.coeff(r,c))<1.e-6 );
+        cout<<" SparseM.bin read back identical -- OK"<<endl;
+    }
+
 
 
 
