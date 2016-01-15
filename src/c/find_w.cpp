@@ -60,6 +60,25 @@ void MCsolver::solve( DenseM const& x, SparseMb const& y, param_struct const* co
 template
 void MCsolver::solve( SparseM const& x, SparseMb const& y, param_struct const* const params_arg );
 
+void MCsolver::trim( enum Trim const kp ){
+    if( kp == TRIM_LAST ){
+        // If have some 'last' data, swap {w,l,u} into {w,l,u}_avg
+        if( weights.size() != 0 ){
+            weights_avg.swap(weights);
+            lower_bounds_avg.swap(lower_bounds);
+            upper_bounds_avg.swap(upper_bounds);
+        }
+    }
+    // ** ALL ** the non-SHORT MCsoln memory is freed
+    // NOTE: in Eigen. resize always reallocates memory, so resize(0) WILL free memory.
+    objective_val_avg.resize(0);
+    weights.resize(0,0);
+    lower_bounds.resize(0,0);
+    upper_bounds.resize(0,0);
+    objective_val.resize(0);
+}
+
+
 // -------- MCsoln I/O --------
 using namespace std;
 using namespace detail;     // see printing.h

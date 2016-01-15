@@ -1,4 +1,5 @@
 demo-proj
+mcgen
 *.bin
 *.diff
 demo-proj-dbg

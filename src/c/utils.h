@@ -11,7 +11,7 @@ using Eigen::VectorXd;
 // functions and structures for sorting and keeping indeces
 
 template<typename IntType>
-void sort_index(const VectorXd& m, std::vector<IntType>& cranks)
+void sort_index( VectorXd const& m, std::vector<IntType>& cranks)
 {
   if( cranks.size() != static_cast<size_t>(m.size()) )
       throw std::runtime_error("ERROR: sort_index(vec,ranks): vec and ranks sizes must match");
@@ -76,8 +76,7 @@ void DotProductInnerVector (Eigen::Ref<Eigen::VectorXd> result, const Eigen::Ref
 #ifndef NDEBUG
   assert(result.size() == mat1.cols());
 #endif
-  size_t i;
-  for (i=0;i<mat1.cols();++i)
+  for (int i=0;i<mat1.cols();++i)
     {
       result(i)=DotProductInnerVector(mat1.col(i),mat2,outerIndex);
     }

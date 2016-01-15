@@ -208,14 +208,14 @@ void evaluate_projection(const SparseM& x, const SparseMb& y,
 			 bool validation, bool allproj, bool verbose, ostream& out);
 template
 void evaluate_projection_chunks(const SparseM& x, const SparseMb& y, 
-				const string& ova_file, int chunks,
+				const string& ova_file, size_t chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname, 
 				bool validation, bool allproj, bool verbose, ostream& out);
 template
 void evaluate_projection_chunks(const SparseM& x, const SparseMb& y, 
-				const string& ova_file, int chunks,
+				const string& ova_file, size_t chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname,
@@ -265,14 +265,14 @@ void evaluate_projection(const DenseM& x, const SparseMb& y,
 			 bool validation, bool allproj, bool verbose, ostream& out);
 template
 void evaluate_projection_chunks(const DenseM& x, const SparseMb& y, 
-				const string& ova_file, int chunks,
+				const string& ova_file, size_t chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname, 
 				bool validation, bool allproj, bool verbose, ostream& out);
 template
 void evaluate_projection_chunks(const DenseM& x, const SparseMb& y, 
-				const string& ova_file, int chunks,
+				const string& ova_file, size_t chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname,

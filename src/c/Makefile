@@ -26,7 +26,7 @@ OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 HDF5_INC ?= -I/usr/include/hdf5/serial
 OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave $(HDF5_INC)
 
-LDFLAGS ?= -L$(BOOSTDIR)/lib -lboost_program_options
+LDFLAGS ?= -L$(BOOSTDIR)/../lib -lboost_program_options
 # testing
 #LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
 
@@ -43,16 +43,16 @@ profile_evaluate:
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
 learn_projection: learn_projection.o find_w.o find_w_detail.o printing.o EigenOctave.o utils.o parameter.o
-	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o learn_projection $^
+	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
 
-evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
-	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o evaluate_projection evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o
+evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o evaluate.o
+	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
 
 run_kmeans: run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
-	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o run_kmeans run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
+	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
 
-run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o PredictionSet.o
-	$(OCTAVE_MEX) $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) -o run_LPSR run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o PredictionSet.o
+run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o
+	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
 
 profile_kmeans: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" run_kmeans
@@ -61,7 +61,7 @@ profile_kmeans:
 	$(CXX) -o $@ $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
 
 ## extra stuff ######################### without octave ###################
-.PHONY: settings check-headers lib libs-only
+.PHONY: settings check-headers chk-headers lib libs-only
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 %-dbg.o: %.cpp
@@ -73,12 +73,19 @@ DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
-check-headers: mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h
+/tmp/%.chk: %
+	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
+CHECK_HEADERS := mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
+check-headers: $(CHECK_HEADERS)
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
 		$(CXX) -c $$header $(CPPFLAGS) -o /dev/null; \
 	done; \
 	echo "DONE checking standalone header compilation"
+# faster version (can run in parallel)
+chk-headers:
+	rm -f /tmp/*.chk
+	$(MAKE) -j10 $(patsubst %,/tmp/%.chk,$(CHECK_HEADERS))
 check-oct-headers: EigenOctave.h
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
@@ -86,14 +93,14 @@ check-oct-headers: EigenOctave.h
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
 lib: libs-only demo-proj demo-quick
-test: lib demo-printing demo-io do-tests
+test: lib demo-printing demo-io do-tests mcgen
 do-tests: | lib demo-printing demo-io
 	./demo-quick > demo-quick.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
 	./demo-mcsolver > demo-mcsolver.log 2>&1
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
-LIB_CPPFILES:=find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp
+LIB_CPPFILES:=find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
@@ -126,6 +133,12 @@ demo-printing: erik/demo-printing.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+#static linkage : 2.6M executable
+mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+#shared linkage : 2.1M executable.. Not much savings.
+#mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
+#	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.
 
 clean: 
 	rm -f *.o *.lo learn_projection evaluate_projection run_kmeans demo-quick demo-proj demo-proj-dbg libmcfilter*.a libmcfilter*.so

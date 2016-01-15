@@ -4,8 +4,6 @@ bool PredVec::AddWarned = false;
 bool PredVec::ThreshWarned = false;
 bool PredVec::TopWarned = false;
 
-
-
 double PredictionSet::PrecK(const SparseMb& y, int k)
 {
   assert (y.rows() == static_cast<int>(_preddata->size()));
@@ -497,15 +495,21 @@ SparseM* PredictionSet::toSparseM() const
   size_t i;
   int maxclass = 0;
   std::vector<PredVec*>::iterator predit;
-  std::vector<prediction*>::iterator it;
+  std::vector<Prediction*>::iterator it;
 
   for(predit = _preddata->begin(),i=0; predit != _preddata->end(); predit++, i++)
     {
-      for (it = (*predit)->predvec()->begin(); it != (*predit)->predvec()->end();it++)
-	{
-	  tripletList.push_back(Eigen::Triplet<double> (i, (*it)->cls, (*it)->out));
-	  maxclass = (maxclass < (*it)->cls ? (*it)->cls : maxclass);
-	}
+#if 0
+        for (it = (*predit)->predvec()->begin(); it != (*predit)->predvec()->end();it++) {
+            tripletList.push_back(Eigen::Triplet<double> (i, (*it)->cls, (*it)->out));
+            maxclass = (maxclass < (*it)->cls ? (*it)->cls : maxclass);
+        }
+#else
+        for( auto const& p: (*predit)->predvec() ){
+            tripletList.push_back( Eigen::Triplet<double>(i, p.cls, p.out));
+            maxclass = std::max( maxclass, p.cls );
+        }
+#endif
     }
   
   SparseM* m = new SparseM(_preddata->size(), maxclass+1);

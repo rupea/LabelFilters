@@ -1,3 +1,10 @@
+#include "constants.h"
+#include "typedefs.h"
+#include "EigenOctave.h"
+#include "EigenIO.h"
+#include "evaluate.h"
+#include "utils.h"
+
 #include <octave/oct.h> 
 #include <octave/parse.h> 
 #include <octave/oct-map.h>
@@ -17,13 +24,6 @@
 #include <boost/numeric/conversion/bounds.hpp>
 #include <boost/limits.hpp>
 #include <boost/program_options.hpp>
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
-#include "constants.h"
-#include "typedefs.h"
-#include "EigenOctave.h"
-#include "EigenIO.h"
-#include "evaluate.h"
 
 using Eigen::VectorXd;
 using Eigen::VectorXi;

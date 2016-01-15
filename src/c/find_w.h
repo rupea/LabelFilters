@@ -43,17 +43,22 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 #if 1 // proposed for lua api.
 /** Corresponds to data stored in an MCFilter "solution" file.
  * - Contains:
- *   - dimensionality data & "short" or "long" format spec
+ *   - dimensionality data
  *   - \c param_struct of last call to MCsolveMCsolver::solve()
  *   - some <em>final iteration</em> values
  *   - {w,l,u,obj} data outputs of time-average solution
  *   - [opt. if len=="long"] {w,l,u,obj} of final iteration
- * - during MCsolver::solve, we need the "long" format,
- *   but the solution can still be saved to disk in "short" 
+ * - during MCsolver::solve, we expand data to LONG format,
+ *   - but the solution can still be saved to disk in SHORT
+ *   - and after \c solve, we can \c keep() just a \c SHORT data
+ * - other operations (TBD) only need the \c SHORT data
  */
 class MCsoln {
 public:
-    enum Len : char { /*default*/SHORT, LONG };
+    enum Len : char {
+        /*default*/SHORT,       ///< retain just {w,l,u}_avg matrices of the solution
+        LONG                    ///< But during \c solve, we use {w,l,u} and objective_vals*.
+    };
     enum Fmt : char { /*default*/BINARY, TEXT };
 
     /** Construct to begin a solution from scratch.
@@ -193,6 +198,19 @@ public:
      */
     template< typename EIGENTYPE >
         void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* const params_arg = nullptr );
+
+    enum Trim { TRIM_LAST, TRIM_AVG };
+    /** Move selected {w,l,u} data into {w,l,u}_avg, freeing all other MCsoln memory.
+     * - After a \c solve, or a \c read we may have:
+     *   - {w,l,u} of last iteration (and objective_val)
+     *   - and {w,l,u}_avg of the time-averaged solution (and objective_val_avg)
+     * - But only one set of these is required to \b use the MCsoln
+     * - So after \c solve (or maybe \c read),
+     *   - you might \c write the LONG/SHORT MCsoln to disk
+     *   - and then call trim(...) to free some memory
+     * \post MCsoln is a model of SHORT data -- only {w,l,u}_avg might contain data
+     */
+    void trim( enum Trim const kp = TRIM_AVG );
 };
 #endif // proposed
 #endif // __FIND_W_H

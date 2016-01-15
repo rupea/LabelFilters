@@ -5,6 +5,8 @@
  */
 
 #include "evaluate.h"
+#include "utils.h"
+#include "EigenIO.h"
 
 template <typename EigenType> inline
 void predict_chunk(PredictionSet* predictions, size_t& nact, 
@@ -13,7 +15,7 @@ void predict_chunk(PredictionSet* predictions, size_t& nact,
 		   predtype thresh, int k, bool verbose)
 {
   int pred_k = k>10?k:10;
-  size_t n = x.rows();
+  //size_t n = x.rows();
   if (verbose)
     {
       cout << "Predict chunk ... " << endl;
@@ -48,7 +50,7 @@ void evaluate_projection(const EigenType& x, const SparseMb& y,
   time_t start;
   time_t stop;
   size_t n = x.rows();
-  size_t dim = x.cols();
+  //size_t dim = x.cols();
   size_t noClasses = y.cols();
   int nproj = wmat?wmat->cols():1;
   ActiveDataSet* active=NULL;
@@ -221,7 +223,7 @@ void evaluate_projection(const EigenType& x, const SparseMb& y,
 
 template <typename EigenType> inline
 void evaluate_projection_chunks(const EigenType& x, const SparseMb& y, 
-				const string& ova_file, int chunks,
+				const string& ova_file, size_t chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname,
@@ -237,7 +239,7 @@ void evaluate_projection_chunks(const EigenType& x, const SparseMb& y,
 				double& total_time_final)
 {
   assert(chunks > 0);
-  double time_chunk;
+  //double time_chunk;
   nact_final = 0;
 
   time_t start_filter;
@@ -328,7 +330,7 @@ void evaluate_projection_chunks(const EigenType& x, const SparseMb& y,
     DenseColM lmat_chunk;
     DenseColM umat_chunk;
     
-    for (int chunk = 0; chunk < chunks; chunk++)
+    for (size_t chunk = 0U; chunk < chunks; ++chunk)
       {
 	size_t chunk_size = noClasses/chunks + (chunk < (noClasses % chunks));
 	if (verbose)
@@ -462,7 +464,7 @@ void evaluate_projection_chunks(const EigenType& x, const SparseMb& y,
 
 template <typename EigenType> inline
 void evaluate_projection_chunks(const EigenType& x, const SparseMb& y, 
-				const string& ova_file, int chunks,
+				const string& ova_file, size_t chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname, 
@@ -493,7 +495,7 @@ void get_projection_measures(const EigenType& x, const SparseMb& y,
 			     VectorXsz& nrTrueActive, VectorXsz& nrActive, VectorXsz& nrTrue)
 { 
   size_t n = x.rows();
-  size_t dim = x.cols();
+  //size_t dim = x.cols();
   size_t noClasses = y.cols();
   int nproj = wmat.cols();
   
