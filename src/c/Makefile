@@ -134,7 +134,8 @@ demo-printing: erik/demo-printing.cpp
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 #static linkage : 2.6M executable
-mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+#mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
