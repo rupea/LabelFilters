@@ -61,7 +61,7 @@ function [xout,yout,map,map_ignored] = remove_rare_classes(xin,yin,min_ex_per_cl
     for i=1:length(yin)
       yout{i} = yin{i}(:,ex_per_class >= min_ex_per_class);
       ## take out instances that do not have a class associated with them any more    
-      n_classes=sum(y,2);
+      n_classes=sum(yout{i},2);
       yout{i} = yout{i}(n_classes > 0,:); 
       xout{i} = xin{i}(n_classes > 0,:);
     end

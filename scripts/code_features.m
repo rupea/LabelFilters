@@ -30,9 +30,8 @@ function [xout, idf] = code_features(xin, coding, idf_from_all_data=true);
     endif
     idf = log(size(x,1)./sum(logical(x),1));
     for i=1:length(xin)
-      xout{i} = xin{i};
       for j=1:size(xin{i},2)	
-	xout{i}(:,j) = x(:,j).*idf(j);
+	xout{i}(:,j) = xin{i}(:,j).*idf(j);
       end
     end
   else

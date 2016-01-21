@@ -1281,6 +1281,7 @@ double set_eta(const param_struct& params, size_t t, double lambda)
     {
     case ETA_CONST: 
       eta_t = params.eta;
+      break;
     case ETA_SQRT:
       eta_t = params.eta/sqrt(t);
       break;
@@ -1334,14 +1335,14 @@ void proj_means(VectorXd& means, const VectorXi& nc,
 // grad are stored in order of the ranked classes
 // to minimize cash misses and false sharing 
 
-void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bound, 
+void getBoundGrad (VectorXd& grad, VectorXd&  bound, 
 		   const size_t idx, const size_t allproj_idx, 
-		   const std::vector<int>& __restricted sorted_class, 
+		   const std::vector<int>&  sorted_class, 
 		   const int sc_start, const int sc_end, 
-		   const std::vector<int>& __restricted classes, 
+		   const std::vector<int>& classes, 
 		   const double start_update, const double other_weight,
-		   const VectorXd& __restricted allproj,
-		   const bool none_filtered, const boolmatrix& __restricted filtered)
+		   const VectorXd& allproj,
+		   const bool none_filtered, const boolmatrix&  filtered)
 {
   std::vector<int>::const_iterator class_iter = std::lower_bound(classes.begin(), classes.end(), sc_start);  
   double update = start_update + (class_iter - classes.begin())*other_weight;
