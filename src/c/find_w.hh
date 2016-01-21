@@ -43,7 +43,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     size_t const n = x.rows();          // # of training examples
     size_t const noClasses = y.cols();
     int const no_projections = params.no_projections;
-    cout << "no_projections: " << no_projections << endl;
+    cout << " find_w.hh, solve_optimization: no_projections: " << no_projections << endl;
+    if( (size_t)no_projections >= d ){
+        cout<<"WARNING: no_projections > example dimensionality"<<endl;
+    }
+    //if( params.tot_projections >= d || params.tot_projections < params.no_projections ){
+    //    params.tot_projections == params.no_projections;
+    //    cout<<"WARNING: will add no random projections";
+    //}
 
     double lambda = 1.0/params.C2;
     double C1 = params.C1/params.C2;
@@ -61,13 +68,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
     WeightVector w;
     VectorXd projection, projection_avg;
-    VectorXd l(noClasses),u(noClasses);
+    VectorXd l(noClasses), u(noClasses);
+    //l.setZero(); u.setZero();           // <-- valgrind proves these are uninitialized sometimes.
     VectorXd sortedLU(2*noClasses); // holds l and u interleaved in the curent class sorting order (i.e. l,u,l,u,l,u)
     //  VectorXd sortedLU_gradient(2*noClasses); // used to improve cache performance
     //  VectorXd sortedLU_gradient_chunk;
     VectorXd l_avg(noClasses),u_avg(noClasses); // the lower and upper bounds for the averaged gradient
     VectorXd sortedLU_avg(2*noClasses); // holds l_avg and u_avg interleaved in the curent class sorting order (i.e. l_avg,u_avg,l_avg,u_avg,l_avg,u_avg)
     VectorXd means(noClasses); // used for initialization of the class order vector;
+    //means.setZero();
     VectorXi nc; // the number of examples in each class
     VectorXd wc; // the number of examples in each class
     VectorXi nclasses; // the number of examples in each class
@@ -165,6 +174,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     if (weights.cols() > no_projections)
     {
         cerr << "Warning: the number of requested filters is lower than the number of filters already learned. Dropping the extra filters" << endl;
+        cerr<<"           XXX actually should only drop if tot_projections says to do so?"<<endl;
         weights.conservativeResize(d, no_projections);
         weights_avg.conservativeResize(d, no_projections);
         lower_bounds.conservativeResize(noClasses, no_projections);
@@ -192,15 +202,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                 // averaging was performed on a prior run or not
                 w = WeightVector(weights_avg.col(projection_dim));
 
-                if (params.reoptimize_LU || (params.remove_constraints && projection_dim < no_projections-1))
-                {
+                if (params.reoptimize_LU || (params.remove_constraints && projection_dim < no_projections-1)){
                     w.project(projection,x);
                 }
 
-                if (params.reoptimize_LU)
-                {
-                    switch (params.reorder_type)
-                    {
+                if (params.reoptimize_LU) {
+                    switch (params.reorder_type) {
                       case REORDER_AVG_PROJ_MEANS:
                           // use the current w since averaging has not started yet
                       case REORDER_PROJ_MEANS:
@@ -399,9 +406,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                       cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
                       exit(-1);
                 }
+                assert( u.size() == l.size() );
+                assert( means.size() == l.size() );
                 // calculate the new class order
                 rank_classes(sorted_class, class_order, means);
+                assert( means.size() == l.size() );
                 // sort the l and u in the order of the classes
+                assert( static_cast<size_t>(sorted_class.size()) == static_cast<size_t>(l.size()) );
+                assert( sortedLU.size() == l.size()*2U );
                 get_sortedLU(sortedLU, l, u, sorted_class);
                 if ( params.optimizeLU_epoch <= 0 && params.avg_epoch &&  t >= params.avg_epoch)
                 {
@@ -470,61 +482,47 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                     cout << "objective_val_avg[" << t << "]: " << objective_val_avg[obj_idx_avg-1] << " "<< w.norm_avg() << endl;
                 }
             }
-        } // end while t
+        } // ********* end while t ********
 #ifdef PROFILE
         ProfilerStop();
         ProfilerStart("filtering.profile");
 #endif
-
         // define these here just in case I got some of the conditons wrong
         VectorXd projection, projection_avg;
 
-        // get l and u if needed
-        // have to do this here because class order might change
-        if ( params.optimizeLU_epoch <= 0 || params.reorder_type == REORDER_RANGE_MIDPOINTS )
-        {
+        if ( params.optimizeLU_epoch <= 0 || params.reorder_type == REORDER_RANGE_MIDPOINTS ){
+            // get l and u back to original class ordering
             get_lu(l,u,sortedLU,sorted_class);
         }
-
         // optimize LU and compute objective for averaging if it is turned on
         // if t = params.avg_epoch, everything is exactly the same as
         // just using the current w
-        if ( params.avg_epoch && t > params.avg_epoch )
-        {
-            // get the current l_avg and u_avg if needed
-            if ( params.optimizeLU_epoch <= 0)
-            {
+        if ( params.avg_epoch && t > params.avg_epoch ){
+            if ( params.optimizeLU_epoch <= 0){
+                // get l_avg and u_avg to reflect original class ordering
                 get_lu(l_avg,u_avg,sortedLU_avg/(t - params.avg_epoch + 1),sorted_class);
             }
-
-            // project all the data on the average w if needed
-            if (params.report_avg_epoch > 0 || params.optimizeLU_epoch > 0)
-            {
+            if (params.report_avg_epoch > 0 || params.optimizeLU_epoch > 0){
+                // project all the data on the average w if needed
                 w.project_avg(projection_avg,x);
             }
-            // only need to reorder the classes if optimizing LU
-            // or if we are interested in the last obj value
-            // do the reordering based on the averaged w
-            if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_avg_epoch > 0))
-            {
+            if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_avg_epoch > 0)){
+                // only need to reorder the classes if optimizing LU
+                // or if we are interested in the last obj value
+                // do the reordering based on the averaged w
                 proj_means(means, nc, projection_avg, y);
-                // calculate the new class order
-                rank_classes(sorted_class, class_order, means);
+                rank_classes(sorted_class, class_order, means); // calculate the new class order
             }
-
-            // optimize the lower and upper bounds (done after class ranking)
-            // since it depends on the ranks
-            if (params.optimizeLU_epoch > 0)
-            {
+            if (params.optimizeLU_epoch > 0){
+                // optimize the lower and upper bounds (done after class ranking)
+                // since it depends on the ranks
                 optimizeLU(l_avg,u_avg,projection_avg,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
             }
-
-            // calculate the objective for the averaged w
-            if( params.report_avg_epoch>0 )
-            {
+            if( params.report_avg_epoch>0 ) {
                 // get the current sortedLU in case bounds or order changed
                 // could test for changes!
                 get_sortedLU(sortedLU_avg, l_avg, u_avg, sorted_class);
+                // calculate the objective for the averaged w
                 objective_val_avg[obj_idx_avg++] =
                     calculate_objective_hinge( projection_avg, y, nclasses,
                                                sorted_class, class_order,
@@ -537,13 +535,9 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                 }
             }
         }
-
-
-
         // do everything for the current w .
         // it might be wasteful if we are not interested in the current w
-        if (params.report_epoch > 0 || params.optimizeLU_epoch > 0)
-        {
+        if (params.report_epoch > 0 || params.optimizeLU_epoch > 0){
             w.project(projection,x);
         }
         // only need to reorder the classes if optimizing LU
@@ -551,8 +545,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
         // do the reordering based on the averaged w
         if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_epoch > 0))
         {
-            switch (params.reorder_type)
-            {
+            switch (params.reorder_type){
               case REORDER_AVG_PROJ_MEANS:
                   // even if reordering is based on the averaged w
                   // do it here based on the w to get the optimal LU and
@@ -567,18 +560,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                   cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
                   exit(-1);
             }
-            // calculate the new class order
-            rank_classes(sorted_class, class_order, means);
+            rank_classes(sorted_class, class_order, means); // calculate the new class order
         }
-
         // optimize the lower and upper bounds (done after class ranking)
         // since it depends on the ranks
         // if ranking type is REORDER_RANGE_MIDPOINTS, then class ranking depends on this
         // but shoul still be done before since it is less expensive
         // (could also be done after the LU optimization
         // do this for the average class
-        if (params.optimizeLU_epoch > 0)
-        {
+        if (params.optimizeLU_epoch > 0){
             optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
         }
 
@@ -603,15 +593,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
         weights.col(projection_dim) = vect;
         lower_bounds.col(projection_dim) = l;
         upper_bounds.col(projection_dim) = u;
-        if ( params.avg_epoch && t > params.avg_epoch )
-        {
+        if ( params.avg_epoch && t > params.avg_epoch ){
             w.toVectorXd_avg(vect);
             weights_avg.col(projection_dim) = vect;
             lower_bounds_avg.col(projection_dim) = l_avg;
             upper_bounds_avg.col(projection_dim) = u_avg;
-        }
-        else
-        {
+        }else{
             weights_avg.col(projection_dim) = vect;
             lower_bounds_avg.col(projection_dim) = l;
             upper_bounds_avg.col(projection_dim) = u;
@@ -624,15 +611,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
         //       and maybe nc
         // check if nclass and nc are used for anything else than weighting examples belonging
         //       to multiple classes
-        if (params.remove_constraints && projection_dim < no_projections-1)
-        {
-            if (params.avg_epoch && t > params.avg_epoch )
-            {
+        if (params.remove_constraints && projection_dim < no_projections-1){
+            if (params.avg_epoch && t > params.avg_epoch ){
                 w.project_avg(projection_avg,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
                 update_filtered(filtered, projection_avg, l_avg, u_avg, y, params.remove_class_constraints);
-            }
-            else
-            {
+            }else{
                 w.project(projection,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
                 update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
             }
@@ -644,17 +627,14 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
             // if weighting is done, the number is different
             // eliminating one example -class pair removes nclass(exmple) potential
             // if the class not among the classes of the example
-            if (params.reweight_lambda != REWEIGHT_NONE)
-            {
+            if (params.reweight_lambda != REWEIGHT_NONE){
                 long int no_remaining = total_constraints - no_filtered;
                 lambda = no_remaining*1.0/(total_constraints*params.C2);
-                if (params.reweight_lambda == REWEIGHT_ALL)
-                {
+                if (params.reweight_lambda == REWEIGHT_ALL){
                     C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                 }
             }
         }
-
         //      C2*=((n-1)*noClasses)*1.0/no_remaining;
         //C1*=((n-1)*noClasses)*1.0/no_remaining;
 

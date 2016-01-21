@@ -63,7 +63,8 @@ OSTREAM& operator<<(OSTREAM& os, enum Reweight_Type const e) { return os<<tostri
 
 typedef struct
 {
-  uint32_t no_projections; ///< number of projections to be made
+  uint32_t no_projections; ///< number of projections to be solved for
+  //uint32_t tot_projections; ///< >= no_projections, random unit vectors orthogonal to solved no_projections [default = no_projections]
   double C1;          ///< the penalty for an example being outside it's class bounary
   double C2;          ///< the penalty for an example being inside other class' boundary
   uint32_t max_iter;    ///< maximum number of iterations
@@ -99,6 +100,7 @@ inline param_struct set_default_params()
 {
   param_struct def;
   def.no_projections = 5;
+  //def.tot_projections = 5;
   def.C1=10.0;
   def.C2=1.0;
   def.max_iter=1e6;

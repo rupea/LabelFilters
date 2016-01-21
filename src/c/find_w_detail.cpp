@@ -62,14 +62,16 @@ std::vector<int> get_classes(VectorXd& y)
  */
 void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const VectorXd& sortkey)
 {
-  if( indices.size() != static_cast<size_t>(sortkey.size()) ||
-      cranks.size() != static_cast<size_t>(sortkey.size()) )
-      throw std::runtime_error("ERROR: rank_classes(indices,cranks,sortKey): indices and cranks must match size of sortKey");
-  sort_index(sortkey, indices);
-  for (int i = 0; i < sortkey.size(); i++)
-    {
-      cranks[indices[i]] = i;
+    if( indices.size() != static_cast<size_t>(sortkey.size()) ||
+        cranks.size() != static_cast<size_t>(sortkey.size()) )
+        throw std::runtime_error("ERROR: rank_classes(indices,cranks,sortKey): indices and cranks must match size of sortKey");
+    //cout<<" sort_index "<<endl; cout.flush();
+    sort_index(sortkey, indices); // <---   un-init
+    //cout<<" cranks... "<<endl; cout.flush();
+    for (int i = 0; i < sortkey.size(); ++i) {
+        cranks[indices[i]] = i;
     }
+    //cout<<" rank_classes DONE "<<endl; cout.flush();
 }
 
 // **********************************************
@@ -77,14 +79,27 @@ void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const Vec
 
 void get_lu (VectorXd& l, VectorXd& u, const VectorXd& sortedLU, const vector<int>& sorted_class)
 {
-  vector<int>::const_iterator sorted_class_iter;
-  const double* sortedLU_iter;
-  int cp;
-  for (sorted_class_iter = sorted_class.begin(),sortedLU_iter=sortedLU.data(); sorted_class_iter != sorted_class.end(); sorted_class_iter++)
+    assert( (size_t)l.size() == sorted_class.size() );
+    assert( (size_t)u.size() == sorted_class.size() );
+    vector<int>::const_iterator scIter;
+    const double* sortedLU_iter;
+    for (scIter = sorted_class.begin(),sortedLU_iter=sortedLU.data(); scIter != sorted_class.end(); ++scIter) {
+        int const cp = *scIter;
+        l.coeffRef(cp) = *(sortedLU_iter++);
+        u.coeffRef(cp) = *(sortedLU_iter++);
+    }
+}
+void get_unsorted_lu_sum (VectorXd & lusum, VectorXd const& l, VectorXd const& u, const VectorXd& sortedLU, const vector<int>& sorted_class)
+{
+    assert( (size_t)l.size() == sorted_class.size() );
+    assert( (size_t)u.size() == sorted_class.size() );
+    assert( (size_t)lusum.size() == sorted_class.size() );
+    vector<int>::const_iterator scIter=sorted_class.begin();
+    const double* sortedLU_iter = sortedLU.data();
+    for ( ; scIter != sorted_class.end(); ++sortedLU_iter, ++scIter)
     {
-      cp = *sorted_class_iter;
-      l.coeffRef(cp) = *(sortedLU_iter++);
-      u.coeffRef(cp) = *(sortedLU_iter++);
+        double const sum = *sortedLU_iter;
+        lusum.coeffRef(*scIter) = sum + *++sortedLU_iter;
     }
 }
 
@@ -1297,7 +1312,7 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
 // ************************
 // function to set eta for each iteration
 
-double set_eta(const param_struct& params, size_t t, double lambda)
+double set_eta(param_struct const& params, size_t const t, double const lambda)
 {
   double eta_t;
   switch (params.eta_type)
@@ -1327,8 +1342,8 @@ double set_eta(const param_struct& params, size_t t, double lambda)
 
 // ********************************
 // Compute the means of the classes of the projected data
-void proj_means(VectorXd& means, const VectorXi& nc,
-		const VectorXd& projection, const SparseMb& y)
+void proj_means(VectorXd& means, VectorXi const& nc,
+		VectorXd const& projection, SparseMb const& y)
 {
   size_t noClasses = y.cols();
   size_t n = projection.size();
@@ -1336,20 +1351,20 @@ void proj_means(VectorXd& means, const VectorXi& nc,
   means.resize(noClasses);
   means.setZero();
   for (i=0;i<n;i++)
-    {
+  {
       for (SparseMb::InnerIterator it(y,i);it;++it)
-	{
-	  if (it.value())
-	    {
-	      c = it.col();
-	      means(c)+=projection.coeff(i);
-	    }
-	}
-    }
+      {
+          if (it.value())
+          {
+              c = it.col();
+              means(c)+=projection.coeff(i);
+          }
+      }
+  }
   for (k = 0; k < noClasses; k++)
-    {
+  {
       means(k) /= nc(k);
-    }
+  }
 }
 
 void init_lu( VectorXd& l, VectorXd& u, VectorXd& means,
@@ -1486,7 +1501,7 @@ void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bound,
 // get the optimal values for lower and upper bounds given
 // a projection and the class order
 // computationally expensive so it should be done sparingly
-void optimizeLU(VectorXd&l, VectorXd&u,
+void optimizeLU(VectorXd& l, VectorXd& u,
 		const VectorXd& projection, const SparseMb& y,
 		const vector<int>& class_order, const vector<int>& sorted_class,
 		const VectorXd& wc, const VectorXi& nclasses,
@@ -1527,131 +1542,110 @@ void optimizeLU(VectorXd&l, VectorXd&u,
       // iterate from the beginning
 
       // grad are stored in order of the ranked classes
-      // to minimize cash misses and false sharing
+      // to minimize cache misses and false sharing
       VectorXd grad(noClasses);
       double classweight;
-      for (size_t sc = 0; sc <noClasses; sc++)
-	{
-	  // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
-	  classweight = wc.coeff(sorted_class[sc]);
-	  if (classweight == 0)
-	    {
-	      // there are no examples of this class
-	      // so just put l and u to 0 (l is set below)
-	      u.coeffRef(sorted_class[sc]) = 0;
-	      grad.coeffRef(sc) = -1;
-	    }
-	  else
-	    {
-	      grad.coeffRef(sc) = C1*classweight;
-	    }
-	}
+      for (size_t sc = 0; sc <noClasses; sc++) {
+          // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
+          classweight = wc.coeff(sorted_class[sc]);
+          if (classweight == 0) { // there are no examples of this class
+              // so just put l and u to 0 (l is set below)
+              u.coeffRef(sorted_class[sc]) = 0;
+              grad.coeffRef(sc) = -1;
+          } else {
+              grad.coeffRef(sc) = C1*classweight;
+          }
+      }
       //      VectorXd grad = C1*wc;
 
-      for (std::vector<size_t>::const_iterator i = indices.begin(); i != indices.end(); i++)
-	{
-	  bool plus = false;
-	  size_t idx = *i;
-	  if (idx >= n)
-	    {
-	      plus = true;
-	      idx -= n;
-	    }
+      for (std::vector<size_t>::const_iterator i = indices.begin(); i != indices.end(); i++) {
+          bool plus = false;
+          size_t idx = *i;
+          if (idx >= n) { plus = true; idx -= n; }
 
-	  if (plus)
-	    {
-	      // only the upper bounds of the classes of this example are affected
-	      class_weight = C1;
-	      if (params.ml_wt_class_by_nclasses)
-		{
-		  class_weight /= nclasses.coeff(idx);
-		}
-	      for (SparseMb::InnerIterator it(y,idx); it; ++it)
-		{
-		  if (it.value())
-		    {
-		      int cs = it.col();
-		      int sc = class_order[cs];
-		      // should check for filtered (in case classes were filtered)
-		      // but things brake above if remove_class_constraints is true
-		      if (grad.coeff(sc) >= 0 )
-			{
-			  grad.coeffRef(sc) -= class_weight;
-			  if (grad.coeff(sc) <= 0)
-			    {
-			      // the upper bound for the last class
-			      // will be at the end of the last
-			      // example. If we make it at +inf then
-			      // it will create problems if the order
-			      // of the classes ever changes without
-			      // optimizing the LU bounds
-			      u.coeffRef(cs) = allproj.coeff(*i);
-			    }
-			}
-		    }
-		}
-	    }
-	  else
-	    {
-	      // only the classes ranked lower than the classes of this example are affected
-	      other_weight = C2;
-	      if (params.ml_wt_by_nclasses)
-		{
-		  other_weight /= nclasses.coeff(idx);
-		}
+          if (plus) {
+              // only the upper bounds of the classes of this example are affected
+              class_weight = C1;
+              if (params.ml_wt_class_by_nclasses) {
+                  class_weight /= nclasses.coeff(idx);
+              }
+              for (SparseMb::InnerIterator it(y,idx); it; ++it) {
+                  if (it.value()) {
+                      int cs = it.col();
+                      int sc = class_order[cs];
+                      // should check for filtered (in case classes were filtered)
+                      // but things brake above if remove_class_constraints is true
+                      if (grad.coeff(sc) >= 0 ) {
+                          grad.coeffRef(sc) -= class_weight;
+                          if (grad.coeff(sc) <= 0) {
+                              // the upper bound for the last class
+                              // will be at the end of the last
+                              // example. If we make it at +inf then
+                              // it will create problems if the order
+                              // of the classes ever changes without
+                              // optimizing the LU bounds
+                              u.coeffRef(cs) = allproj.coeff(*i);
+                          }
+                      }
+                  }
+              }
+          }else{
+              // only the classes ranked lower than the classes of this example are affected
+              other_weight = C2;
+              if (params.ml_wt_by_nclasses) {
+                  other_weight /= nclasses.coeff(idx);
+              }
 
-	      // how many classes of the curent instance should be ranked higher
-	      //  times the weight of each
-	      //  if each class has its own weight will need to
-	      //  be calculated below (or have it precomputed for each example
-	      //  as a corresponding wclasses to nclasses to be wclasses the same as wc
-	      //  corresponds to nc
-	      double right_update = other_weight * nclasses.coeff(idx);
+              // how many classes of the curent instance should be ranked higher
+              //  times the weight of each
+              //  if each class has its own weight will need to
+              //  be calculated below (or have it precomputed for each example
+              //  as a corresponding wclasses to nclasses to be wclasses the same as wc
+              //  corresponds to nc
+              double right_update = other_weight * nclasses.coeff(idx);
 
-	      // calling y.coeff is expensive so get the classes in the ranked order here
-	      classes.resize(0);
-	      for (SparseMb::InnerIterator it(y,idx); it; ++it)
-		{
-		  if (it.value())
-		    {
-		      classes.push_back(class_order[it.col()]);
-		    }
-		}
-	      std::sort(classes.begin(),classes.end());
-	      // we  update the upper bounds.
-	      // if a class has higher rank than the highest rank class of this example
-	      // it's upper bound will not be influenced by this example
-	      //	      int class_end = sorted_class[classes.back()]; // make sure classes is not empty
+              // calling y.coeff is expensive so get the classes in the ranked order here
+              classes.resize(0);
+              for (SparseMb::InnerIterator it(y,idx); it; ++it) {
+                  if (it.value()) {
+                      classes.push_back(class_order[it.col()]);
+                  }
+              }
+              std::sort(classes.begin(),classes.end());
+              // we  update the upper bounds.
+              // if a class has higher rank than the highest rank class of this example
+              // it's upper bound will not be influenced by this example
+              //	      int class_end = sorted_class[classes.back()]; // make sure classes is not empty
 
-	      if (classes.back() == 0)
-		{
-		  continue;
-		}
+              if (classes.back() == 0)
+              {
+                  continue;
+              }
 #ifdef _OPENMP
-	      // make sure there is enough work to do to paralelize this
-	      int n_chunks = classes.back()/min_chunk_size + 1;
-	      n_chunks = n_chunks < max_n_chunks?n_chunks:max_n_chunks;
-	      int chunk_size = classes.back()/n_chunks;
-	      int remaining = classes.back()%n_chunks;
-	      for (int chunk=0; chunk < n_chunks; chunk++)
-		{
+              // make sure there is enough work to do to paralelize this
+              int n_chunks = classes.back()/min_chunk_size + 1;
+              n_chunks = n_chunks < max_n_chunks?n_chunks:max_n_chunks;
+              int chunk_size = classes.back()/n_chunks;
+              int remaining = classes.back()%n_chunks;
+              for (int chunk=0; chunk < n_chunks; chunk++)
+              {
 #pragma omp task default(shared) firstprivate(chunk) shared(grad, u, idx, i, sorted_class, classes, right_update, other_weight, allproj, none_filtered, filtered, chunk_size, remaining)
-		  {
-		    int sc_start = chunk*chunk_size + (chunk<remaining?chunk:remaining);
-		    int sc_incr = chunk_size + (chunk<remaining);
-		    // #pragma omp critical
-		    // {
-		    //   cout << "0   " << idx << "   " << *i << "   " << sc_start << "   " << sc_incr << "    " << chunk << "   " << classes.back() << endl;
-		    // }
-		    getBoundGrad(grad, u, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, right_update, -other_weight, allproj, none_filtered, filtered);
-		  }
-		}
+                  {
+                      int sc_start = chunk*chunk_size + (chunk<remaining?chunk:remaining);
+                      int sc_incr = chunk_size + (chunk<remaining);
+                      // #pragma omp critical
+                      // {
+                      //   cout << "0   " << idx << "   " << *i << "   " << sc_start << "   " << sc_incr << "    " << chunk << "   " << classes.back() << endl;
+                      // }
+                      getBoundGrad(grad, u, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, right_update, -other_weight, allproj, none_filtered, filtered);
+                  }
+              }
 #pragma omp taskwait
 #else // if not _OPENMP
-	      getBoundGrad(grad, u, idx, *i, sorted_class, 0,classes.back(),classes,right_update,-other_weight,allproj,none_filtered,filtered);
+              getBoundGrad(grad, u, idx, *i, sorted_class, 0,classes.back(),classes,right_update,-other_weight,allproj,none_filtered,filtered);
 #endif // _OPENMP
-	    }
-	}
+          }
+      }
     }
 
 #pragma omp single
@@ -2188,44 +2182,98 @@ void optimizeLU(VectorXd&l, VectorXd&u,
 // this might be a costly operation that might be not needed
 // we'll implement this when we get there
 
-// ******************************
-// Projection to a new vector that is orthogonal to the rest
-// It is basically Gram-Schmidt Orthogonalization
+/** Projection to a new vector that is orthogonal to the rest.
+ * - It is basically Gram-Schmidt Orthogonalization.
+ * - sequentially remove projections of \c w onto each of the
+ *   \c weights[i] directions.
+ * - original implementation <B>only works of weights.cols(0..projection_dim-1)
+ *   are already orthogonal</B>
+ * \throw runtime_error in debug compile if \c w not orthogonal to each \c weights.col(0..projection_dim-1)
+ */
 void project_orthogonal( VectorXd& w, const DenseM& weights,
-			 const int& projection_dim)
+                         const int& projection_dim)
 {
-  if (projection_dim == 0)
-    return;
-  cout<<" project_orthogonal : w["<<w.rows()<<"x"<<w.cols()<<"]"
-      <<" weight["<<weights.rows()<<"x"<<weights.cols()<<"]"
-      <<" projection_dim = "<<projection_dim<<endl;
-
-  // Assuming the first to the current projection_dim are the ones we want to be orthogonal to
-  VectorXd proj_sum(w.rows());
-  DenseM wt = w.transpose();
-  double norm;
-
-  proj_sum.setZero();
-
-  for (int i = 0; i < projection_dim; i++)
-    {
-      norm = weights.col(i).norm();
-      proj_sum = proj_sum
-	+ weights.col(i) * ((wt * weights.col(i)) / (norm * norm));
+    int const verbose=0;
+    if (projection_dim == 0)
+        return;
+    if(verbose) cout<<" project_orthogonal : w["<<w.rows()<<"x"<<w.cols()<<"] |w_0|="<<w.norm()
+        <<" weight["<<weights.rows()<<"x"<<weights.cols()<<"]"
+        <<" projection_dim = "<<projection_dim<<endl;
+#define ASSUME_WEIGHTS_ALREADY_ORTHOGONAL 0
+#if ASSUME_WEIGHTS_ALREADY_ORTHOGONAL
+#if 0 // original code
+    //
+    // [ejk] original method only works if weights cols 0..projection_dim-1 are already ortho
+    //
+    // Assuming the first to the current projection_dim are the ones we want to be orthogonal to
+    VectorXd proj_sum(w.rows());
+    //DenseM wt = w.transpose();
+    proj_sum.setZero();
+    for (int i = 0; i < projection_dim; ++i) {
+        double const norm = weights.col(i).norm();
+        proj_sum = proj_sum
+            + weights.col(i) * ((w.transpose() * weights.col(i)) / (norm*norm));
+        if(verbose) cout<<" w vs w["<<i<<"] |w[i]|="<<norm<<" dot(wi,w-proj_sum)) ~ "
+            <<(w-proj_sum).transpose() * weights.col(i)<<endl;
     }
 
-  w = (w - proj_sum);
+    w = (w - proj_sum); // NO
+    // Suppose two identical cols of weights.
+    // Then that component would get removed TWICE.
+    // So must immediately apply projections to w ...
+#else 0 // just update w sequentially...
+    for (int i = 0; i < projection_dim; ++i) {
+        double const norm = weights.col(i).norm();
+        if( norm > 1.e-6 ){
+            w.array() -= (weights.col(i) * ((w.transpose() * weights.col(i)) / (norm*norm))).array();
+        }
+        if(verbose) cout<<" remove wi=weights.col("<<i<<") --> |w'_"<<i<<"|="<<w.norm()
+            <<" dot(w',wi)"<<w.transpose() * weights.col(i)<<endl;
+    }
+#endif
+#else // ! ASSUME_WEIGHTS_ALREADY_ORTHOGONAL
+    // we orthogonalize weights, and then apply to w
+    DenseM o = weights.topLeftCorner( weights.rows(), projection_dim );  // orthonormalized weights
+    VectorXd onorm(projection_dim);
+    for(int i = 0; i < projection_dim; ++i){
+        onorm[i] = o.col(i).norm();
+    }
+    for(int i = 0; i < projection_dim; ++i){
+        for(int j = 0; j < i; ++j) {
+            double const nj = o.col(j).norm(); //double const nj = onorm[j];
+            if( nj > 1.e-6 ){
+                o.col(i).array() -= (o.col(j) * ((o.col(i).transpose() * o.col(j)) / (nj*nj))).array();
+            }
+            if(verbose) cout<<" o"<<i<<" remove o"<<j<<" --> |o"<<i<<"|="<<o.col(i).norm()
+                <<" dot(o"<<i<<",o"<<j<<") = "<<o.col(i).transpose() * o.col(j)<<endl;
+        }
+        onorm[i] = o.col(i).norm();
+    }
+    // now use the orthogonalized version of weights to generate w (as usual)
+    for(int i = 0; i < projection_dim; ++i){
+        double const norm = onorm[i]; //o.col(i).norm();
+        if( norm > 1.e-6 ){
+            w.array() -= (o.col(i) * ((w.transpose() * o.col(i)) / (norm*norm))).array();
+        }
+        if(verbose) cout<<" remove wi=o.col("<<i<<") --> |w'_"<<i<<"|="<<w.norm()
+            <<" dot(w',wi)"<<w.transpose() * o.col(i)<<endl;
+    }
+#endif
 #ifndef NDEBUG
-  // check orthogonality
-  std::ostringstream err;
-  for( int i=0; i<projection_dim; ++i ){
-      double z = w.adjoint() * weights.col(i);
-      if( fabs(z) > 1.e-8 ){
-          err<<" ERROR: orthogonality w vs weights.col("<<i<<") violated"<<endl;
-      }
-  }
-  if(err.str().size())
-      throw std::runtime_error(err.str());
+    // check orthogonality
+    std::ostringstream err;
+    for( int i=0; i<projection_dim; ++i ){
+        double z = w.transpose() * weights.col(i);
+        if( fabs(z) > 1.e-8 ){
+            err<<" ERROR: w wrt "<<weights.cols()<<" vectors,"
+                " orthogonality violated for w vs weights.col("<<i<<")"
+                "\n\t|w'| = "<<w.norm() // <<" |proj_sum| = "<<proj_sum.norm()
+                <<"\n\tdot product = "<<z<<" too large";
+        }
+    }
+    if(err.str().size()){
+        throw std::runtime_error(err.str()); // perhaps it is not that serious?
+    }
 #endif //NDEBUG
 }
 

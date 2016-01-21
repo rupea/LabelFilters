@@ -501,14 +501,15 @@ namespace mcgen {
                     po::store( parsed, vm );
                 }
 
-                po::notify(vm);
-
                 if( vm.count("help") ) {
                     helpUsage( cout );
                     cout<<desc<<endl;
                     helpExamples(cout);
                     return;
                 }
+
+                po::notify(vm); // at this point, raise any exceptions for 'required' args
+
                 if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
                 if( vm.count("dim") ) { parms.dim = vm["dim"].as<uint32_t>(); }
                 if( vm.count("margin") ) {

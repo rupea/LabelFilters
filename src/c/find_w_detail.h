@@ -81,7 +81,7 @@ void project_orthogonal( VectorXd& w, const DenseM& weights,
 			 const int& projection_dim);
 
 /** function to set eta for each iteration */
-double set_eta(param_struct const& params, size_t t, double lambda);
+double set_eta(param_struct const& params, size_t const t, double const lambda);
 
 /** Compute the means of the classes of the projected data */
 void proj_means(VectorXd& means, const VectorXi& nc,
@@ -210,6 +210,7 @@ void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const pa
 // get the optimal values for lower and upper bounds given
 // a projection and the class order
 // computationally expensive so it should be done sparingly
+// Note: optimizeLU does not care about input state of l,u
 void optimizeLU(VectorXd&l, VectorXd&u,
 		const VectorXd& projection, const SparseMb& y,
 		const std::vector<int>& class_order, const std::vector<int>& sorted_class,

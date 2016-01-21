@@ -92,7 +92,7 @@ std::array<char,4> MCsoln::magicEof = {'M', 'C', 's', 'z' };
 
 MCsoln::MCsoln()
 : magicHdr( magicBin )
-    , d( 0U )
+    , d( 0U )           // unknown until first call to 'solve', when have training examples 'x'
     , nProj( 0U )
     , nClass( 0U )
     , fname("")

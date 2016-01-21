@@ -42,7 +42,7 @@ profile_learnproj:
 profile_evaluate: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
-learn_projection: learn_projection.o find_w.o find_w_detail.o printing.o EigenOctave.o utils.o parameter.o
+learn_projection: learn_projection.o find_w.o find_w_detail.o mcsolver.o printing.o EigenOctave.o utils.o parameter.o
 	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
 
 evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o evaluate.o
@@ -60,8 +60,9 @@ profile_kmeans:
 %.o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
 
+
 ## extra stuff ######################### without octave ###################
-.PHONY: settings check-headers chk-headers lib libs-only
+.PHONY: settings check-headers chk-headers lib libs-only lib test long do-tests
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 %-dbg.o: %.cpp
@@ -70,12 +71,17 @@ DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 	$(CXX) -o $@ $(CPPFLAGS) -fPIC -c $<
 %-dbg.lo: %.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -fPIC -c $<
+# overrides to avoid annoying Eigen warnings when 'setFromTriplets' is used
+PredictionSet-dbg.o utils-dbg.o : %-dbg.o: %.cpp
+	$(CXX) -o $@ $(DBGFLAGS) -Wno-sign-compare -c $<
+PredictionSet-dbg.lo utils-dbg.lo: %-dbg.lo: %.cpp
+	$(CXX) -o $@ $(DBGFLAGS) -fPIC -Wno-sign-compare -c $<
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
+CHECK_HEADERS := mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
 check-headers: $(CHECK_HEADERS)
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
@@ -94,13 +100,25 @@ check-oct-headers: EigenOctave.h
 	echo "DONE checking octave-related standalone header compilation"
 lib: libs-only demo-proj demo-quick
 test: lib demo-printing demo-io do-tests mcgen
-do-tests: | lib demo-printing demo-io
+long: clean
+	$(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20) \
+	&& $(MAKE) -j20 do-tests \
+	&& $(MAKE) -j20 demo-proj demo-proj-dbg demo-proj2-dbg \
+	&& { if [ -f dpa.log ]; then $(MAKE) dpa.log; else tail -n5 dpa.log; fi; } \
+	&& $(MAKE) dpb.log \
+	&& echo 'OK: make long'
+dpa.log: demo-proj-dbg | libmcfilter-dbg.a
+	./$< 2>&1 | tee dpa.log | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	./$< 2>&1 | tee dpb.log | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	./demo-quick > demo-quick.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
 	./demo-mcsolver > demo-mcsolver.log 2>&1
+	@echo '                do-tests *** PASSED ***'
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
-LIB_CPPFILES:=find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp
+LIB_CPPFILES:= mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
@@ -120,7 +138,10 @@ demo-proj: erik/demo-proj.cpp libmcfilter.a
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj-dbg: | libmcfilter-dbg.a
 demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ -DUSE_MCSOLVER=0 $(CPPFLAGS) -I. $^ $(LDFLAGS)
+demo-proj2-dbg: | libmcfilter-dbg.a
+demo-proj2-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
+	$(CXX) -o $@ -DUSE_MCSOLVER=1 $(CPPFLAGS) -I. $^ $(LDFLAGS)
 # The following test throws if the solution is not sufficiently close to the correct answer.
 # Note: inside eigen, there are signed vs. unsigned issues (error=sign-compare)
 demo-quick: | libmcfilter-dbg.a
@@ -143,5 +164,5 @@ mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
 
 clean: 
 	rm -f *.o *.lo learn_projection evaluate_projection run_kmeans demo-quick demo-proj demo-proj-dbg libmcfilter*.a libmcfilter*.so
-	rm -f demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log run_LPSR
+	rm -f demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log run_LPSR demo-proj2-dbg demo-mcsolver demo-proj.native mcgen
 	$(MAKE) -f Makefile.octave clean

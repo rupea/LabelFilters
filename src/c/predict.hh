@@ -13,13 +13,6 @@
 #include <gperftools/profiler.h>
 #endif
 
-namespace detail { // templated-->non-templated, to reduce code bloat
-
-    ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& projections,
-                                           const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat,
-                                           bool verbose);
-}//detail::
-
 template <typename Eigentype>
 ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
                           const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat,
@@ -129,7 +122,7 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 }
 
 
-
+/** Beware: \c w here is a linear xform that gets pre-applied to x. */
 template <typename Eigentype>
 void predict( PredictionSet* predictions,
               Eigentype const& x, DenseColMf const& w, 
@@ -217,7 +210,7 @@ void predict( PredictionSet* predictions,
 	  size_t c = act->find_first();	  
 	  while (c < noClasses)
 	    {
-	      //	      predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
+	      // predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
 	      predtype out = static_cast<predtype>((x.row(i)*w.col(c).cast<double>())(0,0));
 	      pv->add_pred(out,c+start_class);
 	      c = act->find_next(c);

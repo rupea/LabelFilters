@@ -3,6 +3,8 @@
 
 #include "typedefs.h"
 #include "parameter.h"
+#include "mutexlock.h"  // deprecate this XXX (use std::mutex?)
+//#include "mcsolver.h"   // maybe just the fwd declarations?
 #include <iosfwd>
 #include  <array>
 
@@ -125,6 +127,7 @@ public:
     DenseM weights_avg;                 ///< [ d x nProj ] time-avg'd projection matrix
     DenseM lower_bounds_avg;            ///< [ nClass x nProj ]
     DenseM upper_bounds_avg;            ///< [ nClass x nProj ]
+    DenseM medians;                     ///< [ nClass x nProj ] (set during 'solve' post-processing)
 private:
     mutable std::array<char,4> magicEof1;                  ///< MCs{c|z}
 public:
@@ -150,6 +153,7 @@ public:
 
 };
 
+
 /** for debug tests: write to sstream, read from sstream, throw if error detected */
 void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsoln::Len len);
 
@@ -160,7 +164,12 @@ void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsol
  *
  * - \b NOTE: eventually, one might move some of the other utility routines here ?
  */
-class MCsolver : private MCsoln {
+class MCsolver : private MCsoln
+      // begin with these "shadowing" the original variables, until exact same function
+      // is verified.
+      //, private MCpermState      // during iteration, sometimes we work with sortedLU_*, other times need l,u
+      //, private MCiterBools      // utility bools, now easy to ref in details of solve(..)
+{
 public:
 
     /** Initialize with given input data.
@@ -200,7 +209,7 @@ public:
         void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* const params_arg = nullptr );
 
     enum Trim { TRIM_LAST, TRIM_AVG };
-    /** Move selected {w,l,u} data into {w,l,u}_avg, freeing all other MCsoln memory.
+    /** Free memory by moving selected {w,l,u} data into {w,l,u}_avg.
      * - After a \c solve, or a \c read we may have:
      *   - {w,l,u} of last iteration (and objective_val)
      *   - and {w,l,u}_avg of the time-averaged solution (and objective_val_avg)
@@ -209,8 +218,21 @@ public:
      *   - you might \c write the LONG/SHORT MCsoln to disk
      *   - and then call trim(...) to free some memory
      * \post MCsoln is a model of SHORT data -- only {w,l,u}_avg might contain data
+     *
+     * \note While there may be some issue of whether to use w_avg or w, it seems
+     * that the correct function for l and u should be to calculate the \b exact
+     * lower and upper boundaries for whatever projection axes we choose.
+     * This then requires a post-processing pass over the data, during which
+     * other easy trivial operations can be done --- like producing an auxiliary
+     * class median vector that can be quite useful as a built-in poor-man's
+     * nearest-neighbour predictor (for extremely small extra storage).
+     * \detail
+     * - rename 'postSolve', if it does more than just Trim?
      */
     void trim( enum Trim const kp = TRIM_AVG );
+
+private:
+    int getNthreads( param_struct const& params ) const;
 };
 #endif // proposed
 #endif // __FIND_W_H

@@ -12,7 +12,8 @@ void print_parameter_usage()
 {
   cout << "     parameters - a structure with the optimization parameters. If a parmeter is not present the default is used" << endl;
   cout << "         Parameters (structure field names) are:" << endl;
-  cout << "           no_projections - nubmer of projections to be learned [5]" << endl;
+  cout << "           no_projections - number of projections to be learned [5]" << endl;
+  //cout << "           tot_projections - number of projections total (rest will be random orthogonal unit vectors) [5]" << endl;
   cout << "           C1 - the penalty for an example being outside it's class bounary" << endl;
   cout << "           C2 - the penalty for an example being inside other class' boundary" << endl;
   cout << "           max_iter - maximum number of iterations [1e^6]" << endl;
@@ -170,6 +171,7 @@ using namespace detail;
 
 #define PARAM_STRUCT_IO \
         IO(no_projections); \
+        /*IO(tot_projections);*/ \
         IO(C1); \
         IO(C2); \
         IO(max_iter); \

@@ -24,7 +24,7 @@ void init_w( WeightVector& w,
              DenseM const& weights, int const projection_dim)
 {
     using namespace std;
-    //cout<<" init_w : rand"; cout.flush();
+    cout<<" init_w : weights.cols()="<<weights.cols()<<" projection_dim="<<projection_dim<<" random"; cout.flush();
     int const d = x.cols();
     int const noClasses = y.cols();
     assert( projection_dim < weights.cols() );
@@ -34,10 +34,13 @@ void init_w( WeightVector& w,
     init.setRandom(); init.normalize();
 
     if(1){
-        //cout<<" + vector-between-2-classes"; cout.flush();
+        cout<<" + vector-between-2-classes"; cout.flush();
         // initialize w as vector between the means of two random classes.
         // should find cleverer initialization schemes
         int c1, c2, tries=0;
+        // Actually better to select to far classes, probability prop. to dist between classes?
+        // BUT also want to avoid previously chosen directions.
+        // XXX fix this !!!
         do{
             c1 = ((int) rand()) % noClasses;
             ++tries;
@@ -56,11 +59,17 @@ void init_w( WeightVector& w,
             init.array() += difference.array()*(10.0/difference.norm()); // 10 ? perhaps match margins?
         }
     }
+    cout<<endl;
 
     if(1){ // I think starting w should be ~ orthogonal to previous projections.
         //cout<<" + orthogal to prev"; cout.flush();
-        // orthogonalize to current projection dirns w[*, col<projection_dim]
-        project_orthogonal( init, weights, projection_dim );
+        try{
+            // orthogonalize to current projection dirns w[*, col<projection_dim]
+            project_orthogonal( init, weights, projection_dim );
+        }catch(std::runtime_error const& e){
+            cout<<e.what();
+            cout<<" Continuing anyway (just initializing a fresh \"random\" projection vector)"<<endl;
+        }
         double inorm = init.norm();
         if( init.norm() < 1.e-6 ) {init.setRandom(); init.normalize();}
         else                      {init *= (1.0 / inorm);}
