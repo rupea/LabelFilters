@@ -18,11 +18,13 @@ using namespace std;
 
     , l( nClass )
     , u( nClass )
-, sortlu( nClass*2U )
+    , sortlu( nClass*2U )
+
+    , sortlu_avg( nClass*2U )
+    , nAccSortlu_avg(0U)
 
     , l_avg( nClass )
     , u_avg( nClass )
-, sortlu_avg( nClass*2U )
 {
     reset();            // just in case Eigen does not zero them initially
 }
@@ -36,11 +38,13 @@ void MCpermState::reset()
     ok_lu = false;
     ok_lu_avg = false;
 
+    sortlu_avg.setZero();
+    ok_sortlu_avg = true;       // sortlu_avg is an ACUUMULATOR - setZero is a valid initial state
+    nAccSortlu_avg = 0U;            // but sortlu_avg becomes significant only when this is nonzero
+
     l_avg.setZero();
     u_avg.setZero();
-    sortlu_avg.setZero();
     ok_sortlu = false;
-    ok_sortlu_avg = true;       // sortlu_avg is an ACUUMULATOR - it begins at zero, which is a valid state.
 }
 void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const& y, VectorXi const& nc )
 {
@@ -63,6 +67,8 @@ void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const
 
     sortlu_avg.setZero();
     ok_sortlu_avg = true;
+    nAccSortlu_avg = 0U;
+
     ok_lu_avg = false;
 }
 
@@ -71,7 +77,8 @@ void MCpermState::optimizeLU( VectorXd const& projection, SparseMb const& y, Vec
                               double const C1, double const C2,
                               param_struct const& params, bool print )
 {
-    ::optimizeLU( l, u, projection, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
+    ::optimizeLU( l, u, // <--- outputs
+                  projection, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
                   nclasses, filtered, C1, C2, params, print );
     ok_lu = true;
     ok_sortlu = false;
@@ -81,10 +88,12 @@ void MCpermState::optimizeLU_avg( VectorXd const& projection_avg, SparseMb const
                                   double const C1, double const C2,
                                   param_struct const& params, bool print )
 {
-    ::optimizeLU( l_avg, u_avg, projection_avg, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
+    ::optimizeLU( l_avg, u_avg, // <--- outputs
+                  projection_avg, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
                   nclasses, filtered, C1, C2, params, print );
     ok_lu_avg = true;
-    ok_sortlu_avg = false;
+    // NO EFFECT on sortlu_avg, which is an ACCUMULATOR-OF-sortlu
+    //ok_sortlu_avg = true;
 }
 
 int MCsolver::getNthreads( param_struct const& params ) const
@@ -108,7 +117,6 @@ int MCsolver::getNthreads( param_struct const& params ) const
     return nThreads;
 }
 
-#if MCUC
 MCupdateChunking::MCupdateChunking( size_t const nTrain, size_t const nClass,
                                            size_t const nThreads, param_struct const& params )
     : batch_size( [nTrain,&params]{
@@ -133,6 +141,5 @@ MCupdateChunking::~MCupdateChunking(){
     delete[] idx_locks; const_cast<MutexType*&>(idx_locks) = nullptr;
     delete[]  sc_locks; const_cast<MutexType*&>( sc_locks) = nullptr;
 }
-#endif
 
 

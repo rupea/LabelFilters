@@ -287,6 +287,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 
     // update L and U with w fixed.
     // use new_proj since it is exactly the projection obtained with the new w
+    bool const accumulate_sortedLU = (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch);
 #pragma omp parallel for  default(shared)
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
@@ -309,7 +310,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
         // update the average LU
         // need to do something special when samplin classes to avoid the O(noClasses) complexity.
         // for now we leave it like this since we almost always we optimize LU at the end
-        if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
+        if (accumulate_sortedLU)
         {
             // if we optimize the LU, we do not need to
             // keep track of the averaged lower and upper bounds
@@ -322,8 +323,12 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
             //might become too small
             sortedLU_avg.segment(2*sc_start, 2*sc_incr) += sortedLU.segment(2*sc_start, 2*sc_incr);
         }
-
     }
+#if MCPRM>0
+    if (accumulate_sortedLU) {
+        ++luPerm.nAccSortlu_avg;
+    }
+#endif
 }
 
     template<typename EigenType>
@@ -451,6 +456,9 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
         // it might become too big!, but through division it
         //might become too small
         sortedLU_avg += sortedLU;
+#if MCPRM>0
+        ++luPerm.nAccSortlu_avg;
+#endif
     }
 }
 

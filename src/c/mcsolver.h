@@ -6,17 +6,13 @@
 #include "find_w.h"
 #include "boolmatrix.h"
 
-/** MCUC 0 = no MCupdateState, 1 = define it, test for equivalence,
- * 2 = use it (eliminate most old vars) */
-#define MCUC 2
-
-/** MCPRM 0 = no MCpermState, 1 = define it, use it in easy ways
- * 2 = use it (eliminate most old vars)
- * 3 = advanced logic simplifications */
-#define MCPRM 2
-#if MCPRM > 0 && MCUC < 2
-#error "only work on MCPRM after MCUC work is complete (MCUC>=2)"
-#endif
+/** MCPRM 0 = no MCpermState.
+ * - 1 = define it, use it in easy ways
+ * - 2 = use it (eliminate most old vars)
+ *   - and then to add 'mk_ok' calls before function calls modifying luPerm variables
+ * - 3 = delete original "optimized" conditional xfers from l,u <--> sortlu (and for _avg)
+ */
+#define MCPRM 3
 
 
 class Perm;             ///< an internal detail class -- no user access
@@ -106,7 +102,7 @@ public:
     /** update step occasionally modify sortlu_avg boundaries (invalidating {l,u}_avg). */
     void chg_sortlu_avg();
 
-    /** optimizeLU, on the other hand, changes {l,u}* (invalidating sortlu*) */
+    /** optimizeLU, on the other hand, changes {l,u}* (invalidating sortlu*). */
     void chg_lu();
     void chg_lu_avg();
     //@}
@@ -137,11 +133,24 @@ private:
     VectorXd l;                 ///< lower bounds in original class order
     VectorXd u;                 ///< upper bounds in original class order
     VectorXd sortlu;            ///< concatenated (l,u) pairs in \c Perm order
-    // same, once it has started up, for the time-averaged solution
-    VectorXd l_avg;
-    VectorXd u_avg;
+
+    /** tricky dataflow here.
+     * - During solve iteration, \c sortlu_avg \b accumulates values from sortlu.
+     * - Data flow:
+     *   - sortlu --> sortlu_avg   (accumulate during gradient update)
+     *     - sortlu_avg --> {l,u}_avg only if req'd for REORDER_AVG_PROJ_MEANS
+     *       - if reorder, then go back: {l,u}_avg --> sortlu_avg (if req'd)
+     *   - Then near \em end, I might expect
+     *     - sortlu_avg no longer relevant
+     *     - optimizeLU (or maybe copy {l,u}) --> \em final {l,u}_avg
+     */
     VectorXd sortlu_avg;
+    uint64_t nAccSortlu_avg;    ///< count of accumulations into sortlu_avg from sortlu
+
+    VectorXd l_avg;             ///< used as a convenient temporay,
+    VectorXd u_avg;             ///< sometimes shortly related to \c sortlu_avg
 };
+
 /** iteration state that does not need saving -- important stuff is in MCsoln */
 struct MCiterBools
 {
@@ -154,29 +163,7 @@ struct MCiterBools
     bool const finite_diff_test;     ///< true if param != 0 && t%param==0
     bool const doing_avg_epoch;      ///< avg_epoch && t >= avg_epoch
 };
-#if 0
-struct MCiterState{
-    w;
-    nclasses;
-    maxclasses;
-    // perm: l,u, sorted_class, class_order, sortedLU, ...
-    filtered;
-    // MCsoln?: C1, C2, params, eta_t
-    // projections also should be ok/chg-protected for ease-of-use
-    projection;         // needed for optimizeLU, calculate_objective_hinge
-    projection_avg;     // -- '' -- (and outside 't' loop too)
-    //
-    sc_chunks, sc_chunk_size, sc_remaining;
 
-    // utility constants:
-    n= x.rows();
-
-};
-struct MCoptluState{ // over and above MCiterState
-    wc;
-};
-#endif
-#if MCUC
 /** solver update step may parallelize by \em chunking the computation. */
 struct MCupdateChunking{
     MCupdateChunking( size_t const nTrain, size_t const nClass, size_t const nThreads, param_struct const& p );
@@ -198,5 +185,4 @@ struct MCupdateChunking{
     MutexType* const sc_locks;
     //@}
 };
-#endif
 #endif // MCSOLVER_H

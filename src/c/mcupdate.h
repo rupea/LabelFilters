@@ -3,7 +3,7 @@
 
 struct MCupdate
 {
-#if MCUC>=2 && MCPRM==0
+#if MCPRM==0
     // version 1...
     template<typename EigenType> 
         static void update( WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
@@ -60,7 +60,7 @@ struct MCupdate
             //luPerm.chg_sortlu();
             //luPerm.chg_sortlu_avg();
         }
-#elif MCUC>1 && MCPRM>0
+#elif MCPRM>0
     template<typename EigenType> 
         static void update( WeightVector& w, /*VectorXd& sortedLU, VectorXd& sortedLU_avg,*/
                             MCpermState & luPerm,      // sortlu and sortlu_avg are input and output
