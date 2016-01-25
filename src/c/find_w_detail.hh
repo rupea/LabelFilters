@@ -326,7 +326,8 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     }
 #if MCPRM>0
     if (accumulate_sortedLU) {
-        ++luPerm.nAccSortlu_avg;
+        if(t==params.avg_epoch) std::cout<<" ACC "; std::cout.flush();
+        //++luPerm.nAccSortlu_avg;
     }
 #endif
 }
@@ -456,8 +457,9 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
         // it might become too big!, but through division it
         //might become too small
         sortedLU_avg += sortedLU;
+        if(t==params.avg_epoch) std::cout<<" ACC "; std::cout.flush();
 #if MCPRM>0
-        ++luPerm.nAccSortlu_avg;
+        //++luPerm.nAccSortlu_avg;
 #endif
     }
 }

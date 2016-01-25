@@ -332,7 +332,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 #endif
         t = 0;
         if(PRINT_O){
-            cout<<"objective_val[  t   ]: value    w.norm\n"
+            cout<<"objective_val[  t   ]: value    w.norm (initially "<<w.norm()<<")\n"
                 <<"--------------------- -------  -------"<<endl;
         }
 
@@ -451,7 +451,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
             if(bReportAvg){
                 if ( params.avg_epoch && t >= params.avg_epoch) {
                     // use the average to calculate objective
-                    VectorXd sortedLU_test;
+                    VectorXd sortedLU_test( l_avg.size()+u_avg.size() );
                     if (params.optimizeLU_epoch > 0) {
                         optimizeLU(l_avg, u_avg, projection_avg, y, class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
                         get_sortedLU(sortedLU_test, l_avg, u_avg, sorted_class);

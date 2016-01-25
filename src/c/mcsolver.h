@@ -13,6 +13,9 @@
  * - 3 = delete original "optimized" conditional xfers from l,u <--> sortlu (and for _avg)
  */
 #define MCPRM 3
+#if MCPRM < 3
+#error "MCPRM < 3 code has been REMOVED"
+#endif
 
 
 class Perm;             ///< an internal detail class -- no user access

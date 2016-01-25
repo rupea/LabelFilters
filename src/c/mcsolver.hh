@@ -58,12 +58,10 @@ inline void MCpermState::chg_sortlu(){
     //assert( ok_sortlu ); // oh it is ok to call this multiple times
     ok_lu = false;
 }
-inline void MCpermState::chg_sortlu_avg(){
-    assert( ok_sortlu_avg );
+inline void MCpermState::chg_sortlu_avg(){      // multiple calls OK
     ok_lu_avg = false;
 }
-inline void MCpermState::chg_lu(){
-    //assert( ok_lu );
+inline void MCpermState::chg_lu(){              // multiple calls OK
     ok_sortlu = false;
 }
 inline void MCpermState::chg_lu_avg(){ // only called from optimizeLU_avg
@@ -83,7 +81,7 @@ inline void MCpermState::mkok_lu_avg(){
         toLu( l_avg, u_avg, sortlu_avg );
         ok_lu_avg = true;
     }
-    // ok_lu_avg MAY be false (until avg'ing is started)
+    // ok_lu_avg MAY be false -- should assert if it's required
 }
 inline VectorXd& MCpermState::mkok_sortlu(){
     if(!ok_sortlu){
@@ -102,10 +100,10 @@ inline VectorXd& MCpermState::mkok_sortlu_avg(){
 }
 inline void MCpermState::rank( VectorXd& sortkey ){
     mkok_lu();
-    mkok_lu_avg();
+    //mkok_lu_avg();
     Perm::rank( sortkey );
     ok_sortlu = false;
-    ok_sortlu_avg = false;
+    if( nAccSortlu_avg ) ok_sortlu_avg = false;
 }
 inline void MCpermState::getSortlu_avg( VectorXd& sortlu_test ) const
 {
@@ -118,91 +116,46 @@ inline void MCpermState::getSortlu_avg( VectorXd& sortlu_test ) const
 }
 
 // upgrade path via macros for oft-called functions...
-#if MCPRM==0
-#define OPTIMIZE_LU do { \
-    optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params); \
+#define ITER_TRACE 0
+#define W_HAS_CHANGED do { \
+    ok_projection = false; \
+    ok_projection_avg = false; \
 }while(0)
-#elif MCPRM==1
-#define OPTIMIZE_LU do{ \
-    optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params); \
-    luPerm.ok_lu = true; luPerm.ok_sortlu = false; \
-    assert( luPerm.ok_lu ); \
+#define MKOK_PROJECTION do { \
+    if( ! ok_projection     ){ w.project    (projection    , x); ok_projection     = true; } \
 }while(0)
-#elif MCPRM==2
-#define OPTIMIZE_LU do { \
+#define MKOK_PROJECTION_AVG do { \
+    if( ! ok_projection_avg ){ w.project_avg(projection_avg, x); ok_projection_avg = true; } \
+}while(0)
+
+#if MCPRM>=3
+#define OPTIMIZE_LU( MSG ) do { \
+    if(ITER_TRACE){ std::cout<<MSG; std::cout.flush(); } \
     /** -- no -- luPerm l/u/sortlu prerequisites : outputs l, u */ \
-    luPerm.optimizeLU(projection, y, wc, nclasses, filtered, C1, C2, params); \
-    assert( luPerm.ok_lu ); assert( ! luPerm.ok_sortlu ); \
-}while(0)
-#else
-#define OPTIMIZE_LU do { \
-    /** -- no -- luPerm l/u/sortlu prerequisites : outputs l, u */ \
+    MKOK_PROJECTION; \
     assert( ok_projection ); \
     luPerm.optimizeLU(projection, y, wc, nclasses, filtered, C1, C2, params); \
     assert( luPerm.ok_lu ); assert( ! luPerm.ok_sortlu ); \
 }while(0)
-#endif
-
-#if MCPRM==0
-#define OPTIMIZE_LU_AVG do { \
-    optimizeLU(l_avg,u_avg,projection_avg,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params); \
-}while(0)
-#elif MCPRM==1
-#define OPTIMIZE_LU_AVG do{ \
-    assert( luPerm.ok_sortlu_avg ); \
-    optimizeLU(l_avg,u_avg,projection_avg,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params); \
-    luPerm.ok_lu_avg = true; luPerm.ok_sortlu_avg = false; \
-    assert( luPerm.ok_lu_avg ); \
-}while(0)
-#elif MCPRM==2
-#define OPTIMIZE_LU_AVG do { \
+#define OPTIMIZE_LU_AVG( MSG ) do { \
+    if(ITER_TRACE){ std::cout<<MSG; std::cout.flush(); } \
+    MKOK_PROJECTION_AVG; \
     /* -- no -- luPerm prerequisites, but sets {l,u}_avg instead of {l,u} */ \
     /* sortlu_avg is still some slightly stale accumulated version, but we can't change it */ \
-    assert( luPerm.ok_sortlu_avg ); \
-    luPerm.optimizeLU_avg(projection_avg, y, wc, nclasses, filtered, C1, C2, params); \
-    assert( luPerm.ok_lu_avg ); \
-}while(0)
-#else
-#define OPTIMIZE_LU_AVG do { \
-    /* -- no -- luPerm prerequisites, but sets {l,u}_avg instead of {l,u} */ \
-    /* sortlu_avg is still some slightly stale accumulated version, but we can't change it */ \
-    assert( luPerm.ok_sortlu_avg ); \
     assert( ok_projection_avg ); \
     luPerm.optimizeLU_avg(projection_avg, y, wc, nclasses, filtered, C1, C2, params); \
     assert( luPerm.ok_lu_avg ); \
+    if( luPerm.nAccSortlu_avg ) luPerm.ok_sortlu_avg=false; \
 }while(0)
 #endif
 
-#if MCPRM==0
-#define GET_LU do { \
-    get_lu( l,u, sortedLU,sorted_class ); \
-}while(0)
-#elif MCPRM==1
-#define GET_LU do { \
-    assert( luPerm.ok_sortlu ); \
-    get_lu( l,u, sortedLU,sorted_class ); \
-    luPerm.ok_lu = true; \
-}while(0)
-#else
+#if MCPRM>=3
 #define GET_LU do { \
     luPerm.mkok_sortlu(); \
     assert( luPerm.ok_sortlu ); \
     luPerm.mkok_lu(); \
     assert( luPerm.ok_lu ); \
 }while(0)
-#endif
-
-#if MCPRM==0
-#define GET_LU_AVG do { \
-    get_lu( l_avg,u_avg, sortedLU,sorted_class ); \
-}while(0)
-#elif MCPRM==1
-#define GET_LU_AVG do { \
-    assert( luPerm.ok_sortlu ); \
-    get_lu( l_avg,u_avg, sortedLU,sorted_class ); \
-    luPerm.ok_lu_avg = true; \
-}while(0)
-#else
 #define GET_LU_AVG do { \
     luPerm.mkok_lu_avg(); \
     assert( luPerm.ok_lu_avg ); \
@@ -212,18 +165,7 @@ inline void MCpermState::getSortlu_avg( VectorXd& sortlu_test ) const
 }while(0)
 #endif
 
-#if MCPRM==0
-#define GRADIENT_UPDATE do { \
-            MCupdate::update(w, sortedLU, sortedLU_avg, \
-                             x, y, C1, C2, lambda, t, eta_t, nTrain, /*batch_size,*/ \
-                             nclasses, maxclasses, sorted_class, class_order, filtered, \
-                             /*sc_chunks, sc_chunk_size, sc_remaining,*/ \
-                             /*idx_chunks, idx_chunk_size, idx_remaining,*/ \
-                             /*idx_locks, sc_locks,*/ \
-                             updateSettings, \
-                             params); \
-}while(0)
-#elif MCPRM>0
+#if MCPRM>=3
 #define GRADIENT_UPDATE do { \
             /* cout<<" t="<<t<<" before 'update', luPerm.ok_sortlu="<<luPerm.ok_sortlu<<endl; */ \
             luPerm.mkok_sortlu(); \
@@ -239,19 +181,13 @@ inline void MCpermState::getSortlu_avg( VectorXd& sortlu_test ) const
 }while(0)
 #endif
 
-#if MCPRM==0
-#define GET_SORTEDLU do { \
-    get_sortedLU(sortedLU, l, u, sorted_class); /* l, u --> sortedLU */ \
-}while(0)
-#define GET_SORTEDLU_AVG do { \
-    get_sortedLU(sortedLU_avg, l_avg, u_avg, sorted_class); /* l, u --> sortedLU */ \
-}while(0)
-#else
+#if MCPRM>=3
 #define GET_SORTEDLU do { \
     assert( luPerm.ok_lu ); \
     get_sortedLU(sortedLU, l, u, sorted_class); /* l, u --> sortedLU */ \
     luPerm.ok_sortlu = true; \
 }while(0)
+/** \post BOTH ok_lu_avg and ok_sortlu_avg true. */
 #define GET_SORTEDLU_AVG do { \
     luPerm.mkok_lu_avg(); \
     assert( luPerm.ok_lu_avg ); \
@@ -299,16 +235,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     VectorXd projection, projection_avg;
     bool ok_projection = false;     // whenever w changes (init or gradient update)
     bool ok_projection_avg = false; // ok_projection* invalidated.
-
-#if MCPRM==0
-    VectorXd l(nClass),u(nClass);
-    VectorXd sortedLU(2*nClass); // holds l and u interleaved in the curent class sorting order (i.e. l,u,l,u,l,u)
-    //  VectorXd sortedLU_gradient(2*nClass); // used to improve cache performance
-    //  VectorXd sortedLU_gradient_chunk;
-    VectorXd l_avg(nClass),u_avg(nClass); // the lower and upper bounds for the averaged gradient
-    VectorXd sortedLU_avg(2*nClass); // holds l_avg and u_avg interleaved in the curent class sorting order (i.e. l_avg,u_avg,l_avg,u_avg,l_avg,u_avg)
-    std::vector<int> sorted_class(nClass), class_order(nClass);//, prev_class_order(nClass);// used as the switch
-#elif MCPRM>=1
+#if MCPRM==3
     MCpermState luPerm( nClass );
     VectorXd & l                = luPerm.l;
     VectorXd & u                = luPerm.u;
@@ -413,22 +340,16 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 // use weights_avg since they will hold the correct weights regardless if
                 // averaging was performed on a prior run or not
                 w = WeightVector(weights_avg.col(projection_dim));
-                ok_projection = false;
-                ok_projection_avg = false;
+                W_HAS_CHANGED;  // projections of 'x' onto 'w' no longer valid
 
-#if MCPRM < 3
-                if (params.reoptimize_LU || (params.remove_constraints && projection_dim < int(nProj)-1))
-                {
-                    w.project(projection,x);
-                    ok_projection = true;
-                }
-#endif
                 if (params.reoptimize_LU) {
                     switch (params.reorder_type) {
                       case REORDER_AVG_PROJ_MEANS:
                           // use the current w since averaging has not started yet
+                          std::cout<<" ***CHECKME-FALLTHROUGH***"<<endl;
+                          assert( luPerm.nAccSortlu_avg == 0 );
                       case REORDER_PROJ_MEANS:
-                          if( ! ok_projection ){ w.project(projection,x); ok_projection=true; }
+                          MKOK_PROJECTION;
                           proj_means(means, nc, projection, y);
                           break;
                       case REORDER_RANGE_MIDPOINTS:
@@ -442,34 +363,22 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                           exit(-1);
                     }
                     rank_classes(sorted_class, class_order, means);
-                    OPTIMIZE_LU;
+                    //luPerm.ok_sortlu = false; // ok_sortlu_avg accum still ok because it begins all-zero
+                    luPerm.ok_sortlu = false; if( luPerm.nAccSortlu_avg ) luPerm.ok_sortlu_avg=false;
+                    OPTIMIZE_LU(" OPTLU-Init");         // OPTIMIZE_LU(w,projection,sort_order) ----> luPerm.{l,u}
                     // copy w, lower_bound, upper_bound from the coresponding averaged terms.
                     // this way we do not spend time reoptimizing LU for non-averaged terms we probably won't use.
                     // The right way to handle this would be to know whether we want to return
                     // only the averaged values or we also need the non-averaged ones.
                     w.toVectorXd(vect);
                     weights.col(projection_dim) = vect;
-#if MCPRM==0
-                    lower_bounds.col(projection_dim) = l;
-                    upper_bounds.col(projection_dim) = u;
-                    //
-                    lower_bounds_avg.col(projection_dim) = l;
-                    upper_bounds_avg.col(projection_dim) = u;
-#else
                     lower_bounds.col(projection_dim) = luPerm.l;
                     upper_bounds.col(projection_dim) = luPerm.u;
                     //
                     lower_bounds_avg.col(projection_dim) = luPerm.l;
                     upper_bounds_avg.col(projection_dim) = luPerm.u;
-#endif
                 }else{
-#if MCPRM==0
-                    l = lower_bounds_avg.col(projection_dim);
-                    u = upper_bounds_avg.col(projection_dim);
-#else
                     luPerm.set_lu( lower_bounds_avg.col(projection_dim), upper_bounds_avg.col(projection_dim) );
-                    assert( luPerm.ok_lu );
-#endif
                 }
                 // should we do this in parallel?
                 // the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
@@ -525,39 +434,33 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         }
     }
 
-    cout << "start projection " << projection_dim << endl; cout.flush();
     for(; projection_dim < (int)nProj; projection_dim++)
     {
-#if 0 && MCPRM>=1
-        luPerm.reset(); // including sortedLU_avg.setZero()
-        assert( y.cols() == luPerm.l.size() );
-        assert( luPerm.ok_sortlu_avg ); // this is an accumulator, all-zero is the actual valid initial state (sorta')
-#endif
         init_w      (w, x,y,nc, weights_avg,projection_dim);
-        ok_projection = false;
-        ok_projection_avg = false;
+        cout << "start projection "<<projection_dim<<" w.norm="<<w.norm()<<endl;
+        W_HAS_CHANGED;  // ok_projection* --> false
 
-        w.project(projection, x);        // project each example onto current projection dirn, w
-        ok_projection = true;
-#if MCPRM==0
-        init_lu     (l,u,means, params.reorder_type,projection,y,nc); // init l, u and means
-        if( params.optimizeLU_epoch <= 0 )    sortedLU_avg.setZero(); // not needed
-#else
+        MKOK_PROJECTION;                  // guarantee valid 'projection' of 'x' [every example] onto 'w'
         luPerm.init( projection, y, nc );
         assert( luPerm.ok_lu );
-        assert( luPerm.ok_sortlu_avg ); // this is an accumulator, all-zero is the actual valid initial state (sorta')
+        assert( luPerm.ok_sortlu_avg );   // this is an accumulator, all-zero is the actual valid initial state
         assert( y.cols() == luPerm.l.size() );
         if( params.reorder_type == REORDER_RANGE_MIDPOINTS ) means = luPerm.l + luPerm.u;
         else /* we have no *_avg yet, so use l,u          */ proj_means( means,  nc,projection,y );  
-#endif
+        cout<<" ranking..."; cout.flush();
         rank_classes(sorted_class, class_order, means);
-        cout << "start optimize LU" << endl; cout.flush();
+        luPerm.ok_sortlu = false;
+        assert(!luPerm.ok_lu_avg);
+        assert(luPerm.ok_sortlu_avg); // ok_sortlu_avg remains true (all zeroes, iteration has not begun yet)
+        assert(luPerm.nAccSortlu_avg==0U);
+        //if( luPerm.nAccSortlu_avg ) luPerm.ok_sortlu_avg=false;
+        cout<<"start optimize LU" << endl; cout.flush();
 #ifdef PROFILE
         ProfilerStop();
         ProfilerStart("optimizeLU.profile");
 #endif
         if (params.optimizeLU_epoch > 0) { // questionable.. l,u at this point are random, so why do it this early?
-            OPTIMIZE_LU;
+            OPTIMIZE_LU(" PROJ_INIT");
         }
         GET_SORTEDLU;
         cout << "end optimize LU" << endl; cout.flush();
@@ -565,18 +468,22 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         ProfilerStop();
 #endif
         print_report(projection_dim,batch_size, nClass,C1,C2,lambda,w.size(),print_report(x));
+        t = 0;        // part of MCsoln data -- TODO -- continue iterating
+        if(PRINT_O){
+            cout<<" t=0 luPerm.{ok_lu="<<luPerm.ok_lu<<",ok_sortlu="<<luPerm.ok_sortlu
+                <<",  ok_lu_avg="<<luPerm.ok_lu_avg<<",ok_sortlu_avg="<<luPerm.ok_sortlu_avg<<"}"<<endl;
+            cout<<"objective_val[  t   ]: value    w.norm (initially "<<w.norm()<<")\n"
+                <<"--------------------- -------  -------"<<endl;
+
+        }
 #ifdef PROFILE
         ProfilerStart("learning.profile");
 #endif
-        t = 0;        // part of MCsoln data -- TODO -- continue iterating
-        if(PRINT_O){
-#if MCPRM>=1
-            cout<<" t=0 luPerm.{ok_lu="<<luPerm.ok_lu<<",ok_sortlu="<<luPerm.ok_sortlu
-                <<",  ok_lu_avg="<<luPerm.ok_lu_avg<<",ok_sortlu_avg="<<luPerm.ok_sortlu_avg<<"}"<<endl;
-#endif
-            cout<<"objective_val[  t   ]: value    w.norm\n"
-                <<"--------------------- -------  -------"<<endl;
-        }
+        cout<<" start iterations:"
+            <<" * ok_projection="<<ok_projection<<" ok_projection_avg="<<ok_projection_avg
+            <<" * luPerm ok_lu="<<luPerm.ok_lu<<" ok_sortlu="<<luPerm.ok_sortlu
+            <<" * luPerm ok_lu_avg="<<luPerm.ok_lu_avg<<" ok_sortlu_avg="<<luPerm.ok_sortlu_avg<<" nAccSortlu_avg="<<luPerm.nAccSortlu_avg
+            <<endl;
         // -------- main iteration loop --------
         while (t < params.max_iter) {
             ++t;
@@ -594,6 +501,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                                       class_order, sortedLU, filtered, C1, C2, params);
                 }
             }
+            if(0) cout<<" t="<<setw(7)<<t
+                <<" * ok_projection="<<ok_projection<<" ok_projection_avg="<<ok_projection_avg
+                    <<" * luPerm ok_lu="<<luPerm.ok_lu<<" ok_sortlu="<<luPerm.ok_sortlu
+                    <<" * luPerm ok_lu_avg="<<luPerm.ok_lu_avg<<" ok_sortlu_avg="<<luPerm.ok_sortlu_avg<<" nAccSortlu_avg="<<luPerm.nAccSortlu_avg
+                    <<endl;
 
             // compute the gradient and update
             //      modifies w, sortedLU, (sortedLU_avg) ONLY  (l,u,l_avg,u_avg values may be stale)
@@ -601,110 +513,60 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
             // --> the ONLY place where 'w' is modified
             // update --> invalidates projection_avg and projection
             GRADIENT_UPDATE;
-            ok_projection = false;
-            ok_projection_avg = false;
-            // w has changed
-            // Projections map raw data in 'x' ---> the updated line in 'w'
+            W_HAS_CHANGED; // Projections no good. They map raw data in 'x' ---> the updated line in 'w'
 
-            // reorder the classes
-#if MCPRM<3
-            if (t4.report || t4.optimizeLU || (t4.reorder && params.reorder_type == REORDER_PROJ_MEANS)){
-                w.project    (projection    , x);
+#ifndef NDEBUG
+            // Can this invariant (at this point) simplify [ or debug ] anything?
+            if( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ){
+                if(!( luPerm.nAccSortlu_avg > 0U )) cout<<"OH? t="<<t
+                    <<" luPerm.nAccSortlu_avg = "<<luPerm.nAccSortlu_avg<<" not > 0"<<endl;
+            }else{
+                if(!( luPerm.nAccSortlu_avg == 0U )) cout<<"OH? t="<<t
+                    <<" luPerm.nAccSortlu_avg = "<<luPerm.nAccSortlu_avg<<" not == 0"<<endl;
             }
-            if (t4.report_avg || (t4.reorder && params.reorder_type == REORDER_AVG_PROJ_MEANS)){
-                w.project_avg(projection_avg, x);
-            }
-            ok_projection = true;
-            ok_projection_avg = true;
-            if(t4.reorder)
-            {
+#endif
+
+            if(t4.reorder) {
+                if(ITER_TRACE){ std::cout<<" REORDER"<<t<<" "; std::cout.flush(); }
                 switch (params.reorder_type){
                   case REORDER_AVG_PROJ_MEANS:
+                      MKOK_PROJECTION_AVG;
                       proj_means(means, nc, projection_avg, y);
                       break;
                   case REORDER_PROJ_MEANS:
-                      proj_means(means, nc, projection, y);
-                      break;
-                  case REORDER_RANGE_MIDPOINTS:
-                      means = l+u; //no need to divide by 2 since it is only used for ordering
-                      break;
-                  //default:
-                  //    cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
-                  //    exit(-1);
-                }
-                // calculate the new class order
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) GET_LU_AVG;
-#if MCPRM>=2
-                assert( luPerm.ok_lu );
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) assert( luPerm.ok_lu_avg );
-#endif
-                rank_classes(sorted_class, class_order, means); // valgrind error above -- goto VALGRIND_ERROR
-
-#if MCPRM>=2
-                luPerm.ok_sortlu = false;
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) luPerm.ok_sortlu_avg = false;
-#endif
-                GET_SORTEDLU; // sort the l and u in the order of the classes
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) GET_SORTEDLU_AVG;
-            }
-#else // MCPRM>=3
-            if(t4.reorder)
-            {
-                switch (params.reorder_type){
-                  case REORDER_AVG_PROJ_MEANS:
-                      // if averaging has not started yet, this defaults projecting
-                      // using the current w
-                      if( ! ok_projection_avg ){ w.project_avg(projection_avg, x); ok_projection_avg = true; }
-                      proj_means(means, nc, projection_avg, y);
-                      break;
-                  case REORDER_PROJ_MEANS:
-                      if( ! ok_projection ){ w.project(projection, x); ok_projection = true; }
+                      MKOK_PROJECTION;
                       proj_means(means, nc, projection, y);
                       break;
                   case REORDER_RANGE_MIDPOINTS:
                       luPerm.mkok_lu(); assert(luPerm.ok_lu);
                       means = l+u; //no need to divide by 2 since it is only used for ordering
                       break;
-                  //default:
-                  //    cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
-                  //    exit(-1);
                 }
                 // calculate the new class order
                 luPerm.mkok_lu();
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) GET_LU_AVG;
-
-                assert( luPerm.ok_lu );
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) assert( luPerm.ok_lu_avg );
-
+                //if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ){ GET_LU_AVG; }
+                if( luPerm.nAccSortlu_avg ) GET_LU_AVG;
                 rank_classes(sorted_class, class_order, means); // valgrind error above -- goto VALGRIND_ERROR
-
-                luPerm.ok_sortlu = false;
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) luPerm.ok_sortlu_avg = false;
-
+                luPerm.ok_sortlu = false; if( luPerm.nAccSortlu_avg ) luPerm.ok_sortlu_avg=false;
                 GET_SORTEDLU; // sort the l and u in the order of the classes
-                if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) GET_SORTEDLU_AVG;
+                //if ( params.optimizeLU_epoch <= 0 && t4.doing_avg_epoch ) GET_SORTEDLU_AVG;
+                if( luPerm.nAccSortlu_avg ) GET_SORTEDLU_AVG;
+                // else .. NO change in validity of zeroed accumulator
             }
-#endif
 
             // optimize the lower and upper bounds (done after class ranking)
             // since it depends on the ranks
             // if ranking type is REORDER_RANGE_MIDPOINTS, then class ranking depends on this
             // but shoul still be done before since it is less expensive
             // (could also be done after the LU optimization
-            if (t4.optimizeLU){  // w, luPerm constant, optimize {l,u}
-                if( ! ok_projection ){ w.project(projection, x); ok_projection = true; }
-                OPTIMIZE_LU;
-                GET_SORTEDLU;
-#if MCPRM>=3
-                assert( luPerm.ok_lu ); assert( luPerm.ok_sortlu );
-#endif
+            if (t4.optimizeLU){  // w, luPerm constant, optimize {l,u}. Needs valid 'projection'
+                OPTIMIZE_LU(" OPTLU"<<t<<" ");  assert( luPerm.ok_lu ); // sort order unchanged, so sortlu_avg ...
+                GET_SORTEDLU;           assert( luPerm.ok_sortlu );     // ... accumulator validity, NOT affected :)
             }
             // calculate the objective functions with respect to the current w and bounds
             if(t4.report){ // params.report_epoch && (t % params.report_epoch == 0) )
-                // use the current w to calculate objective
-#if MCPRM>=3
-                if( ! ok_projection ){ w.project(projection, x); ok_projection = true; }
-#endif
+                if(ITER_TRACE){ std::cout<<" REPORT"<<t<<" "; std::cout.flush(); }
+                MKOK_PROJECTION;
                 objective_val[obj_idx++] =
                     calculate_objective_hinge( projection, y, nclasses,
                                                sorted_class, class_order,
@@ -720,37 +582,31 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
             // it runs the optimizaion
             if(t4.report_avg){
                 if ( t4.doing_avg_epoch ){
+                    if(ITER_TRACE){ std::cout<<" REPORT_AVG_a"<<t; std::cout.flush(); }
                     // use the average to calculate objective
-                    VectorXd sortedLU_test;
+                    VectorXd sortedLU_test( l_avg.size()+u_avg.size() );
                     if (params.optimizeLU_epoch > 0) {  // <-- {l,u}_avg used as temporaries here
-                        OPTIMIZE_LU_AVG;                // NO effect on sortlu_avg (still a sortlu accumulator)
+                        OPTIMIZE_LU_AVG("_opt");        // NO effect on sortlu_avg (still a sortlu accumulator)
                         get_sortedLU( sortedLU_test, l_avg, u_avg, sorted_class);
                     } else {
+                        assert( luPerm.nAccSortlu_avg > 0U );
+                        if(ITER_TRACE){ std::cout<<"_avg"; std::cout.flush(); }
                         sortedLU_test = sortedLU_avg/(t - params.avg_epoch + 1);
                     }
-#if MCPRM>=3
-                    if( ! ok_projection_avg ){ w.project_avg(projection_avg, x); ok_projection_avg = true; }
-#endif
+                    MKOK_PROJECTION_AVG;
                     objective_val_avg[obj_idx_avg++] =
-                        calculate_objective_hinge( projection_avg, y, nclasses,
-                                                   sorted_class, class_order,
-                                                   w.norm_avg(), sortedLU_test,
-                                                   filtered,
+                        calculate_objective_hinge( projection_avg, y, nclasses, sorted_class, class_order,
+                                                   w.norm_avg(), sortedLU_test, filtered,
                                                    lambda, C1, C2, params); // save the objective value
                 } else if(t4.report){
-                        // the objective has just been computed for the current w, use it.
-                        objective_val_avg[obj_idx_avg++] = objective_val[obj_idx - 1];
+                    if(ITER_TRACE){ std::cout<<" REPORT_AVG_b"<<t<<" "; std::cout.flush(); }
+                    // the objective has just been computed for the current w, use it.
+                    objective_val_avg[obj_idx_avg++] = objective_val[obj_idx - 1];
                 } else {
-                    // since averaging has not started yet, compute the objective for
-                    // the current w.
-                    // we can use projection_avg because if averaging has not started
-                    // this is just the projection using the current w
-#if MCPRM>=3
-                    if( ! ok_projection_avg ){ w.project_avg(projection_avg, x); ok_projection_avg = true; }
-#endif
+                    if(ITER_TRACE){ std::cout<<" REPORT_noAVGyet"<<t<<" "; std::cout.flush(); }
+                    MKOK_PROJECTION;
                     objective_val_avg[obj_idx_avg++] =
-                        calculate_objective_hinge( projection_avg, y, nclasses,
-                                                   sorted_class, class_order,
+                        calculate_objective_hinge( projection, y, nclasses, sorted_class, class_order,
                                                    w.norm(), sortedLU, filtered,
                                                    lambda, C1, C2, params); // save the objective value
                 }
@@ -763,74 +619,89 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         ProfilerStop();
         ProfilerStart("filtering.profile");
 #endif
+        cout<<" * end iterations:"
+            <<" * ok_projection="<<ok_projection<<" ok_projection_avg="<<ok_projection_avg
+            <<" * luPerm ok_lu="<<luPerm.ok_lu<<" ok_sortlu="<<luPerm.ok_sortlu
+            <<" * luPerm ok_lu_avg="<<luPerm.ok_lu_avg<<" ok_sortlu_avg="<<luPerm.ok_sortlu_avg<<" nAccSortlu_avg="<<luPerm.nAccSortlu_avg
+            <<endl;
 
         // define these here just in case I got some of the conditons wrong
-        VectorXd projection, projection_avg;
+        //VectorXd projection, projection_avg;
 
+#if 0
         // get l and u if needed
         // have to do this here because class order might change
         if ( params.optimizeLU_epoch <= 0 || params.reorder_type == REORDER_RANGE_MIDPOINTS ) {
             GET_LU;
         }
+#endif
         // optimize LU and compute objective for averaging if it is turned on
         // if t = params.avg_epoch, everything is exactly the same as
         // just using the current w
         if ( params.avg_epoch && t > params.avg_epoch ) {
+            cout<<" mp02 bugpoint: luPerm ok_lu_avg="<<luPerm.ok_lu_avg<<" ok_sortlu_avg="<<luPerm.ok_sortlu_avg
+                <<" nAccSortlu_avg="<<luPerm.nAccSortlu_avg<<endl;
+#if 0
             if ( params.optimizeLU_epoch <= 0) {
                 GET_LU_AVG; // get the current l_avg and u_avg if needed
             }
+#endif
+#if 0
             if (params.report_avg_epoch > 0 || params.optimizeLU_epoch > 0) {
                 // project all the data on the average w if needed
                 w.project_avg(projection_avg,x);
             }
+#endif
             // only need to reorder the classes if optimizing LU
             // or if we are interested in the last obj value
             // do the reordering based on the averaged w
             if (params.reorder_epoch > 0
                 && (params.optimizeLU_epoch > 0 || params.report_avg_epoch > 0)) {
-                // calculate the new class order
+                if(ITER_TRACE){ std::cout<<" proj_RANK_AVG "; std::cout.flush(); }
+                MKOK_PROJECTION_AVG;
                 proj_means(means, nc, projection_avg, y);
+                // calculate the new class order
+                        //GET_LU_AVG;     // mp02 ok_lu_avg failed
                 rank_classes(sorted_class, class_order, means);
+                luPerm.ok_sortlu = false; if( luPerm.nAccSortlu_avg ) luPerm.ok_sortlu_avg=false;
+                        //GET_SORTEDLU_AVG;
+                // XXX if reorder AND report_avg AND !optLU, then could have sortlu_avg false forever after
             }
             // optimize the lower and upper bounds (done after class ranking)
             // since it depends on the ranks
             if (params.optimizeLU_epoch > 0) {
-                OPTIMIZE_LU_AVG;
+                OPTIMIZE_LU_AVG(" proj_OPTLU_avg");
             }
-            if( params.report_avg_epoch>0 ) {
-                // get the current sortedLU in case bounds or order changed // could test for changes!
-                GET_SORTEDLU_AVG;
-                // calculate the objective for the averaged w
+            if( params.report_avg_epoch>0 ) { // calculate the objective for the averaged w
+                if(ITER_TRACE){ std::cout<<" proj_OBJ_avg "; std::cout.flush(); }
+                GET_SORTEDLU_AVG;               // if !ok from OPTIMIZE_LU_AVG, then set it from sortlu_avg
+                MKOK_PROJECTION_AVG;
                 objective_val_avg[obj_idx_avg++] =
                     calculate_objective_hinge( projection_avg, y, nclasses,
                                                sorted_class, class_order,
-                                               w.norm_avg(), sortedLU_avg,
-                                               filtered,
+                                               w.norm_avg(), sortedLU_avg, filtered,
                                                lambda, C1, C2, params); // save the objective value
                 if(PRINT_O) {
                     cout << "objective_val_avg[" << t << "]: " << objective_val_avg[obj_idx_avg-1] << " "<< w.norm_avg() << endl;
                 }
             }
         }
-
-        // do everything for the current w .
-        // it might be wasteful if we are not interested in the current w
-        if (params.report_epoch > 0 || params.optimizeLU_epoch > 0) {
-            w.project(projection,x);
-        }
         // only need to reorder the classes if optimizing LU
         // or if we are interested in the last obj value
         // do the reordering based on the averaged w
         if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_epoch > 0)) {
+            if(ITER_TRACE){ std::cout<<" proj_REORDER_nonavg "; std::cout.flush(); }
             switch (params.reorder_type) {
               case REORDER_AVG_PROJ_MEANS:
                   // even if reordering is based on the averaged w
                   // do it here based on the w to get the optimal LU and
                   // the best objective with respect to w
               case REORDER_PROJ_MEANS:
+                  MKOK_PROJECTION;
                   proj_means(means, nc, projection, y);
                   break;
               case REORDER_RANGE_MIDPOINTS:
+                  luPerm.mkok_lu();
                   means = l+u; //no need to divide by 2 since it is only used for ordering
                   break;
               default:
@@ -839,6 +710,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
             }
             // calculate the new class order
             rank_classes(sorted_class, class_order, means);
+            luPerm.ok_sortlu = false; if( luPerm.nAccSortlu_avg ) luPerm.ok_sortlu_avg=false;
         }
 
         // optimize the lower and upper bounds (done after class ranking)
@@ -848,12 +720,13 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         // (could also be done after the LU optimization
         // do this for the average class
         if (params.optimizeLU_epoch > 0) {
-            OPTIMIZE_LU;
+            OPTIMIZE_LU(" proj_OPTLU");
         }
         // calculate the objective for the current w
         if( params.report_epoch>0 ) {
             // get the current sortedLU in case bounds or order changed
             GET_SORTEDLU;
+            MKOK_PROJECTION;
             objective_val[obj_idx++] =
                 calculate_objective_hinge( projection, y, nclasses,
                                            sorted_class, class_order,
@@ -861,7 +734,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                                            filtered,
                                            lambda, C1, C2, params); // save the objective value
             if(PRINT_O) {
-                cout << "objective_val[" <<setw(6)<<t << "]: " << objective_val[obj_idx-1] << " "<< w.norm() << endl;
+                cout << "objective_val[" <<setw(6)<<t << "]: " << objective_val[obj_idx-1] << " "<< w.norm();
             }
         }
 
@@ -870,11 +743,15 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         lower_bounds.col(projection_dim) = l;
         upper_bounds.col(projection_dim) = u;
         if ( params.avg_epoch && t > params.avg_epoch ) {
+            luPerm.mkok_lu_avg();
+            if( ! luPerm.ok_lu_avg ) throw std::runtime_error("BAD final luPerm.ok_lu_avg");
             w.toVectorXd_avg(vect);
             weights_avg.col(projection_dim) = vect;
             lower_bounds_avg.col(projection_dim) = l_avg;
             upper_bounds_avg.col(projection_dim) = u_avg;
         }else{
+            luPerm.mkok_lu();
+            if( ! luPerm.ok_lu ) throw std::runtime_error("BAD final luPerm.ok_lu");
             weights_avg.col(projection_dim) = vect;
             lower_bounds_avg.col(projection_dim) = l;
             upper_bounds_avg.col(projection_dim) = u;
@@ -888,11 +765,12 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         // check if nclass and nc are used for anything else than weighting examples belonging
         //       to multiple classes
         if (params.remove_constraints && projection_dim < (int)nProj-1) {
+            if(ITER_TRACE){ std::cout<<" proj_UPDATE_FILTERED "; std::cout.flush(); }
             if (params.avg_epoch && t > params.avg_epoch ) {
-                w.project_avg(projection_avg,x); // most likely been calculated above (?)
+                MKOK_PROJECTION_AVG;
                 update_filtered(filtered, projection_avg, l_avg, u_avg, y, params.remove_class_constraints);
             }else{
-                w.project(projection,x); // most likely calculated above (?)
+                MKOK_PROJECTION;
                 update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
             }
 
@@ -911,7 +789,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 }
             }
         }
-
         //      C2*=((nTrain-1)*nClass)*1.0/no_remaining;
         //C1*=((nTrain-1)*nClass)*1.0/no_remaining;
 
@@ -919,6 +796,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         ProfilerStop();
 #endif
 
+        if(ITER_TRACE || PRINT_O)
+            cout<<endl;
     } // end for projection_dim
 }
 #endif //MCSOLVER_HH

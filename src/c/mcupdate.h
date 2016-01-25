@@ -80,13 +80,11 @@ struct MCupdate
             // make sortlu* variables valid (if possible, and not already valid)
             luPerm.mkok_sortlu();
             luPerm.mkok_sortlu_avg();
-#if MCPRM>=1
             assert( luPerm.ok_sortlu );
             //assert( luPerm.ok_sortlu_avg ); // sortlu_avg may be undefined (until t>=epoch_avg)
             if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t    >    params.avg_epoch){
                 assert( luPerm.ok_sortlu_avg );
             }
-#endif
             VectorXd& sortedLU                          = luPerm.sortlu;
             VectorXd& sortedLU_avg                      = luPerm.sortlu_avg;
             std::vector<int> const& sorted_class        = luPerm.perm;
@@ -104,6 +102,8 @@ struct MCupdate
             MutexType* idx_locks       = updateSettings.idx_locks;
             MutexType* sc_locks        = updateSettings.sc_locks;
 
+            // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU
+            assert( luPerm.ok_sortlu_avg == true ); // accumulator begins at all zeros, so true
             if (params.update_type == SAFE_SGD) {
                 update_safe_SGD(w, sortedLU, sortedLU_avg,
                                 x, y, C1, C2, lambda, t, eta_t, nTrain, // nTrain is just x.rows()
@@ -119,18 +119,13 @@ struct MCupdate
                                      idx_locks, sc_locks,
                                      params);
             }
-            // inform that sortlu* have changed... and therefore {l,u}_avg are out of date
-            luPerm.chg_sortlu();
+            luPerm.chg_sortlu();        // sortlu change ==> ok_lu now false
+            // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU_avg
             if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch){
-                // Here or later, 'update' ACCUMULATES sortedLU into sortedLU
-                luPerm.chg_sortlu_avg();
+                assert( luPerm.ok_sortlu_avg == true );
+                ++luPerm.nAccSortlu_avg;
+                luPerm.chg_sortlu_avg();      // ==> {l,u}_avg are no longer OK reflections of accumulated sortlu_avg
             }
-#if MCPRM>=1
-            assert( luPerm.ok_sortlu );
-            if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch){
-                assert( luPerm.ok_lu_avg );
-            }
-#endif
         }
 #endif
 };

@@ -62,7 +62,7 @@ profile_kmeans:
 
 
 ## extra stuff ######################### without octave ###################
-.PHONY: settings check-headers chk-headers lib libs-only lib test long do-tests
+.PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 %-dbg.o: %.cpp
@@ -101,22 +101,78 @@ check-oct-headers: EigenOctave.h
 lib: libs-only demo-proj demo-quick
 test: lib demo-printing demo-io do-tests mcgen
 long: clean
-	$(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20) \
+	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
 	&& $(MAKE) -j20 do-tests \
 	&& $(MAKE) -j20 demo-proj demo-proj-dbg demo-proj2-dbg \
 	&& { if [ -f dpa.log ]; then $(MAKE) dpa.log; else tail -n5 dpa.log; fi; } \
-	&& $(MAKE) dpb.log \
+	&& $(MAKE) dpb.log
+	rm -f dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log
+	$(MAKE) -j6 dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log > erik/mk-long.log 2>&1
+	$(MAKE) long-compare
+long-compare:
+	{ for n in "" 1 2 3 4 5 6; do \
+	  a=`tail dpa$$n.log | grep '^obj' | tail -n1`; \
+	  b=`tail dpb$$n.log | grep '^obj' | tail -n1`; \
+	  echo "dpa$$n: $$a     dpb$$n: $$b"; \
+	done; } \
 	&& echo 'OK: make long'
 dpa.log: demo-proj-dbg | libmcfilter-dbg.a
-	./$< 2>&1 | tee dpa.log | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+	@echo -e "\n$@ ..."
+	./$< 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
 dpb.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
-	./$< 2>&1 | tee dpb.log | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+	@echo -e "\n$@ ..."
+	./$< 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa1.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 1 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb1.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 1 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa2.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 2 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb2.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 2 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa3.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 3 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb3.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 3 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa4.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 4 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb4.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 4 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa5.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 5 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb5.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 5 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa6.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 6 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb6.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 6 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
 do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	./demo-quick > demo-quick.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
 	./demo-mcsolver > demo-mcsolver.log 2>&1
-	@echo '                do-tests *** PASSED ***'
+	# All the simple tests (p0) can converge, for both original (o) and mcsolver (m,default)
+	@nfails=0; ntests=0; \
+	for t in 0 1 2 3 4 5 6; do  \
+	  { ./demo-mcsolver op0$$t > erik/log-op0$$t.log 2>&1 || { nfails=$$(($$nfails+1)); echo "ERROR in demo-mcsolver op0$$t"; false; } ; } &\
+	  { ./demo-mcsolver mp0$$t > erik/log-mp0$$t.log 2>&1 || { nfails=$$(($$nfails+1)); echo "ERROR in demo-mcsolver mp0$$t"; false; } ; } &\
+	  wait; \
+	  ntests=$$(($$ntests+1)); \
+	done; \
+	if [ "$$nfails" = "0" ]; then echo "                do-tests *** PASSED $$ntests TESTS ***"; \
+	else                          echo "                do-tests *** FAILED $$nfails TESTS ***"; false; fi
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 LIB_CPPFILES:= mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
@@ -152,6 +208,7 @@ demo-mcsolver: erik/demo-mcsolver.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 demo-printing: erik/demo-printing.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 #static linkage : 2.6M executable
