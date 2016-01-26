@@ -11,8 +11,9 @@
  * - 2 = use it (eliminate most old vars)
  *   - and then to add 'mk_ok' calls before function calls modifying luPerm variables
  * - 3 = delete original "optimized" conditional xfers from l,u <--> sortlu (and for _avg)
+ * - etc etc
  */
-#define MCPRM 3
+#define MCPRM 5
 #if MCPRM < 3
 #error "MCPRM < 3 code has been REMOVED"
 #endif
@@ -117,7 +118,7 @@ public:
     VectorXd& mkok_sortlu();
     VectorXd& mkok_sortlu_avg();
     //@}
-    
+
     /** at report time, we \em might want a temporary sortlu list for the hinge loss calc.
      * This calculates and returns client-specified sortlu_avg vector.
      * Note this is const (after this, ok_sortlu_avg has NOT changed) */

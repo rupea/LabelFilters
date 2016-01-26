@@ -1,8 +1,13 @@
 demo-proj
+dpa.log
+dpb.log
+dpa?.log
+dpb?.log
 mcgen
 *.bin
 *.diff
 demo-proj-dbg
+demo-proj2-dbg
 demo-proj-O3
 demo-quick
 demo-quick-dbg

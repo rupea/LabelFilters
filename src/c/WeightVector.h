@@ -8,7 +8,7 @@ using Eigen::VectorXi;
 
 class WeightVector
 {
- private: 
+ private:
 #if __cplusplus >= 201103L
   static double constexpr MIN_SCALE = 1e-4; // min scale value, for numerical stability
   static double constexpr MAX_SCALE = 1e+4; // max scale value, for numerical stability
@@ -19,39 +19,42 @@ class WeightVector
   static double const MAX_BETA  = 1e+4; // max beta  value, for numerical stability
 #endif
   VectorXd my_weights;  // current weights of the last iteration
-  double my_scale; // scalar to multiply the weights with. Makes 
+  double my_scale; // scalar to multiply the weights with. Makes
                    // the gradient update to the weight vector due
                    //  to the L2 norm very fast
-  double my_norm_sq; // the square of the L2 norm of the vector. It is 
+  double my_norm_sq; // the square of the L2 norm of the vector. It is
                      // computed incrementally
-                     // to avoid costly computations when it is needed. 
-  
+                     // to avoid costly computations when it is needed.
+
   VectorXd my_A; // current averaged weights
   double my_alpha; // for averaged gradient
   double my_beta;  // for averaged gradient
   size_t my_avg_t;  // the round of averaging
 
- public: 
+ public:
+  /** non-zero after averaging has started and \c norm_avg() and \c toVectorXd_avg and \c project_avg become useful */
+  inline size_t getAvg_t() const {return my_avg_t;}
+
   WeightVector()
     {
       my_weights=VectorXd();
       my_scale = 1.0;
       my_norm_sq = 0;
       my_A = VectorXd();
-      my_avg_t = 0; 
+      my_avg_t = 0;
       my_beta = 1;
       my_alpha = 1;
     }
 
-  // constructor from a dense vector. 
+  // constructor from a dense vector.
   WeightVector(const VectorXd& w)
     {
-      double norm = w.norm();      
+      double norm = w.norm();
       my_norm_sq = norm*norm;
       my_scale = 1.0;
       my_weights = w;
       my_A = VectorXd(w.size());
-      my_avg_t = 0; 
+      my_avg_t = 0;
       my_beta = 1;
       my_alpha = 1;
     }
@@ -62,12 +65,12 @@ class WeightVector
       my_weights = VectorXd(size);
       my_scale = 1.0;
       my_A = VectorXd(size);
-      my_avg_t = 0; 
+      my_avg_t = 0;
       my_beta = 1;
       my_alpha = 1;
     }
 
-  
+
   inline void scale(const double s)
   {
     if (s == 0.0) // reset everything to zero, including the average
@@ -107,7 +110,7 @@ class WeightVector
     if (my_beta > MAX_BETA)
       {
 	reset_beta();
-      }    
+      }
   }
 
   inline void reset_alpha()
@@ -149,12 +152,12 @@ class WeightVector
     {
       v = (my_A + my_weights*my_alpha)/my_beta;
     }
-  
+
   inline double norm() const
   {
     return sqrt(my_norm_sq);
-  }  
-  
+  }
+
   inline double norm_avg() const
   {
     return (my_A + my_weights*my_alpha).norm()/my_beta;
@@ -165,17 +168,17 @@ class WeightVector
     return my_weights.size();
   }
 
-  // template functions must be defined in the header 
+  // template functions must be defined in the header
 
   // updates the current weight only, not the average
-  // should not be called if the average has been updated (i.e. my_avg_t > 1) 
-  template<typename EigenType> 
+  // should not be called if the average has been updated (i.e. my_avg_t > 1)
+  template<typename EigenType>
     void batch_gradient_update(const EigenType& x, const VectorXsz& index, const VectorXd& gradient, double lambda, double eta)
-    {      
+    {
       assert(x.cols()==my_weights.size());
       assert(my_avg_t == 0);
       // update for the reglarizer
-      scale(1.0-lambda*eta);      
+      scale(1.0-lambda*eta);
       size_t batch_size = index.size();
       double eta1 = eta/batch_size;
       for (size_t idx = 0; idx < batch_size; idx++)
@@ -189,15 +192,15 @@ class WeightVector
     }
 
   // updates the current weight only, not the average
-  // should not be called if the average has been updated (i.e. my_avg_t > 1) 
+  // should not be called if the average has been updated (i.e. my_avg_t > 1)
   // special function when batch size = 1
-  template<typename EigenType> 
+  template<typename EigenType>
     void batch_gradient_update(const EigenType& x, size_t index, double gradient, double lambda, double eta)
-    {      
+    {
       assert(x.cols()==my_weights.size());
       assert(my_avg_t == 0);
       // update for the reglarizer
-      scale(1.0-lambda*eta);      
+      scale(1.0-lambda*eta);
       if ( gradient != 0 )
 	{
 	  gradient_update_nochecks(x, index, gradient * eta);
@@ -207,15 +210,15 @@ class WeightVector
   // updates the current weight and the average
   // should not be called once the averaging should start
   // should have a different function for dense examples vectors
-  // as one could only update the average once per batch rather than at 
-  // every iteration. 
-  // in fact shoud have a different class for dense examples 
-  template<typename EigenType> 
+  // as one could only update the average once per batch rather than at
+  // every iteration.
+  // in fact shoud have a different class for dense examples
+  template<typename EigenType>
     void batch_gradient_update_avg(const EigenType& x, const VectorXsz& index, const VectorXd& gradient, double lambda, double eta)
-    {      
+    {
       if (my_avg_t == 0)
 	{
-	  // first time calling the averaging, 
+	  // first time calling the averaging,
 	  // is the same as simply updating the gradient
 	  batch_gradient_update(x,index,gradient,lambda,eta);
 	  my_avg_t++;
@@ -239,20 +242,20 @@ class WeightVector
 	}
     }
 
-  
+
   // special function for cases where batch_size = 1
   // updates the current weight and the average
   // should not be called once the averaging should start
   // should have a different function for dense examples vectors
-  // as one could only update the average once per batch rather than at 
-  // every iteration. 
-  // in fact shoud have a different class for dense examples 
-  template<typename EigenType> 
+  // as one could only update the average once per batch rather than at
+  // every iteration.
+  // in fact shoud have a different class for dense examples
+  template<typename EigenType>
     void batch_gradient_update_avg(const EigenType& x, size_t index, double gradient, double lambda, double eta)
-    {      
+    {
       if (my_avg_t == 0)
 	{
-	  // first time calling the averaging, 
+	  // first time calling the averaging,
 	  // is the same as simply updating the gradient
 	  batch_gradient_update(x,index,gradient,lambda,eta);
 	  my_avg_t++;
@@ -265,21 +268,21 @@ class WeightVector
 	  if ( gradient != 0 )
 	    {
 	      gradient_update_avg_nochecks(x, index, gradient * eta);
-	    }	  
+	    }
 	  update_alpha_beta();
 	}
     }
 
   // updates the current weight only, not the average
-  // should not be called if the average has been updated (i.e. my_avg_t > 1) 
+  // should not be called if the average has been updated (i.e. my_avg_t > 1)
   // should check if my_avg_t > 1, but won't do it here to eliminate an operation
 
   // we could have a separate function for dense vectors that automatically resets the scale
-  // but we do this to keep things simple for now. 
-  template<typename EigenType> 
+  // but we do this to keep things simple for now.
+  template<typename EigenType>
     inline void gradient_update(const EigenType& x, const size_t row, const double eta)
-    {      
-      // avoid boudary checks inside the loop. 
+    {
+      // avoid boudary checks inside the loop.
       // check that sizes match here.
       assert(x.cols()==my_weights.size());
       assert(my_avg_t == 0);
@@ -287,11 +290,11 @@ class WeightVector
     }
 
   // we could have a separate function for dense vectors that automatically resets the scale
-  // but we do this to keep things simple for now. 
-  template<typename EigenType> 
+  // but we do this to keep things simple for now.
+  template<typename EigenType>
     inline void gradient_update_avg(const EigenType& x, const size_t row, const double eta)
-    {      
-      // avoid boudary checks inside the loop. 
+    {
+      // avoid boudary checks inside the loop.
       // check that sizes match here.
       assert(x.cols()==my_weights.size());
       gradient_update_avg_nochecks(x,row,eta);
@@ -316,17 +319,17 @@ class WeightVector
 
 
   template<typename EigenType> inline void project_avg(VectorXd& proj, const EigenType& x) const
-    {           
+    {
       proj = (x*my_A + (x*my_weights)*my_alpha)/my_beta;
     }
 
 
  private:
   // have these functions private because they do no error checking
-  template<typename EigenType> 
+  template<typename EigenType>
     void gradient_update_nochecks(const EigenType& x, const size_t row, const double eta)
-    {      
-      // avoid boudary checks inside the loop. 
+    {
+      // avoid boudary checks inside the loop.
       // check that sizes match here.
       //      assert(x.cols()==my_weights.size());
       typename EigenType::InnerIterator it(x, row);
@@ -340,16 +343,16 @@ class WeightVector
 	  val -= (it.value() * eta1);
 	  norm_update += val*val;
 	  my_weights.coeffRef(col) = val;
-	} 
+	}
       my_norm_sq += norm_update*my_scale*my_scale;
     }
 
   // we could have a separate function for dense vectors that automatically resets the scale
-  // but we do this to keep things simple for now. 
-  template<typename EigenType> 
+  // but we do this to keep things simple for now.
+  template<typename EigenType>
     void gradient_update_avg_nochecks(const EigenType& x, const size_t row, const double eta)
-    {      
-      // avoid boudary checks inside the loop. 
+    {
+      // avoid boudary checks inside the loop.
       // check that sizes match here.
       //      assert(x.cols()==my_weights.size());
       typename EigenType::InnerIterator it(x, row);
@@ -364,11 +367,11 @@ class WeightVector
 	  val -= (it.value() * eta1);
 	  norm_update += val*val;
 	  my_weights.coeffRef(col) = val;
-	  my_A.coeffRef(col) += it.value() * eta_A;	  
-	} 
+	  my_A.coeffRef(col) += it.value() * eta_A;
+	}
       my_norm_sq += norm_update*my_scale*my_scale;
     }
-  
+
 
 };
 

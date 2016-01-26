@@ -16,8 +16,8 @@
 #include "constants.h"          // PRINT_O setting
 #include "printing.hh"          // print_report, print_progress
 
-#ifdef PROFILE 
-#include <gperftools/profiler.h> 
+#ifdef PROFILE
+#include <gperftools/profiler.h>
 #endif
 
 #include <iomanip>

@@ -165,7 +165,7 @@ do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	./demo-mcsolver > demo-mcsolver.log 2>&1
 	# All the simple tests (p0) can converge, for both original (o) and mcsolver (m,default)
 	@nfails=0; ntests=0; \
-	for t in 0 1 2 3 4 5 6; do  \
+	for t in 0 1 2 3 4 5 6 7; do  \
 	  { ./demo-mcsolver op0$$t > erik/log-op0$$t.log 2>&1 || { nfails=$$(($$nfails+1)); echo "ERROR in demo-mcsolver op0$$t"; false; } ; } &\
 	  { ./demo-mcsolver mp0$$t > erik/log-mp0$$t.log 2>&1 || { nfails=$$(($$nfails+1)); echo "ERROR in demo-mcsolver mp0$$t"; false; } ; } &\
 	  wait; \

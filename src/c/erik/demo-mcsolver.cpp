@@ -119,7 +119,7 @@ void apply_testnum(param_struct & params)
       case(2):                // mcsolver does not run correctly
           //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
           //mcsolver 'luPerm.ok_sortlu_avg' failed  at end of first dim (after t=100000)
-          params.avg_epoch = 1200;    
+          params.avg_epoch = 1200;
           cout<<" params.avg_epoch = "<<params.avg_epoch;
           break;
       case(3):        // make nAccSortlu_avg increment (for sure)
@@ -159,7 +159,7 @@ void apply_testnum(param_struct & params)
 
 /** partly destroys the solution by colwise renormalizing \c weights */
 void check_solution( DenseM & weights, DenseM & lower_bounds, DenseM & upper_bounds )
-{    
+{
     cout<<" post-run call to rand() returns "<<rand()<<endl;
     cout<<" quick demo of 3 translations of a "<<problem_msg<<" along the x axis"<<endl;
     cout<<" projection matrix\n";
