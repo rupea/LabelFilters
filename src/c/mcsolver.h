@@ -14,8 +14,8 @@
  * - etc etc
  */
 #define MCPRM 5
-#if MCPRM < 3
-#error "MCPRM < 3 code has been REMOVED"
+#if MCPRM < 5
+#error "MCPRM < 5 code has been REMOVED"
 #endif
 
 
@@ -56,7 +56,7 @@ public:
     friend class MCupdate;      // perhaps temporarily
     MCpermState( size_t nClass );       ///< allocate 6 vectors of size nClass, nothing is 'ok'
     /** produce new perm+rev according to ascending \c sortKey. */
-    void rank( VectorXd& sortkey ); // unperm, rerank, set flags
+    void rank( VectorXd const& sortkey ); // unperm, rerank, set flags
 
     /// \name Various ways to initialize \c l and \c u
     //@{
@@ -123,10 +123,10 @@ public:
      * This calculates and returns client-specified sortlu_avg vector.
      * Note this is const (after this, ok_sortlu_avg has NOT changed) */
     void getSortlu_avg( VectorXd& sortlu_test ) const;
+    void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu ) const;
 private:
     void toLu( VectorXd & ll, VectorXd & uu, VectorXd const& sorted );
     void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu );
-    void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu ) const;
 private:
     //MCsoln & const mcs;
     bool ok_lu;                 ///< after init, one or two of ok_lu and ok_sortlu are always true

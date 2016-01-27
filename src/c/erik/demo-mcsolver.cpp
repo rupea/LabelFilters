@@ -82,14 +82,17 @@ int testparms(int argc, char**argv, param_struct & params) {
             if(*ca == 'h'){
                 cout<<" Options:"
                     <<"\n   pN          test problem N in [0,2] w/ base parameter settings [default=2]"
-                    <<"\n   0-9         parameter modifiers, [default=0, no change from pN defaults]"
+                    <<"\n   0-9A-Z      parameter modifiers, [default=0, no change from pN defaults]"
                     <<"\n   m           [default] mcsolver code"
                     <<"\n   o           original code"
                     <<"\n   s<string>   save file base name (only for 'm') [default=none]"
                     <<"\n   h           this help"
                     <<"\n   v           increase verbosity [default=0]"
+                    <<"\n Convergence: p0 p1 p2 should converge"
+                    <<"\n              p0 with 0-9A-Z should converge, but harder problems might not"
                     <<endl;
             }else if(isdigit(*ca))      testnum = *ca - '0';
+            else if(isalpha(*ca) && isupper(*ca)) testnum = 10 + (*ca - 'A');
             else if(*ca == 'v')         ++verbose;
             else if(*ca == 'o')         use_mcsolver=false;
             else if(*ca == 'm')         use_mcsolver=true;
@@ -113,40 +116,87 @@ void apply_testnum(param_struct & params)
           cout<<" all parameters default";
           break;
       case(1):
+          params.avg_epoch = 0;                 // default
+          params.report_avg_epoch = 0;          // default
+          params.report_epoch = 0;
           params.optimizeLU_epoch = 0;
-          cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch;
+          params.reorder_epoch = 0;
+          cout<<" params.report_epoch="<<params.report_epoch
+              <<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
+              <<" params.reorder_epoch = "<<params.reorder_epoch;
           break;
-      case(2):                // mcsolver does not run correctly
-          //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
-          //mcsolver 'luPerm.ok_sortlu_avg' failed  at end of first dim (after t=100000)
-          params.avg_epoch = 1200;
-          cout<<" params.avg_epoch = "<<params.avg_epoch;
+      case(2):
+          params.avg_epoch = 0;                 // default
+          params.report_avg_epoch = 0;          // default
+          params.report_epoch = 1000;           // default
+          params.optimizeLU_epoch = 0;
+          params.reorder_epoch = 0;
+          cout<<" params.report_epoch="<<params.report_epoch
+              <<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
+              <<" params.reorder_epoch = "<<params.reorder_epoch;
           break;
-      case(3):        // make nAccSortlu_avg increment (for sure)
+      case(3):
+          params.avg_epoch = 0;                 // default
+          params.report_avg_epoch = 0;          // default
+          params.report_epoch = 1000;           // default
+          params.optimizeLU_epoch = 5500;
+          params.reorder_epoch = 0;
+          cout<<" params.report_epoch="<<params.report_epoch
+              <<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
+              <<" params.reorder_epoch = "<<params.reorder_epoch;
+          break;
+      case(4):
+          params.avg_epoch = 0;                 // default
+          params.report_avg_epoch = 0;          // default
+          params.report_epoch = 2000;
+          params.optimizeLU_epoch = 2500;
+          params.reorder_epoch = 1000;
+          cout<<" params.report_epoch="<<params.report_epoch
+              <<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
+              <<" params.reorder_epoch = "<<params.reorder_epoch;
+          break;
+      case(5):        // make nAccSortlu_avg increment (for sure)
           params.optimizeLU_epoch = 0;
           params.avg_epoch = 16000;
           cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
               <<" params.avg_epoch = "<<params.avg_epoch;
           break;
-      case(4):                // original annd mcsolver BOTH do not run correctly
+      case(6):
+          params.optimizeLU_epoch = 0;
+          cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch;
+          break;
+      case(7):                // mcsolver does not run correctly
+          //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
+          //mcsolver 'luPerm.ok_sortlu_avg' failed  at end of first dim (after t=100000)
+          params.avg_epoch = 1200;
+          cout<<" params.avg_epoch = "<<params.avg_epoch;
+          break;
+      case(8):                // original annd mcsolver BOTH do not run correctly
           //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
           //mcsolver 'luPerm.ok_sortlu_avg' failed  at t=1400
           params.avg_epoch = 1200;
           params.report_avg_epoch = 1400;
           cout<<" params.avg_epoch = "<<params.avg_epoch;
           break;
-      case(5):
+      case(9):
           params.reorder_type = REORDER_PROJ_MEANS;
           cout<<" params.reorder_type = "<<tostring(params.reorder_type);
           break;
-      case(6):
+      case(10):
           params.reorder_type = REORDER_RANGE_MIDPOINTS;
           cout<<" params.reorder_type = "<<tostring(params.reorder_type);
           break;
-      case(7):        // make nAccSortlu_avg increment (for sure)
+      case(11):        // make nAccSortlu_avg increment (for sure)
           params.reorder_epoch = 1000;   // default
           params.optimizeLU_epoch = 0;
           params.report_avg_epoch = 9999;
+          cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
+              <<" params.avg_epoch = "<<params.avg_epoch;
+          break;
+      case(12):        // make nAccSortlu_avg increment (for sure)
+          params.reorder_epoch = 1000;   // default
+          params.optimizeLU_epoch = 0;
+          params.report_avg_epoch = params.report_epoch*2U;
           cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
               <<" params.avg_epoch = "<<params.avg_epoch;
           break;
@@ -181,7 +231,13 @@ void check_solution( DenseM & weights, DenseM & lower_bounds, DenseM & upper_bou
     for(int r=0U; r<lower_bounds.rows(); ++r) cout<<(r==0U?"":"           ")<<lower_bounds.row(r)<<"\n";
     cout<<endl;
     cout<<" ub    = ";
-    for(int r=0U; r<upper_bounds.rows(); ++r) cout<<(r==0U?"":"           ")<<upper_bounds.row(r)<<"\n";
+    for(int r=0U; r<upper_bounds.rows(); ++r){
+        auto const& row_r = upper_bounds.row(r);
+        cout<<(r==0U?"":"           ");
+        for(uint32_t i=0; i<row_r.size(); ++i ){ cout<<" "<<row_r[i]; cout.flush(); }
+        //cout<<row_r<<"\n"; cout.flush();
+        cout<<endl;
+    }
     cout<<endl;
     //
     // throw on wrong output
@@ -342,7 +398,10 @@ int main(int argc,char** argv)
         //DenseM const& u_avg = soln.upper_bounds_avg;
         //VectorXd const& objective_val = soln.objective_val;
         //VectorXd const& objective_val_avg = soln.objective_val_avg;
-        check_solution( weights, lower_bounds, upper_bounds );  // throw on error
+        if(1){
+            cout<<"upper_bounds = "<<upper_bounds<<endl;
+            check_solution( weights, lower_bounds, upper_bounds );  // throw on error
+        }
         if( saveBasename.size() > 0U ){
             string saveTxt(saveBasename); saveTxt.append(".soln");
             cout<<" Saving to file "<<saveTxt<<endl;
@@ -350,9 +409,9 @@ int main(int argc,char** argv)
                 ofstream ofs(saveTxt);
                 soln.write( ofs, MCsoln::TEXT, MCsoln::SHORT );
                 ofs.close();
-            }catch(std::exception const& what){
-                cout<<"OHOH! Error during text write of demo.soln"<<endl;
-                throw(what);
+            }catch(std::exception const& e){
+                cout<<"OHOH! Error during text write of demo.soln "<<e.what()<<endl;
+                throw(e);
             }
             string saveBin(saveBasename); saveBin.append("-bin.soln");
             cout<<" Saving to file "<<saveBin<<endl;

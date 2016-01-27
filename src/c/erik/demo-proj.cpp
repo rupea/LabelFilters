@@ -93,6 +93,20 @@ void apply_testnum(param_struct & params)
           params.reorder_type = REORDER_RANGE_MIDPOINTS;
           cout<<" params.reorder_type = "<<tostring(params.reorder_type);
           break;
+      case(7):        // make nAccSortlu_avg increment (for sure)
+          params.reorder_epoch = 1000;   // default
+          params.optimizeLU_epoch = 0;
+          params.report_avg_epoch = 9999;
+          cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
+              <<" params.avg_epoch = "<<params.avg_epoch;
+          break;
+      case(8):        // make nAccSortlu_avg increment (for sure)
+          params.reorder_epoch = 1000;   // default
+          params.optimizeLU_epoch = 0;
+          params.report_avg_epoch = params.report_epoch*2U;
+          cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
+              <<" params.avg_epoch = "<<params.avg_epoch;
+          break;
       default:
           cout<<" OHOH! testnum = "<<testnum<<", really?"<<endl;
           throw std::runtime_error(" UNKNOWN testnum (running defaults)");
@@ -113,61 +127,7 @@ int main(int argc,char** argv)
   testparms(argc,argv, params);
   params.no_projections = 4U;
   params.max_iter=100000U;              // default 1e6 takes 10-15 minutes
-#if 0
-  // parse arguments
-  {
-#ifndef TESTNUM
-#define TESTNUM 0
-#endif
-      int testnum = TESTNUM;
-      if( argc == 2 ){
-          testnum = argv[1][0] - '0';
-      }
-      cout<<" demo-proj running testnum "<<testnum;
-      switch( testnum ){
-        case(0):
-            cout<<" all parameters default";
-            break;
-        case(1):
-            params.optimizeLU_epoch = 0;
-            cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch;
-            break;
-        case(2):                // mcsolver does not run correctly
-            //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
-            //mcsolver 'luPerm.ok_sortlu_avg' failed  at end of first dim (after t=100000)
-            params.avg_epoch = 1200;    
-            cout<<" params.avg_epoch = "<<params.avg_epoch;
-            break;
-        case(3):        // make nAccSortlu_avg increment (for sure)
-            params.optimizeLU_epoch = 0;
-            params.avg_epoch = 16000;
-            cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
-                <<" params.avg_epoch = "<<params.avg_epoch;
-            break;
-        case(4):                // original annd mcsolver BOTH do not run correctly
-            //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
-            //mcsolver 'luPerm.ok_sortlu_avg' failed  at t=1400
-            params.avg_epoch = 1200;
-            params.report_avg_epoch = 1400;
-            cout<<" params.avg_epoch = "<<params.avg_epoch;
-            break;
-        case(5):
-            params.reorder_type = REORDER_PROJ_MEANS;
-            cout<<" params.reorder_type = "<<tostring(params.reorder_type);
-            break;
-        case(6):
-            params.reorder_type = REORDER_RANGE_MIDPOINTS;
-            cout<<" params.reorder_type = "<<tostring(params.reorder_type);
-            break;
-        default:
-            cout<<" OHOH! "<<endl;
-            throw std::runtime_error(" UNKNOWN testnum (running defaults)");
-      }
-      cout<<endl;
-  }
-#else
   apply_testnum(params);
-#endif
 
   int const rand_seed = 117;
   int const p = params.no_projections;

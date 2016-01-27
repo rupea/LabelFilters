@@ -330,14 +330,18 @@ void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1,
     size_t total_p=0;
 
     std::vector<PredVec*>* preddata = _preddata; // needed to make the omp work.
+#if MCTHREADS
 #pragma omp parallel default(none) shared(preddata,thresh,k,y,class_tp,class_total_p,total_p,tp,ncl)
+#endif
     {
       std::vector<size_t> class_tp_private(y.cols(),0);
       std::vector<size_t> class_total_p_private(y.cols(),0);    
       std::vector<size_t> ncl_private(y.cols(),0);
       size_t tp_private=0;
       size_t total_p_private=0;
+#if MCTHREADS
 #pragma omp for
+#endif
       for ( size_t i=0; i < preddata->size(); i++)
 	{
 	  std::vector<int> preds;
@@ -364,7 +368,9 @@ void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1,
 	    }	  
 	  total_p_private+=preds.size();
 	}
+#if MCTHREADS
 #pragma omp critical
+#endif
       {
 	for (int i=0; i < y.cols(); i++)
 	  {
@@ -385,7 +391,9 @@ void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1,
     double rec = 0;
     double f1 = 0;
     size_t l=0;
+#if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:prec,rec,f1,l)
+#endif
     for (int j=0;j<y.cols();j++)
       {
 	double p=0,r=0;
@@ -421,7 +429,9 @@ void PredictionSet::TopMetrics(double& Prec1, double& Top1,
     double my_top1=0, my_prec1=0, my_top5=0, my_prec5=0, my_top10=0, my_prec10=0;
     
     std::vector<PredVec*>* preddata = _preddata; // needed to make the omp work.
+#if MCTHREADS
 #pragma omp parallel for default(none) shared(preddata,y,maxtop) reduction(+:my_top1,my_top5,my_top10,my_prec1,my_prec5,my_prec10)
+#endif
     for ( size_t i=0; i<preddata->size(); i++)
       {	
 	std::vector<int> preds;

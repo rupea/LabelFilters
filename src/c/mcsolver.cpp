@@ -26,6 +26,7 @@ using namespace std;
     , l_avg( nClass )
     , u_avg( nClass )
 {
+    cout<<" +MCpermState(nClass="<<nClass<<")"<<endl;
     reset();            // just in case Eigen does not zero them initially
 }
 
@@ -48,14 +49,21 @@ void MCpermState::reset()
 }
 void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const& y, VectorXi const& nc )
 {
+    size_t const nClasses = y.cols();
+    size_t const nEx      = y.rows();
+    cout<<" MCpermState::init(projection["<<projection.size()<<"],y,nc) nClasses="<<nClasses<<")"<<endl;
+    //l.conservativeResize( nClasses );
+    //u.conservativeResize( nClasses );
+    assert( l.size() == (int)nClasses );
+    assert( u.size() == (int)nClasses );
+    assert( projection.size() == (int)nEx );
     l.setConstant(  0.1 * boost::numeric::bounds<double>::highest() );
     u.setConstant(  0.1 * boost::numeric::bounds<double>::lowest() );
-    size_t const nClasses = y.rows();
-    // XXX if we iterate over CLASSES, then loop can be parallelized, maybe
-    for (size_t i=0; i<nClasses; ++i) {
+    for (size_t i=0; i<nEx; ++i) {
         for (SparseMb::InnerIterator it(y,i); it; ++it) {
             if (it.value()) {
                 size_t const c = it.col();
+                assert( c < nClasses );
                 double const pr = projection.coeff(i);
                 l.coeffRef(c) = min(pr, l.coeff(c));
                 u.coeffRef(c) = max(pr, u.coeff(c));

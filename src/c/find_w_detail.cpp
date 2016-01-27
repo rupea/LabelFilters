@@ -7,7 +7,7 @@
 #include "find_w_detail.h"
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
-//#include "boost/iterator/counting_iterator.hpp"
+#include "boost/iterator/counting_iterator.hpp"
 #include <boost/numeric/conversion/bounds.hpp>  // boost::numeric::bounds<T>
 #include <iostream>
 #include <iomanip>
@@ -69,6 +69,7 @@ void rank_classes(std::vector<int>& indices, std::vector<int>& cranks, const Vec
     sort_index(sortkey, indices); // <---   un-init
     //cout<<" cranks... "<<endl; cout.flush();
     for (int i = 0; i < sortkey.size(); ++i) {
+        assert( indices[i] >= 0 && indices[i] < static_cast<int>(cranks.size()) );
         cranks[indices[i]] = i;
     }
     //cout<<" rank_classes DONE "<<endl; cout.flush();
@@ -1220,7 +1221,9 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
   //  size_t no_filtered = filtered.count();
   bool none_filtered = filtered.count()==0;
   //int maxclasses = nclasses.maxCoeff();
+#if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:obj_val)
+#endif
   for (int i = 0; i < projection.size(); i++)
     {
       obj_val += calculate_ex_objective_hinge(i, projection.coeff(i),  y,
@@ -1267,8 +1270,9 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
   int sc_remaining = noClasses % sc_chunks;
   size_t i_chunk_size = projection.size()/i_chunks;
   size_t i_remaining = projection.size() % i_chunks;
-
+#if MCTHREADS
 # pragma omp parallel for  default(shared) collapse(2) reduction(+:obj_val)
+#endif
   for (int i_chunk = 0; i_chunk < i_chunks; i_chunk++)
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
       {
@@ -1513,27 +1517,35 @@ void optimizeLU(VectorXd& l, VectorXd& u,
   size_t n = projection.size();
   size_t noClasses = y.cols();
   VectorXd allproj(2*n);
+  //allproj.setZero();            // valgrind issues ???
   allproj << (projection.array() - 1), (projection.array() + 1);
 
-  bool none_filtered = filtered.count()==0;
+  bool none_filtered = filtered.count()==0;             // XXX ouch ???
   std::vector<size_t> indices(allproj.size());
-  sort_index(allproj, indices);
-  //std::vector<size_t> indices( boost::counting_iterator<size_t>(0),
-  //                             boost::counting_iterator<size_t>(n+n));
-  //std::sort(indices.begin(), indices.end(),
-  //          [&allproj]( size_t const i, size_t const j )-> bool
-  //          { return allproj[i] < allproj[j]; });
+  if(1){
+      sort_index(allproj, indices);  // valgrind complaints ??? XXX
+  }else{ // incorrect?
+      std::vector<size_t> indices( boost::counting_iterator<size_t>(0),
+                                   boost::counting_iterator<size_t>(n+n));
+      std::sort(indices.begin(), indices.end(),
+                [&allproj]( size_t const i, size_t const j )-> bool
+                { return allproj[i] < allproj[j]; });
+  }
 
-  int min_chunk_size = 10000;
 #ifdef _OPENMP
+  int min_chunk_size = 10000;
   int max_n_chunks = omp_get_max_threads();
-#else
   int max_n_chunks = 1;
+#else
 #endif
 
+#if MCTHREADS
 #pragma omp parallel default(shared) shared(l, u, allproj, indices,none_filtered, filtered, n, noClasses, y, class_order, sorted_class, wc, nclasses, params, min_chunk_size, max_n_chunks)
+#endif
   {
+#if MCTHREADS
 #pragma omp single
+#endif
     {
       double class_weight, other_weight;
       std::vector<int> classes;
@@ -1621,7 +1633,9 @@ void optimizeLU(VectorXd& l, VectorXd& u,
               {
                   continue;
               }
+#if MCTHREADS
 #ifdef _OPENMP
+#endif
               // make sure there is enough work to do to paralelize this
               int n_chunks = classes.back()/min_chunk_size + 1;
               n_chunks = n_chunks < max_n_chunks?n_chunks:max_n_chunks;
@@ -1629,7 +1643,9 @@ void optimizeLU(VectorXd& l, VectorXd& u,
               int remaining = classes.back()%n_chunks;
               for (int chunk=0; chunk < n_chunks; chunk++)
               {
+#if MCTHREADS
 #pragma omp task default(shared) firstprivate(chunk) shared(grad, u, idx, i, sorted_class, classes, right_update, other_weight, allproj, none_filtered, filtered, chunk_size, remaining)
+#endif
                   {
                       int sc_start = chunk*chunk_size + (chunk<remaining?chunk:remaining);
                       int sc_incr = chunk_size + (chunk<remaining);
@@ -1640,7 +1656,9 @@ void optimizeLU(VectorXd& l, VectorXd& u,
                       getBoundGrad(grad, u, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, right_update, -other_weight, allproj, none_filtered, filtered);
                   }
               }
+#if MCTHREADS
 #pragma omp taskwait
+#endif
 #else // if not _OPENMP
               getBoundGrad(grad, u, idx, *i, sorted_class, 0,classes.back(),classes,right_update,-other_weight,allproj,none_filtered,filtered);
 #endif // _OPENMP
@@ -1648,7 +1666,9 @@ void optimizeLU(VectorXd& l, VectorXd& u,
       }
     }
 
+#if MCTHREADS
 #pragma omp single
+#endif
     {
       double class_weight, other_weight;
       std::vector<int> classes;
@@ -1757,14 +1777,18 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 	      int remaining = n_active%n_chunks;
 	      for (int chunk=0; chunk < n_chunks; chunk++)
 		{
+#if MCTHREADS
 #pragma omp task default(shared) firstprivate(chunk) shared(grad, l, idx, i, sorted_class, classes, other_weight, allproj, none_filtered, filtered, chunk_size, remaining)
+#endif
 		  {
 		    int sc_start = classes.front() + 1 + chunk*chunk_size + (chunk<remaining?chunk:remaining);
 		    int sc_incr = chunk_size + (chunk<remaining);
 		    getBoundGrad(grad, l, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, 0.0, other_weight, allproj, none_filtered, filtered);
 		  }
 		}
+#if MCTHREADS
 #pragma omp taskwait
+#endif
 #else // if not _OPENMP
 	      getBoundGrad(grad, l, idx, *i, sorted_class, classes.front() + 1,noClasses,classes, 0.0, other_weight, allproj, none_filtered, filtered);
 #endif // _OPENMP
@@ -2183,6 +2207,7 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 // we'll implement this when we get there
 
 /** Projection to a new vector that is orthogonal to the rest.
+ * - sets w to be ortho to weights[0..projection_dim-1]
  * - It is basically Gram-Schmidt Orthogonalization.
  * - sequentially remove projections of \c w onto each of the
  *   \c weights[i] directions.
@@ -2232,11 +2257,13 @@ void project_orthogonal( VectorXd& w, const DenseM& weights,
     }
 #endif
 #else // ! ASSUME_WEIGHTS_ALREADY_ORTHOGONAL
+    if(verbose) cout<<" Orthogonalizing first "<<projection_dim<<" cols of weights..."<<endl;
     // we orthogonalize weights, and then apply to w
     DenseM o = weights.topLeftCorner( weights.rows(), projection_dim );  // orthonormalized weights
+    assert( o.cols() == projection_dim );
     VectorXd onorm(projection_dim);
     for(int i = 0; i < projection_dim; ++i){
-        onorm[i] = o.col(i).norm();
+        onorm[i] = o.col(i).norm();                     // valgrind issues. why?
     }
     for(int i = 0; i < projection_dim; ++i){
         for(int j = 0; j < i; ++j) {
@@ -2249,9 +2276,8 @@ void project_orthogonal( VectorXd& w, const DenseM& weights,
         }
         onorm[i] = o.col(i).norm();
     }
-    // now use the orthogonalized version of weights to generate w (as usual)
     for(int i = 0; i < projection_dim; ++i){
-        double const norm = onorm[i]; //o.col(i).norm();
+        double const norm = onorm[i]; //o.col(i).norm();        // XXX valgrind
         if( norm > 1.e-6 ){
             w.array() -= (o.col(i) * ((w.transpose() * o.col(i)) / (norm*norm))).array();
         }

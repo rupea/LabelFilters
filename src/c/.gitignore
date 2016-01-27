@@ -1,4 +1,15 @@
 demo-proj
+demo-proj2
+demo-proj3
+demo-proj4
+*.o
+*.lo
+*.2o
+*.3o
+*.4o
+demo-proj*.log
+mcsolver-*
+mcupdate-*
 dpa.log
 dpb.log
 dpa?.log

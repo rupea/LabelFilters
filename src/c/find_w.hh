@@ -75,8 +75,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     //  VectorXd sortedLU_gradient_chunk;
     VectorXd l_avg(noClasses),u_avg(noClasses); // the lower and upper bounds for the averaged gradient
     VectorXd sortedLU_avg(2*noClasses); // holds l_avg and u_avg interleaved in the curent class sorting order (i.e. l_avg,u_avg,l_avg,u_avg,l_avg,u_avg)
-    VectorXd means(noClasses); // used for initialization of the class order vector;
-    //means.setZero();
     VectorXi nc; // the number of examples in each class
     VectorXd wc; // the number of examples in each class
     VectorXi nclasses; // the number of examples in each class
@@ -94,7 +92,10 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     // respectively its own class.
     //  size_t  i=0, idx=0;
     unsigned long t = 1;
+    VectorXd means(noClasses); // used for initialization of the class order vector;
     std::vector<int> sorted_class(noClasses), class_order(noClasses);//, prev_class_order(noClasses);// used as the switch
+    //means.setZero();
+    //for( int i=0; i<static_cast<int>(noClasses); ++i ){ sorted_class[i] = i; class_order[i] = i; } // valgrind debug
     char iter_str[30];
 
     // how to split the work for gradient update iterations
@@ -409,7 +410,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                 assert( u.size() == l.size() );
                 assert( means.size() == l.size() );
                 // calculate the new class order
-                rank_classes(sorted_class, class_order, means);
+                rank_classes(sorted_class, class_order, means); // valgrind!!
                 assert( means.size() == l.size() );
                 // sort the l and u in the order of the classes
                 assert( static_cast<size_t>(sorted_class.size()) == static_cast<size_t>(l.size()) );
@@ -643,6 +644,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 #endif
 
     } // end for projection_dim
+    delete[]  sc_locks;  sc_locks = nullptr;
+    delete[] idx_locks; idx_locks = nullptr;
 }
 
 #endif // FIND_W_HH

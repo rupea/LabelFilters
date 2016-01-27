@@ -5,10 +5,18 @@ endif
 ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
 endif
-OPENMP ?= -fopenmp
+
+#OPENMP ?= -fopenmp
+# for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
+# 1. no openmp anywhere
+#OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
+# 2. allow Eigen/blas threads, but no MCFilter source code threads
+OPENMP:= -DMCTHREADS=0
+# allow STL experimental threads?
+
 CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
 CPPFLAGS += -I$(BOOSTDIR) -std=c++11
-CPPFLAGS += -fopenmp
+#CPPFLAGS += -fopenmp
 CPPFLAGS += -pipe
 # testing...
 MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
@@ -30,7 +38,7 @@ LDFLAGS ?= -L$(BOOSTDIR)/../lib -lboost_program_options
 # testing
 #LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
 
-PROFILE_OPENMP = -fopenmp
+PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
@@ -62,9 +70,11 @@ profile_kmeans:
 
 
 ## extra stuff ######################### without octave ###################
-.PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests
+.PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests do-vg tail-vg
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
+# for better tracing...
+DBGFLAGS += -O1
 %-dbg.o: %.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -c $<
 %.lo: %.cpp
@@ -104,18 +114,23 @@ long: clean
 	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
 	&& $(MAKE) -j20 do-tests \
 	&& $(MAKE) -j20 demo-proj demo-proj-dbg demo-proj2-dbg \
-	&& { if [ -f dpa.log ]; then $(MAKE) dpa.log; else tail -n5 dpa.log; fi; } \
+	&& { if [ -f dpa.log ]; then tail -n5 dpa.log; else $(MAKE) dpa.log; fi; } \
 	&& $(MAKE) dpb.log
 	rm -f dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log
-	$(MAKE) -j6 dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log > erik/mk-long.log 2>&1
+	$(MAKE) -j6 dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log dpa7.log dpb7.log dpa8.log dpb8.log > erik/mk-long.log 2>&1
 	$(MAKE) long-compare
 long-compare:
-	{ for n in "" 1 2 3 4 5 6; do \
+	{ for n in "" 1 2 3 4 5 6 7 8; do \
+	  a=`tail dpa$$n.log | grep '^obj' | tail -n2 | head -n1`; \
+	  b=`tail dpb$$n.log | grep '^obj' | tail -n2 | head -n1`; \
+	  echo "dpa$$n: $$a     dpb$$n: $$b"; \
+	done; }
+	{ for n in "" 1 2 3 4 5 6 7 8; do \
 	  a=`tail dpa$$n.log | grep '^obj' | tail -n1`; \
 	  b=`tail dpb$$n.log | grep '^obj' | tail -n1`; \
-	  echo "dpa$$n: $$a     dpb$$n: $$b"; \
-	done; } \
-	&& echo 'OK: make long'
+	  echo "Dpa$$n: $$a     Dpb$$n: $$b"; \
+	done; }
+	echo 'OK: make long'
 dpa.log: demo-proj-dbg | libmcfilter-dbg.a
 	@echo -e "\n$@ ..."
 	./$< 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
@@ -158,14 +173,45 @@ dpa6.log: demo-proj-dbg | libmcfilter-dbg.a
 dpb6.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
 	@echo -e "\n$@ ..."
 	./$< 6 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa7.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 7 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb7.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 7 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpa8.log: demo-proj-dbg | libmcfilter-dbg.a
+	@echo -e "\n$@ ..."
+	./$< 8 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+dpb8.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
+	@echo -e "\n$@ ..."
+	./$< 8 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
+do-vg: demo-mcsolver
+	valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver m 2>&1 | tee dmc-m.txt | tail
+	@echo ""
+	valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver o 2>&1 | tee dmc-o.txt | tail
+	@echo -n "valgrind tests 0-C ... "
+	for t in 0 1 2 3 4 5 6 7 8 9 A B C; do  \
+	  echo -n " $$t"; \
+	  valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver op0$$t > erik/log-op0$$t.vg 2>&1 & \
+	  valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver mp0$$t > erik/log-mp0$$t.vg 2>&1 & \
+	  wait; \
+	done;
+	@echo DONE valgrind tests
+	$(MAKE) tail-vg
+tail-vg:
+	tail -n1 erik/log-op0*.vg
+	tail -n1 erik/log-mp0*.vg
+do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	./demo-quick > demo-quick.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
 	./demo-mcsolver > demo-mcsolver.log 2>&1
+	 valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver m 2>&1 | tee dmc-m.txt | tail
+	 valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver o 2>&1 | tee dmc-o.txt | tail
 	# All the simple tests (p0) can converge, for both original (o) and mcsolver (m,default)
 	@nfails=0; ntests=0; \
-	for t in 0 1 2 3 4 5 6 7; do  \
+	for t in 0 1 2 3 4 5 6 7 8 9 A B C; do  \
 	  { ./demo-mcsolver op0$$t > erik/log-op0$$t.log 2>&1 || { nfails=$$(($$nfails+1)); echo "ERROR in demo-mcsolver op0$$t"; false; } ; } &\
 	  { ./demo-mcsolver mp0$$t > erik/log-mp0$$t.log 2>&1 || { nfails=$$(($$nfails+1)); echo "ERROR in demo-mcsolver mp0$$t"; false; } ; } &\
 	  wait; \
@@ -173,12 +219,20 @@ do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	done; \
 	if [ "$$nfails" = "0" ]; then echo "                do-tests *** PASSED $$ntests TESTS ***"; \
 	else                          echo "                do-tests *** FAILED $$nfails TESTS ***"; false; fi
+	@echo ""
+	@echo ""
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 LIB_CPPFILES:= mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
 libmcfilter.a: $(patsubst %.cpp,%.o,$(LIB_CPPFILES))
+	$(AR) -vru $@ $^
+libmcfilter2.a: $(patsubst %.cpp,%.2o,$(LIB_CPPFILES))
+	$(AR) -vru $@ $^
+libmcfilter3.a: $(patsubst %.cpp,%.3o,$(LIB_CPPFILES))
+	$(AR) -vru $@ $^
+libmcfilter4.a: $(patsubst %.cpp,%.4o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
@@ -188,9 +242,31 @@ libmcfilter-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIB_CPPFILES))
 	$(CXX) -o $@ -shared $^
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj: | libmcfilter.a
-demo-proj: erik/demo-proj.cpp libmcfilter.a
+demo-proj1: erik/demo-proj.cpp libmcfilter.a
 	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
 	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
+demo-proj2: erik/demo-proj.cpp libmcfilter2.a
+	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -I. $^ $(LDFLAGS)
+	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
+demo-proj3: erik/demo-proj.cpp libmcfilter3.a
+	$(CXX) -o $@ $(CPPFLAGS) -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
+	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
+demo-proj4: erik/demo-proj.cpp libmcfilter4.a
+	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
+	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
+do-proj: demo-proj demo-proj2 demo-proj3 demo-proj4
+	/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log
+	/usr/bin/time -v ./demo-proj2 2>&1 | tee demo-proj2.log
+	/usr/bin/time -v ./demo-proj3 2>&1 | tee demo-proj3.log
+	/usr/bin/time -v ./demo-proj4 2>&1 | tee demo-proj4.log
+	echo "\t\t\t make do-proj COMPLETE"
+
+%.2o: %.cpp
+	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -c $<
+%.3o: %.cpp
+	$(CXX) -o $@ $(CPPFLAGS) -D_GLIBCXX_PARALLEL -c $<
+%.4o: %.cpp
+	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -c $<
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj-dbg: | libmcfilter-dbg.a
 demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a

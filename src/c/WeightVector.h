@@ -41,23 +41,36 @@ class WeightVector
       my_scale = 1.0;
       my_norm_sq = 0;
       my_A = VectorXd();
+	my_A.setZero();
       my_avg_t = 0;
       my_beta = 1;
       my_alpha = 1;
     }
 
   // constructor from a dense vector.
-  WeightVector(const VectorXd& w)
+  WeightVector( VectorXd const& w)
+      : my_weights(w)
+        , my_scale(1.0)
+        , my_norm_sq( w.squaredNorm() )
+        , my_A(w.size())
+        , my_alpha(1.0)
+        , my_beta(1.0)
+        , my_avg_t(0U)
     {
-      double norm = w.norm();
-      my_norm_sq = norm*norm;
+        my_A.setZero(); // absolutely nec. (valgrind)
+    }
+  template<typename Derived>
+  void init( Eigen::MatrixBase<Derived> const& src )
+  {
       my_scale = 1.0;
-      my_weights = w;
-      my_A = VectorXd(w.size());
+      my_weights = src;
+      my_norm_sq = my_weights.squaredNorm();
+      my_A = VectorXd(src.size());
+      my_A.setZero();
       my_avg_t = 0;
       my_beta = 1;
       my_alpha = 1;
-    }
+  }
   //construct a vector of a fixed size and initialize it with zero
   WeightVector(const int size)
     {
@@ -65,6 +78,7 @@ class WeightVector
       my_weights = VectorXd(size);
       my_scale = 1.0;
       my_A = VectorXd(size);
+	//my_A.setZero();
       my_avg_t = 0;
       my_beta = 1;
       my_alpha = 1;
@@ -147,11 +161,26 @@ class WeightVector
     {
       v = my_weights*my_scale;
     }
+  /// some complicate type (decltype in C++1, auto return type deduction in C++14, later)
+  typedef decltype(my_weights*my_scale) VecExprType;
+  /// avoid copies with m.col(i) = w.getVec()
+  inline VecExprType getVec()
+  {
+      return my_weights*my_scale;
+  }
 
   inline void toVectorXd_avg(VectorXd& v) const
     {
-      v = (my_A + my_weights*my_alpha)/my_beta;
+      v = (my_A + my_weights*my_alpha)*(1.0/my_beta);
     }
+
+  /// avoid copies with m.col(i) = w.getVec()
+  typedef decltype((my_A + my_weights*my_alpha) * (1.0/my_beta)) VecAvgExprType;
+  inline VecAvgExprType getVecAvg()
+  {
+      assert( my_avg_t > 0 );
+      return (my_A + my_weights*my_alpha) * (1.0/my_beta);
+  }
 
   inline double norm() const
   {

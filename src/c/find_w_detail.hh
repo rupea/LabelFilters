@@ -76,7 +76,9 @@ void init_w( WeightVector& w,
     }
     //cout<<endl;
 
-    w = WeightVector(init);
+    assert( init.size() == d );
+    assert( fabs(init.norm() - 1.0) < 1.e-6 );
+    w.init(init);
     // w.setRandom(); // initialize to a random value
 }
 
@@ -207,7 +209,9 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     }
 
 
+#if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:multiplier)
+#endif
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
         // the first chunks will have an extra iteration
@@ -242,7 +246,9 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
         // WARNING: for now it assumes that norm(x) = 1!!!!!
         new_proj = proj - eta*lambda*proj - eta*multiplier;
         new_multiplier=0;
+#if MCTHREADS
 #pragma omp parallel for  default(shared) reduction(+:new_multiplier)
+#endif
         for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
         {
             // the first chunks will have an extra iteration
@@ -288,7 +294,9 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     // update L and U with w fixed.
     // use new_proj since it is exactly the projection obtained with the new w
     bool const accumulate_sortedLU = (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch);
+#if MCTHREADS
 #pragma omp parallel for  default(shared)
+#endif
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
         int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
@@ -374,11 +382,12 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
 
     multipliers.setZero();
     //  sortedLU_gradient.setZero();
-
-    //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
-    //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(1)
+#if MCTHREADS
+    #pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
+    #pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(1)
     //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(1) if(idx_chunks > 1)
     //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(2) if(idx_chunks > 1)
+#endif
     for (int idx_chunk = 0; idx_chunk < idx_chunks; idx_chunk++)
     {
         //VectorXd sortedLU_gradient_chunk;
@@ -401,7 +410,9 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
                               sortedLU, filtered,
                               C1, C2, params);
 
-            //#pragma omp task default(none) shared(sc_chunk, idx_chunk, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
+#if MCTHREADS
+            #pragma omp task default(none) shared(sc_chunk, idx_chunk, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
+#endif
             {
                 //#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
                 {
@@ -418,7 +429,9 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
                 //sc_locks[sc_chunk].Unlock();
                 //#pragma omp taskwait
             }
-            //#pragma omp taskwait
+#if MCTHREADS
+            #pragma omp taskwait
+#endif
         }
     }
 

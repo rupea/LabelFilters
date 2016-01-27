@@ -36,7 +36,9 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
         }
         ActiveDataSet::iterator it;
         size_t count = 0;
+#if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:count)
+#endif
         for(size_t j=0; j < n; ++j)
         {
             boost::dynamic_bitset<>* act = (*active)[j];

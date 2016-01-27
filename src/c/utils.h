@@ -14,25 +14,31 @@ using Eigen::VectorXd;
 template<typename IntType>
 void sort_index( VectorXd const& m, std::vector<IntType>& cranks)
 {
-  //struct Cmp {
-  //    Cmp( VectorXd const& m ) : m(m) {}
-  //    bool operator()( int const i, int const j ){
-  //        //return m.coeff(i) < m.coeff(j);
-  //        return m(i) < m(j);   // with checking
-  //    }
-  //    VectorXd const& m;
-  //};
   if( cranks.size() != static_cast<size_t>(m.size()) )
       throw std::runtime_error("ERROR: sort_index(vec,ranks): vec and ranks sizes must match");
-  //std::cout<<" std::iota ... "<<std::endl; std::cout.flush();
+  if( m.size() == 0U )
+      throw std::runtime_error("ERROR: sort_index( m, cranks ) with m.size==0 !");
   std::iota(cranks.begin(), cranks.end(), IntType(0));
-  //for(int i=0U; i<m.size(); ++i)
-  //    cranks[i] = i;
-  //std::cout<<" std::sort ... "<<std::endl; std::cout.flush();
-  //std::sort(cranks.begin(), cranks.end(), Cmp(m) );
   std::sort(cranks.begin(), cranks.end(), [&m](int const i, int const j)
             {return m[i] < m[j];} );
 };
+#if 0 // plainer implementation
+  struct Cmp {
+      Cmp( VectorXd const& m ) : m(m) {}
+      bool operator()( int const i, int const j ){
+          //return m.coeff(i) < m.coeff(j);
+          return m(i) < m(j);   // with checking
+      }
+      VectorXd const& m;
+  };
+  for(size_t i=0U; i<cranks.size(); ++i)
+      cranks[i] = i;
+  std::cout<<" copy..."<<std::endl;
+  VectorXd n(m);
+  std::cout<<" std::sort ... "<<std::endl; std::cout.flush();
+  Cmp cmp(n);
+  std::sort(cranks.begin(), cranks.end(), cmp );
+#endif
 
 
 //**********************************
