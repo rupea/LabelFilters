@@ -1,20 +1,24 @@
 CXX ?= g++
 ifneq ($(wildcard /opt/boost-1.60),)
-BOOSTDIR ?= /opt/boost-1.60/include
+BOOSTROOT?=/opt/boost-1.60
+BOOSTDIR :=$(BOOSTROOT)/include
+BOOSTLIB :=$(BOOSTROOT)/lib
 endif
 ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
+BOOSTLIB :=$(BOOSTDIR)/../lib   # probably wrong !!!
 endif
+BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB)
 
-#OPENMP ?= -fopenmp
+OPENMP ?= -fopenmp
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
 # 1. no openmp anywhere
 #OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
 # 2. allow Eigen/blas threads, but no MCFilter source code threads
-OPENMP:= -DMCTHREADS=0
+#OPENMP:= -DMCTHREADS=0
 # allow STL experimental threads?
 
-CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) 
+CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG
 CPPFLAGS += -I$(BOOSTDIR) -std=c++11
 #CPPFLAGS += -fopenmp
 CPPFLAGS += -pipe
@@ -34,13 +38,13 @@ OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 HDF5_INC ?= -I/usr/include/hdf5/serial
 OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave $(HDF5_INC)
 
-LDFLAGS ?= -L$(BOOSTDIR)/../lib -lboost_program_options
+LDFLAGS ?= $(BOOSTLINK) -lboost_program_options
 # testing
 #LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
 
 PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
 all: learn_projection evaluate_projection run_LPSR
@@ -108,12 +112,12 @@ check-oct-headers: EigenOctave.h
 		$(CXX) -c $$header $(CPPFLAGS) $(OCTAVE_CFLAGS) -o /dev/null; \
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
-lib: libs-only demo-proj demo-quick
+lib: libs-only demo-proj1 demo-quick
 test: lib demo-printing demo-io do-tests mcgen
 long: clean
 	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
 	&& $(MAKE) -j20 do-tests \
-	&& $(MAKE) -j20 demo-proj demo-proj-dbg demo-proj2-dbg \
+	&& $(MAKE) -j20 demo-proj1 demo-proj-dbg demo-proj2-dbg \
 	&& { if [ -f dpa.log ]; then tail -n5 dpa.log; else $(MAKE) dpa.log; fi; } \
 	&& $(MAKE) dpb.log
 	rm -f dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log
@@ -226,6 +230,7 @@ LIB_CPPFILES:= mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSe
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
+
 libmcfilter.a: $(patsubst %.cpp,%.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter2.a: $(patsubst %.cpp,%.2o,$(LIB_CPPFILES))
@@ -236,37 +241,41 @@ libmcfilter4.a: $(patsubst %.cpp,%.4o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
+libmcfilter-prof.a: $(patsubst %.cpp,%-prof.o,$(LIB_CPPFILES))
+	$(AR) -vru $@ $^
 libmcfilter.so: $(patsubst %.cpp,%.lo,$(LIB_CPPFILES))
 	$(CXX) -o $@ -shared $^
 libmcfilter-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIB_CPPFILES))
 	$(CXX) -o $@ -shared $^
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
-demo-proj: | libmcfilter.a
-demo-proj1: erik/demo-proj.cpp libmcfilter.a
-	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
-	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
-demo-proj2: erik/demo-proj.cpp libmcfilter2.a
-	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -I. $^ $(LDFLAGS)
-	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
-demo-proj3: erik/demo-proj.cpp libmcfilter3.a
-	$(CXX) -o $@ $(CPPFLAGS) -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
-	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
-demo-proj4: erik/demo-proj.cpp libmcfilter4.a
-	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
-	@#/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log # 917 seconds
-do-proj: demo-proj demo-proj2 demo-proj3 demo-proj4
-	/usr/bin/time -v ./demo-proj 2>&1 | tee demo-proj.log
-	/usr/bin/time -v ./demo-proj2 2>&1 | tee demo-proj2.log
-	/usr/bin/time -v ./demo-proj3 2>&1 | tee demo-proj3.log
-	/usr/bin/time -v ./demo-proj4 2>&1 | tee demo-proj4.log
-	echo "\t\t\t make do-proj COMPLETE"
-
 %.2o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -c $<
 %.3o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -D_GLIBCXX_PARALLEL -c $<
 %.4o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -c $<
+%-prof.o: %.cpp
+	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -O1 -c $<
+demo-proj1: | libmcfilter.a
+demo-proj1: erik/demo-proj.cpp libmcfilter.a
+	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
+	@#/usr/bin/time -v ./$@ 2>&1 | tee $@.log
+demo-proj2: erik/demo-proj.cpp libmcfilter2.a
+	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -I. $^ $(LDFLAGS)
+demo-proj3: erik/demo-proj.cpp libmcfilter3.a
+	$(CXX) -o $@ $(CPPFLAGS) -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
+demo-proj4: erik/demo-proj.cpp libmcfilter4.a
+	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
+demo-prof: erik/demo-proj.cpp libmcfilter-prof.a
+	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -I. $^ $(PROFILE_LDFLAGS)
+do-proj: demo-proj1 demo-proj2 demo-proj3 demo-proj4
+	/usr/bin/time -v ./demo-proj1 2>&1 | tee demo-proj1.log
+	/usr/bin/time -v ./demo-proj2 2>&1 | tee demo-proj2.log
+	/usr/bin/time -v ./demo-proj3 2>&1 | tee demo-proj3.log
+	OMP_NUM_THREADS=4 /usr/bin/time -v ./demo-proj3 2>&1 | tee demo-proj3-omp8.log # twice as slow
+	/usr/bin/time -v ./demo-proj4 2>&1 | tee demo-proj4.log
+	echo "\t\t\t make do-proj COMPLETE"
+
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj-dbg: | libmcfilter-dbg.a
 demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
@@ -284,6 +293,8 @@ demo-mcsolver: erik/demo-mcsolver.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 demo-printing: erik/demo-printing.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+demo-parms: erik/demo-parms.cpp erik/parameter-args.cpp libmcfilter-dbg.a
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
@@ -296,6 +307,8 @@ mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.
 
 clean: 
-	rm -f *.o *.lo learn_projection evaluate_projection run_kmeans demo-quick demo-proj demo-proj-dbg libmcfilter*.a libmcfilter*.so
-	rm -f demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log run_LPSR demo-proj2-dbg demo-mcsolver demo-proj.native mcgen
+	rm -f *.o *.lo *-dbg.o *-dbg.lo *.2o *.3o *.4o *-prof.o libmcfilter*.a libmcfilter*.so \
+		learn_projection evaluate_projection run_kmeans demo-quick demo-proj1 demo-proj-dbg \
+		demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log run_LPSR \
+	       	demo-proj2-dbg demo-mcsolver demo-proj.native mcgen demo-proj[1-4] demo-prof
 	$(MAKE) -f Makefile.octave clean

@@ -7,10 +7,22 @@
 namespace opt {
     namespace po = boost::program_options;
 
+    /// \name helpers
+    ///@{
+    void helpUsageDummy( std::ostream& os );
+
+    /** retrieve po::options_description for \c param_struct */
+    void mcParameterDesc( po::options_description & desc );
+    ///@}
+
     /** translate program arguments --> \c param_struct.
      * \return unparsed / positional arguments. */
-    std::vector<std::string> argsParse( int argc, char**argv, struct param_struct& parms );
+    std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
+                                     , void(*usageFunc)(std::ostream&)=helpUsageDummy );
 
+    /// a simple version
+    void mcArgs0( int argc, char**argv, param_struct & parms
+                 , void(*usageFunc)(std::ostream&)=helpUsageDummy );
 }//opt::
 
 #endif // PARAMETER_ARGS_H

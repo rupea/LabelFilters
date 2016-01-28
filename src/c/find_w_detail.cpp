@@ -1535,8 +1535,8 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 #ifdef _OPENMP
   int min_chunk_size = 10000;
   int max_n_chunks = omp_get_max_threads();
-  int max_n_chunks = 1;
 #else
+  //int max_n_chunks = 1;
 #endif
 
 #if MCTHREADS

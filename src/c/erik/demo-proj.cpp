@@ -131,7 +131,7 @@ int main(int argc,char** argv)
 
   int const rand_seed = 117;
   int const p = params.no_projections;
-  int const d = 467U;      // x training data dimensionality
+  int const d = 12345U;    // x training data dimensionality
   int const k = 5U;        // number of classes
 
   // x training data and y class labels

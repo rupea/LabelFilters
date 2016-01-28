@@ -355,13 +355,81 @@ class WeightVector
 
  private:
   // have these functions private because they do no error checking
-  template<typename EigenType>
-    void gradient_update_nochecks(const EigenType& x, const size_t row, const double eta)
+    void gradient_update_nochecks(const DenseM& x, const size_t row, const double eta)
+    {
+        using namespace std;
+      // avoid boudary checks inside the loop.
+      // check that sizes match here.
+      //      assert(x.cols()==my_weights.size());
+#if 0 // lots of debug-mode equiv tests...
+      double eta1 = eta/my_scale;
+#ifndef NDEBUG
+      VectorXd mw2 = my_weights - x.row(row).transpose() * eta1;
+      double n2 = 0.0;
+#endif
+      typename DenseM::InnerIterator it(x, row);
+      double norm_update = 0;
+      for (; it; ++it )
+	{
+	  int col = it.col();
+	  double val = my_weights.coeff(col);
+	  norm_update -= val*val;
+	  val -= (it.value() * eta1);
+	  norm_update += val*val;
+	  my_weights.coeffRef(col) = val;
+#ifndef NDEBUG
+          n2 += val*val;
+#endif
+	}
+      my_norm_sq += norm_update*my_scale*my_scale;
+#ifndef NDEBUG
+      if( fabs( my_norm_sq - my_weights.squaredNorm()*my_scale*my_scale ) >= 1.e-6 ){
+          cout<<" my_norm_sq = "<<my_norm_sq
+              <<" my_weights.squaredNorm = "<<my_weights.squaredNorm()
+              <<" my_scale = "<<my_scale
+              <<" eta1 = "<<eta1
+              <<endl;
+          throw std::runtime_error(" bad logic ");
+      }
+      if( fabs( my_norm_sq - n2*my_scale*my_scale ) >= 1.e-6 ){
+          cout<<" my_norm_sq = "<<my_norm_sq
+              <<" n2 = "<<my_weights.squaredNorm()
+              <<" my_scale = "<<my_scale
+              <<" eta1 = "<<eta1
+              <<endl;
+          throw std::runtime_error(" bad logic ");
+      }
+      mw2 -= my_weights;
+      if( mw2.squaredNorm() > 1.e-4 ){
+          cout<<" mw2: "<<mw2<<endl;
+          cout<<" my_weights: "<<my_weights<<endl;
+          throw std::runtime_error(" bad mw2 logic ");
+      }
+#endif
+#elif 1
+      // can use SIMD here
+      my_weights -= x.row(row).transpose() * (eta/my_scale);
+      my_norm_sq = my_weights.squaredNorm() * my_scale*my_scale;
+#elif 0
+      double eta1 = eta/my_scale;
+      // MAYBE this can still be simd-ized in a SINGLE-LOOP version? A: ** NO **
+      // --- note --- SSE2 is capable of simd here, but gcc just didn't recognize it
+      //              if working with raw pointers, probably gcc would automatically do it.
+      double norm2 = 0.0;
+      for(int col=0U; col<x.cols(); ++col){
+	  double val = my_weights.coeff(col) - x.coeff(row,col) * eta1;
+	  my_weights.coeffRef(col) = val;
+	  norm2 += val*val;
+      }
+      my_norm_sq = norm2*my_scale*my_scale;
+#endif
+    }
+    void gradient_update_nochecks(const SparseM& x, const size_t row, const double eta)
     {
       // avoid boudary checks inside the loop.
       // check that sizes match here.
       //      assert(x.cols()==my_weights.size());
-      typename EigenType::InnerIterator it(x, row);
+      typename DenseM::InnerIterator it(x, row);
       double norm_update = 0;
       double eta1 = eta/my_scale;
       for (; it; ++it )
