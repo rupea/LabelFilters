@@ -439,7 +439,7 @@ namespace mcgen {
                 ("parts,p", po::value<uint32_t>()->default_value(2U)
                  , "p>=2 parts to divide each -a axis into. # classes = p^a [8]")
                 ("seed", po::value<uint32_t>()->default_value(0U) , "rand seed")
-                ("multi", po::value<uint32_t()->default_value(2U)
+                ("multi", po::value<uint32_t>()->default_value(2U)
                  , "besides slc, gen multi-labelling up to m classes per example")
                 ("trivial,t"
                  , "[*] soln: unit vectors in 1st -a dimensions form projection axes")
@@ -1114,7 +1114,7 @@ int main(int argc, char** argv)
     // 8. apply transforms to each training examples, write axesFile
     // TODO
     // 9a. generate training files x,y : mcgen-slc-dr4.repo ("slc","dr4") in text format
-    {
+    if(1){
         vector<uint32_t> perm(y.size());
         std::iota( perm.begin(), perm.end(), 0U);
         std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
@@ -1134,26 +1134,25 @@ int main(int argc, char** argv)
         ofs<<"# "<<x.size()<<" "<<p.axes<<"\n"; // # <training examples> <dimensionality>
         // now output the slc labels
         for(uint32_t i=0U; i<y.size(); ++i){
-            ofs<<"L"<<y[perm[i]]<<"\n";
-        }
-        // now output dense real4 training vectors, p.axes floats per line
-        for(uint32_t i=0U; i<perm.size(); ++i){
+            ofs<<"L"<<y[perm[i]];
+            // *********** IMMEDIATELY FOLLOWED ************ by the training data (grr, milde-repo.pdf)
+            ofs<<" ";
             auto const& xp = x[perm[i]];
             assert( xp.size() == p.axes );
             for(uint32_t a=0U; ; ){
-                ofs<<setw(8)<<xp[a];
-                if( ++a >= p.axes ){
+                ofs     <<setw(8)
+                    <<xp[a];
+                if( ++a >= p.axes )
                     break;
-                }
                 ofs<<" ";
             }
             ofs<<"\n";
         }
         ofs.close();
-        cout<<" Generated "<<fname<<endl;
+        cout<<" Generated "<<fname<<endl;       // mcgen-slc-dr4.repo
     }
     // 9b. generate training files x,y : mcgen-mlc-dr4.repo ("slc","dr4") in text format
-    {
+    if(1){
         vector<uint32_t> perm(y.size());
         std::iota( perm.begin(), perm.end(), 0U);
         std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
@@ -1169,19 +1168,20 @@ int main(int argc, char** argv)
             assert( ylabels.size() >= 1U );
             ofs<<ylabels.size()<<" ";
             for(uint32_t l=0U; ; ){
-                ofs<<"L"<<ylabels[l];
+                ofs     <<"L"
+                    <<ylabels[l];
                 if( ++l >= ylabels.size())
                     break;
                 ofs<<" ";
             }
-            ofs<<"\n";
-        }
-        // now output dense real4 training vectors, p.axes floats per line
-        for(uint32_t i=0U; i<perm.size(); ++i){
+            // oh. let's keep going with the 'x' data.  *** milde_repo.pdf *** is S-O-O-O-O unclear.
+            ofs<<" ";
+            // now output dense real4 training vectors, p.axes floats ON REST OF SAME LINE
             auto const& xp = x[perm[i]];
             assert( xp.size() == p.axes );
             for(uint32_t a=0U; ; ){
-                ofs<<setw(8)<<xp[a];
+                ofs     <<setw(8)
+                    <<xp[a];
                 if( ++a >= p.axes )
                     break;
                 ofs<<" ";
@@ -1189,7 +1189,7 @@ int main(int argc, char** argv)
             ofs<<"\n";
         }
         ofs.close();
-        cout<<" Generated "<<fname<<endl;
+        cout<<" Generated "<<fname<<endl;       // mcgen-mlc-dr4.repo
     }
     // 9c. generate test set (all rand) : mcgen-slc-dr4.test
     // 9d. generate test set (all rand) : mcgen-mlc-dr4.test
