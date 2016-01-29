@@ -2,6 +2,8 @@
 #include "parameter-args.h"
 
 #include <iostream>
+#include <iomanip>
+#include <sstream>
 using namespace std;
 
 void myUsage( std::ostream& os ){
@@ -26,7 +28,7 @@ int main(int argc, char**argv)
     opt::mcArgs(argc,argv, parms, myUsage);
     cout<<" Back from parsing args"<<endl;
 #endif
-    cout<<" no_projections = "<<parms.no_projections<<endl;
+    cout<<parms<<endl;
     cout<<"\nGoodbye"<<endl;
 }
 

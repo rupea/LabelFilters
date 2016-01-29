@@ -13,59 +13,12 @@ namespace opt {
         return;
     }
 
-    void XXX( po::options_description & desc )
-    {
-        desc.add_options()
-            ("help,h", "")
-            //("verbose,v", "")
-            ("proj", value<uint32_t>()->default_value(5U) , "# of projections")
-            ("C1", value<double>()->default_value(10.0), "aa[10.0]")
-            ("C2", value<double>()->default_value(1.0), "bb[1.0]")
-            ("maxiter", value<uint32_t>()->default_value(1000000U), "[1000000] max iterations per projection")
-            ("batchsize,b", value<uint32_t>()->default_value(100), "[100] batch size")
-            ("update,u", value<std::string>()->default_value("BATCH")
-             , "[*]BATCH | SAFE gradient update type")
-            ("eps", value<double>()->default_value(1.e-4), "[1.e-4] unused cvgce threshold")
-            ("eta", value<double>()->default_value(0.1), "[0.1] initial learning rate")
-            ("etatype", value<std::string>()->default_value("CONST")
-             , "CONST | SQRT | [*]LIN | 3_4 learning rate schedule")
-            ("etamin", value<double>()->default_value(0.0), "[0.0] learning rate limit")
-            ("optlu", value<uint32_t>()->default_value(10000), "[10000] expensive exact {l,u} soln period")
-            ("torder", value<uint32_t>()->default_value(1000), "[1000] reorder iteration period")
-            ("order", value<std::string>()->default_value("AVG")
-             , "Permutation re-ordering: [*]AVG projected means | PROJ projected means | MID range midpoints."
-             " If --tavg=0, default is PROJ")
-            ("report", value<uint32_t>()->default_value(1000U), "[1000] period for reports about latest iter")
-            ("tavg", value<uint32_t>()->default_value(0U), "[0] averaging start iteration")
-            ("reportavg", value<uint32_t>()->default_value(0U), "[0] period for reports about avg, expensive")
-            ("reweight", value<std::string>()->default_value("LAMBDA")
-             , "NONE | [*]LAMBDA | ALL lambda reweighting method")
-            ("negclass", value<uint32_t>()->default_value(0U)
-             , "# of negative classes used at each iter, 0 ~ all classes")
-            ("wt_by_nclasses", value<bool>()->default_value(false), "bool")
-            ("wt_class_by_nclasses", value<bool>()->default_value(false), "")
-            ("remove_constraints", value<bool>()->default_value(false)
-             , "after each projection, remove constraints")
-            ("remove_class", value<bool>()->default_value(false)
-             , "after each projection, remove already-separated classes")
-            ("threads", value<uint32_t>()->default_value(0U), "[0] # threads, 0 ~ use OMP_NUM_THREADS")
-            ("seed", value<uint32_t>()->default_value(0U), "[0] random number seed")
-            ("tgrad", value<uint32_t>()->default_value(0U), "[0] iter period for finite difference gradient test")
-            ("ngrad", value<uint32_t>()->default_value(1000U), "[1000] directions per gradient test")
-            ("grad", value<double>()->default_value(1.e-4), "[1.e-4] step size per gradient test")
-#if 1
-            ("resume", value<bool>()->default_value(false), "[false] resume an existing soln?")
-            ("reoptlu", value<bool>()->default_value(false), "[false] reoptimize {l,u} bounds of existing soln?")
-#endif
-            ;
-    }
     void mcParameterDesc( po::options_description & desc )
     {
         desc.add_options()
             ("help,h", "")
             //("verbose,v", "")
             ("proj", value<uint32_t>()->default_value(5U) , "# of projections")
-#if 1
             ("C1", value<double>()->default_value(10.0), "~ label in correct [l,u]")
             ("C2", value<double>()->default_value(1.0), "~ label outside other [l,u]")
             ("maxiter", value<uint32_t>()->default_value(1000000U), "max iterations per projection")
@@ -77,8 +30,8 @@ namespace opt {
              , "CONST | SQRT | LIN | 3_4 : learning rate schedule")
             ("etamin", value<double>()->default_value(0.0), "learning rate limit")
             ("optlu", value<uint32_t>()->default_value(10000), "expensive exact {l,u} soln period")
-            ("torder", value<uint32_t>()->default_value(1000), "reorder iteration period")
-            ("order", value<std::string>()->default_value("AVG")
+            ("treorder", value<uint32_t>()->default_value(1000), "reorder iteration period")
+            ("reorder", value<std::string>()->default_value("AVG")
              , "Permutation re-ordering: AVG projected means | PROJ projected means | MID range midpoints."
              " If --tavg=0, default is PROJ")
             ("report", value<uint32_t>()->default_value(1000U), "period for reports about latest iter")
@@ -101,45 +54,9 @@ namespace opt {
             ("grad", value<double>()->default_value(1.e-4), "step size per gradient test")
             ("resume", value<bool>()->default_value(false), "resume an existing soln?")
             ("reoptlu", value<bool>()->default_value(false), "reoptimize {l,u} bounds of existing soln?")
-#endif
             ;
     }
  
-    void mcArgs0( int argc, char**argv, param_struct & parms
-                 , void(*usageFunc)(std::ostream&)/*=helpUsageDummy*/ )
-    {
-#define ARGSDEBUG 1            
-#if ARGSDEBUG > 0
-        cout<<" argsParse( argc="<<argc<<", argv, ... )"<<endl;
-        for( int i=0; i<argc; ++i ) {
-            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
-        }
-#endif
-        vector<string> ret;
-        po::options_description desc("Options");
-        //mcParameterDesc( desc );
-        desc.add_options()
-            ("help,h", "")
-            //("verbose,v", "")
-            ("proj", po::value<unsigned>(&parms.no_projections)->default_value(5U) , "# of projections")
-            ;
-        po::variables_map vm;
-        po::store( po::command_line_parser(argc,argv)
-                   .options(desc)
-                   .run(),
-                   vm );
-        if( vm.count("help") ) {
-            (*usageFunc)( cout );       // some customizable Usage intro
-            cout<<desc<<endl;           // param_struct options
-            exit(0);
-        }
-
-        po::notify(vm); // at this point, raise any exceptions for 'required' args
-
-        //if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
-        //if( vm.count("proj") )
-        //    parms.no_projections = vm["proj"].as<uint32_t>();
-    }
     std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
                                      , void(*usageFunc)(std::ostream&)/*=helpUsageDummy*/ )
     {
@@ -169,7 +86,7 @@ namespace opt {
                 = po::command_line_parser( argc, argv )
                 .options( desc )
                 //.positional( po::positional_options_description() ) // empty, none allowed.
-                //.allow_unregistered()
+                .allow_unregistered()
                 .run();
             po::store( parsed, vm );
 #endif
@@ -219,16 +136,14 @@ namespace opt {
             parms.finite_diff_test_epoch	=vm["tgrad"].as<uint32_t>(); //0;
             parms.no_finite_diff_tests	        =vm["ngrad"].as<uint32_t>(); //1000;
             parms.finite_diff_test_delta	=vm["grad"].as<double>(); //1e-4;
-#if 1
             parms.resume 	                =vm["resume"].as<bool>(); // false;
             parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
 
             if( vm.count("help") ) {
                 exit(0);
             }
-#endif
 
-            //ret = collect_unrecognized( parsed.options, include_positional );
+            ret = collect_unrecognized( parsed.options, include_positional );
             return ret;
         }
         catch(po::error& e)

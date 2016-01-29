@@ -33,8 +33,7 @@ int testparms(int argc, char**argv, param_struct & params) {
                 cout<<" Options:"
                     //<<"\n   pN          test problem N in [0,2] w/ base parameter settings [default=2]"
                     <<"\n   0-9         parameter modifiers, [default=0, no change from pN defaults]"
-                    <<"\n   m           [default] mcsolver code"
-                    <<"\n   o           original code"
+                    <<"\n   m|o         m[default] mcsolver code | o original code"
                     <<"\n   s<string>   save file base name (only for 'm') [default=none]"
                     <<"\n   h           this help"
                     <<"\n   v           increase verbosity [default=0]"
@@ -131,8 +130,9 @@ int main(int argc,char** argv)
 
   int const rand_seed = 117;
   int const p = params.no_projections;
-  int const d = 12345U;    // x training data dimensionality
-  int const k = 5U;        // number of classes
+  //int const d = 12345U;       // x training data dimensionality ~ 440 s runtime
+  int const d = 281U;           // ~ 30 s run
+  int const k = 5U;             // number of classes
 
   // x training data and y class labels
   srand(rand_seed);

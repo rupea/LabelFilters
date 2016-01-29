@@ -16,13 +16,11 @@ namespace opt {
     ///@}
 
     /** translate program arguments --> \c param_struct.
+     * - other args can be passed along to a second stage of argument parsing
      * \return unparsed / positional arguments. */
     std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
                                      , void(*usageFunc)(std::ostream&)=helpUsageDummy );
 
-    /// a simple version
-    void mcArgs0( int argc, char**argv, param_struct & parms
-                 , void(*usageFunc)(std::ostream&)=helpUsageDummy );
 }//opt::
 
 #endif // PARAMETER_ARGS_H

@@ -7,6 +7,9 @@
 #include <string>
 #include <vector>
 #include <cmath>        // acos
+#include <random>
+#include <fstream>
+//#include "r64.h"      // lets use c++11 stuff...
 
 // fwd and function declarations
 namespace mcgen {
@@ -72,10 +75,13 @@ namespace mcgen {
             bool     ball;                  ///< [*] true = examples on unit ball, false = rotated unit hypercube
             uint32_t dim;                   ///< [3] dimension of each training example
             int32_t  margin;                ///< [+axes] |margin|<=a 0=none, +ve=separable, -ve=non-separable
+            double   fmargin;               ///< [0.01] distance multiplier for margin example generation
             uint32_t parts;                 ///< [2] each axis separates into parts, nClass = parts ^ axes [2^3]
             bool     trivial;               ///< [1]: soln is first \c axes unitvecs (skew,rot=0), 0: use skew,rot!=0
             uint32_t skew;                  ///< [0] skew < axes dims toward (1,0,0,...) of trivial soln
             uint32_t rot;                   ///< [0] then project into axes < rot < dim and do a random rotation
+            uint32_t seed;                  ///< [0] rand number seed
+            uint32_t multi;                 ///< [2] besides slc, generate a multi-labelling with up to this many labels per example.
             //@}
             /// \name non-core settings set via init()
             //@{
@@ -96,6 +102,8 @@ namespace mcgen {
             std::string str();
         };
     }//opt::
+    
+    std::ostream& operator<<( std::ostream& os, opt::Parms const& p );
 
     class ExampleGenerator{
     public:
@@ -266,6 +274,8 @@ namespace mcgen {
 
 // define implementation & details
 #include <iostream>
+#include <iomanip>
+#include <tuple>
 namespace mcgen {
     namespace ndim {
         SkewerMult::SkewerMult(uint32_t const x, double const o, double const f,
@@ -366,6 +376,7 @@ namespace mcgen {
               , ball( true )
               , dim( 3U )
               , margin( 3U )
+              , fmargin( 0.01 )
               , parts( 2U )
               , trivial( true )
               , skew( 0U )
@@ -413,28 +424,29 @@ namespace mcgen {
             desc.add_options()
                 ("help,h", "help")
 
-                ("axes,a", po::value<uint32_t>()->implicit_value(3U)
-                 , "[3] projection|soln axes, 2 <= a <= d")
-                ("ball,b", po::value<bool>()->implicit_value(true)->default_value(true)
-                 , "[*] examples on unit ball")
-                ("cube,c", po::value<bool>()->implicit_value(false)->default_value(false)
-                 , "... or examples in [deformed? r,s] unit cube")
-                ("dim,d", po::value<uint32_t>()->implicit_value(3U)
-                 , "[3] dimension of training data, d >= 2")
+                ("axes,a", po::value<uint32_t>()->default_value(3U)
+                 , "projection|soln axes, 2 <= a <= d")
+                ("ball,b", po::value<bool>()->implicit_value(true)->default_value(false)
+                 , " examples on unit ball")
+                ("cube,c", po::value<bool>()->implicit_value(true)->default_value(true)
+                 , "[*] ... or examples in [deformed? r,s] unit cube")
+                ("dim,d", po::value<uint32_t>()->default_value(3U)
+                 , "embedding dimension of training data, d >= a")
                 ("margin,m", po::value<int32_t>()
                  , "[a] |m|<=a, add 2|m|a(p-1) margin tightness examples."
-                 "  +ve: separable, -ve: non-separable, 0: no margin-examples"
-                 )
-                ("parts,p", po::value<uint32_t>()->implicit_value(2U)->default_value(2U)
-                 , "[2] p>=2 parts to divide each -a axis into. # classes = p^a [8]")
-
-                ("rot,r", po::value<uint32_t>()
-                 , "after t+s, move into a<=r<=d dims & rotate randomly (keep lengths,angles)")
-                ("skew,s", po::value<uint32_t>()
-                 , "after t, rot 0<s<a-1 dims (2..s+1) 1st unit (1,0,0...) (axes-->non-orthog)")
+                 "  +ve: separable, -ve: non-separable, 0: no margin-examples")
+                ("fmargin,f", po::value<double>()->default_value(0.01),"push factor related to margin width")
+                ("parts,p", po::value<uint32_t>()->default_value(2U)
+                 , "p>=2 parts to divide each -a axis into. # classes = p^a [8]")
+                ("seed", po::value<uint32_t>()->default_value(0U) , "rand seed")
+                ("multi", po::value<uint32_t()->default_value(2U)
+                 , "besides slc, gen multi-labelling up to m classes per example")
                 ("trivial,t"
                  , "[*] soln: unit vectors in 1st -a dimensions form projection axes")
-
+                ("skew,s", po::value<uint32_t>()->default_value(0U)
+                 , "after t, rot last 0<s<a-1 dims (2..s+1) toward 1st unit vector (1,0,0...) (axes-->non-orthog)")
+                ("rot,r", po::value<uint32_t>()->default_value(0U)
+                 , "after t+s, move into a<=r<=d dims & rotate randomly (keep lengths,angles)")
                 ("examples,x", po::value<uint32_t>()
                  , "[0] How many, silently adjusted up to max(a*4, 2*<pre-determined examples>")
                 ;
@@ -510,25 +522,25 @@ namespace mcgen {
 
                 po::notify(vm); // at this point, raise any exceptions for 'required' args
 
-                if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
-                if( vm.count("dim") ) { parms.dim = vm["dim"].as<uint32_t>(); }
+                parms.axes = vm["axes"].as<uint32_t>();
+                parms.dim = vm["dim"].as<uint32_t>();
                 if( vm.count("margin") ) {
                     parms.margin = vm["margin"].as<int32_t>();
                     cout<<" parms.margin --> "<<parms.margin<<endl;
+                }else{
+                    parms.margin = parms.axes;
                 }
-#if 1
-                if( vm.count("parts") ) { parms.parts = vm["parts"].as<uint32_t>(); }
+                parms.fmargin = vm["fmargin"].as<double>();
+                parms.seed = vm["seed"].as<uint32_t>();
+                parms.multi = vm["seed"].as<uint32_t>();
+                parms.parts = vm["parts"].as<uint32_t>();
                 //if( vm.count("trivial") ) {
                 //    int32_t const t = vm["trivial"].as<int32_t>();
                 //    if( t != 0 && t != 1 ) throw runtime_error("-t must be zero or 1");
                 //    parms.trivial = static_cast<bool>(t);
                 //}
-                if( vm.count("skew") ) {
-                    parms.skew = vm["skew"].as<uint32_t>();
-                }
-                if( vm.count("rot") ) {
-                    parms.rot = vm["rot"].as<uint32_t>();
-                }
+                parms.skew = vm["skew"].as<uint32_t>();
+                parms.rot = vm["rot"].as<uint32_t>();
                 //if( ! parms.trivial && (parms.skew == 0U && parms.rot == 0U))
                 //    throw runtime_error("-t0 needs either -s or -r");
                 if( parms.skew != 0U || parms.rot != 0U ) // supplying -s or -r implies non-trivial
@@ -542,97 +554,6 @@ namespace mcgen {
                     throw runtime_error("-a must be <= -d");
                 if( parms.parts > 1000U )
                     throw runtime_error("-p seems too large");
-#endif
-#if 0
-                opt.time = 0U;          // replace NWRITES
-                opt.traces = 0U;        // use traces unless other args (--time) force us not to
-                opt.awPercent = 0U;
-                opt.ek23 = vm.count("ek23");
-                opt.tp25 = vm.count("tp25");
-                opt.idmap = vm.count("idmap");
-
-                if( vm.count("time") )  // if --time (or -t) option appeared, only OK for fake workload
-                {
-                    opt.time = vm["time"].as<float>()*SECONDSTOTIME;
-                    cout<<" opt.time represents "<<opt.time*TIMETOSECONDS<<" s"<<endl;
-                    //if( vm.count("traces") && vm["traces"].as<bool>() )
-                    //{
-                    //cout<<" our TracePlay doesn't know how to shut off after a given --time="
-                    //cout<<" our TracePlay MIGHT know how to shut off after a given --time="
-                    //    <<opt.time*TIMETOSECONDS<<endl;
-                    //throw "oops";
-                    //}
-                    //opt.traces = 0;
-                }
-                if( vm.count("async") )  // if --time (or -t) option appeared, only OK for fake workload
-                {
-                    opt.awPercent = vm["async"].as<uint32_t>();
-                    if( opt.awPercent > 100U )
-                    {
-                        cout<<" --async="<<opt.awPercent<<" \%-of-writes-async must be in range [0,100]"<<endl;
-                        throw("oops");
-                    }
-                }
-
-                opt.nTimes = vm["times"].as<uint32_t>();
-                opt.tMon = vm["tMon"].as<float>();
-
-                opt.wol  = vm["wol"].as<uint32_t>();
-                if( opt.wol > 3U )
-                {
-                    cout<<" --wol="<<opt.wol<<" out of range [0,3]"<<endl;
-                    throw " --wol should be 0,1,2,3";
-                }
-                if( opt.swap == 0U && opt.wol == 1U )
-                {
-                    cout<<"--wol ineffective with --swap=0 (NEVERSWAP)"<<endl;
-                    throw("oops");
-                }
-
-                opt.nio = 0U;
-                if( vm.count("nio") )   // --nio (or -n) option appeared, only OK for trace files
-                {
-                    opt.nio = vm["nio"].as<uint32_t>(); 
-                    // BOTH WorkModel and current TwrkWrite DO accept --nio switch
-                }
-
-                if( vm.count("traces") )        // if --traces (or -T) appeared as an option...
-                {
-                    opt.traces = vm["traces"].as<bool>();
-                }
-                { // --traces with missing --time / --nio specs get some low default values
-                    if(  opt.traces && opt.nio == 0U )
-                    {
-                        //opt.nio = 20U;   // something small
-                        //cout<<" TracePlay will use low default value of --nio="<<opt.nio<<endl;
-                        cout<<" pa21 using whole trace files, --nio="<<opt.nio<<endl;
-                    }
-                    if( !opt.traces && opt.time == 0U && opt.nio == 0U )
-                    {
-                        opt.time = 1U*SECONDSTOTIME;   // something small
-                        cout<<" WorkModel will use low default value of --time="
-                            <<opt.time*TIMETOSECONDS<<" (seconds)"<<endl;
-                    }
-                    // TODO -- fix loadGen.cpp so that --time=0 makes it go "forever". for now kludge it
-                    //         by using some high value (e.g. 50000 seconds)
-                    if( !opt.traces && opt.nio > 0U && opt.time == 0U )
-                    {
-                        opt.time = 50000U * SECONDSTOTIME;
-                        cout<<" WorkModel with --nio will use some high-ish value --time="
-                            <<opt.time*TIMETOSECONDS<<" (seconds)"<<endl;
-                    }
-                }
-
-                // ... ADD MORE OPTIONS HERE ...
-
-                // ... check for more unsupported combinations? ...
-
-                if( vm.count("dryrun") )
-                {
-                    cout<<asOptions( opt )<<endl;
-                    exit(0);
-                }
-#endif
             }
             catch(po::error& e)
             {
@@ -648,6 +569,37 @@ namespace mcgen {
         }
     }//opt::
 
+    std::ostream& operator<<( std::ostream& os, opt::Parms const& p )
+    {
+        using namespace std;
+#define WIDE(OS,N,STUFF) do \
+        { \
+            std::ostringstream oss; \
+            oss<<STUFF; \
+            os<<left<<setw(N)<<oss.str(); \
+        }while(0)
+        os<<"MCfilter parameters:\n";
+        uint32_t const c1=23U;
+        uint32_t const c2=22U;
+        uint32_t const c3=23U;
+        WIDE(os,c1,right<<setw(14)<<"axis "<<left<<p.axes);
+        WIDE(os,c2,right<<setw(14)<<"dim "<<left<<p.dim);
+        WIDE(os,c3,right<<setw(14)<<"trivial "<<left<<p.trivial);
+        os<<endl;
+        WIDE(os,c1,right<<setw(14)<<"parts "<<left<<p.parts);
+        WIDE(os,c2,right<<setw(14)<<(p.ball? "ball ":"cube "));
+        WIDE(os,c3,right<<setw(14)<<"rot "<<left<<p.rot);
+        os<<endl;
+        WIDE(os,c1,right<<setw(14)<<"margin "<<left<<p.margin);
+        WIDE(os,c2,right<<setw(14)<<"fmargin "<<left<<p.fmargin);
+        WIDE(os,c3,right<<setw(14)<<"skew "<<left<<p.skew);
+        os<<endl;
+        WIDE(os,c1,right<<setw(14)<<"nClass "<<left<<p.nClass);
+        WIDE(os,c2,right<<setw(14)<<"nxStd "<<left<<p.nxStd);
+        WIDE(os,c3,right<<setw(14)<<"nx "<<left<<p.nx);
+        os<<endl;
+        return os;
+    }
 
     //namespace po=boost::program_options;
     void help( std::ostream& os ){
@@ -671,6 +623,10 @@ int main(int argc, char** argv)
     cout<<" default canonical args: "<<p.str()
         <<" nClass="<<p.nClass<<" nxStd="<<p.nxStd<<" nx="<<p.nx<<endl;
     opt::argsParse( argc, argv, p );
+    cout<<" Parameter dump:\n"<<p<<endl;
+    p.init();
+    cout<<" Parameter dump, after init():\n"<<p<<endl;
+
     string canonicalArgs = p.str();
     cout<<"         canonical args: "<<canonicalArgs
         <<" margin="<<p.margin<<" nClass="<<p.nClass<<" nxStd="<<p.nxStd<<" nx="<<p.nx<<endl;
@@ -689,16 +645,556 @@ int main(int argc, char** argv)
         os<<"mcgen-"<<canonicalArgs<<".axes.txt";
         axesFile = os.str();
     }
-    p.init();
-    // 1. generate the trivial axis solution
-    // 2. generate trivial solutions: 1 central example per class
+    // XXX for now assume unit cube (easiest)
+    p.ball = false;
+    /** help partition a range into \c p linear parts */
+    struct LinearEquipartition {
+        uint32_t const n;       ///< equal parts
+        float const lo;         ///< splitting lo
+        float const hi;         ///< to hi
+        float const range;      ///< total range (hi-lo)
+        float const step;       ///< size of each part
+        std::vector<float> const partn;       // beg,end,end,...,end of the partition
+        LinearEquipartition(uint32_t parts) : n(parts)
+                                              , lo(0.0), hi(1.0)
+                                              , range(hi-lo), step(range/parts)
+                                              , partn(n+1U)
+        {
+            auto & nc = const_cast<std::vector<float>&>(partn); // cast to non-const for construction
+            for(uint32_t i=0U; i<n; ++i) nc[i] = lo + i*step;
+            nc[n] = hi;
+        }
+        float beg(uint32_t const i) const { assert(i<n); return partn[i]; }
+        float mid(uint32_t const i) const { assert(i<n); return (partn[i]+partn[i+1]) * 0.5; }
+        float end(uint32_t const i) const { assert(i<n); return partn[i+1]; }
+        /** fast reverse lookup of 'closest region number' */
+        uint32_t lookup( float f ){
+            float i = (min(max(f,lo),hi) - lo) / step;
+            return min((uint32_t)i,n);  // could be too large because of rare rounding error?
+        }
+        float rand();
+        void dump( std::ostream& os ) const {
+            using namespace std;
+            os<<" LinearEquipartition(parts="<<n<<")";
+            for(uint32_t i=0U; i<n; ++i){
+                os<<"\n\ti="<<i<<" b:m:e = "<<beg(i)<<":"<<mid(i)<<":"<<end(i);
+            }
+            os<<endl;
+        }
+    };
+    /** Count in \c d dimensions, in base \c b, to enumerate spatial partitions.
+     * - This is isomorphic to "counting in arbitrary base" with given number of digits.
+     * - We use standard ripple-counting to generate the sequence.
+     * - The count in digits[i] is \em little-endian, so \c digits[i][0] is the \em ones place
+     */
+    struct RippleCounter {
+        uint32_t const d;       ///< dimension ~ number of digits ~ Parms::axes
+        uint32_t const b;       ///< base (max value of each digit is 'base-1')
+        /** digits[i] is the <b>i</b>'th <b>d</b>-dimensional vector of base-<b>b</b> digits */
+        std::vector<std::vector<uint32_t>> const digits;
+        RippleCounter( uint32_t dim, uint32_t base ) : d(dim), b(base), digits()
+        {
+            using namespace std;
+            auto & dig = const_cast<std::vector<std::vector<uint32_t>>&>( digits );  // non-const for constructor
+            vector<uint32_t> cnt(d,0U); // start at zero
+            dig.push_back(cnt);
+            //cout<<" +RippleCounter(dim="<<dim<<",base="<<base<<") digits.size() = "<<digits.size()<<endl;
+            // generate 'v' in standard ripple-counting order
+            uint32_t place=0U;  // who should be incrementing at the moment?
+            while( place < d ){
+                ++cnt[place];
+                if( cnt[place] < b ){
+                    dig.push_back(cnt);
+                    //cout<<" digits.size() = "<<digits.size()<<endl;
+                    continue;
+                }// else "overflow"
+                uint32_t hi=place;     // overflow into what higher digit?
+                do{ ++hi; } while( hi < d && cnt[hi]+1U >= b );
+                if( hi >= d ) break;   // EXIT when nowhere to overflow
+                assert( hi < d );
+                ++cnt[hi];
+                assert( cnt[hi] < b );
+                for(uint32_t lo=0U; lo<hi; ++lo) cnt[lo] = 0U;  // reset all lower digits
+                dig.push_back(cnt);
+                //cout<<" digits.size() = "<<digits.size()<<endl;
+                place = 0U;
+            }
+        }
+        /** for partition \c p, what are the neighboring partition indices?
+         * Close spatial \em neighbors are when a single digit of \c digits[p]
+         * changes to a neighboring value (no wraparound). i.e. the neighbour
+         * is \em closest in the axis of the changed digit. */
+        std::vector<uint32_t> neighbors( uint32_t const p )
+        {
+            std::vector<uint32_t> ret;
+            uint32_t offset = 1U;       // how big a change of 1 in 'place' is
+            for( uint32_t place=0U; place<d; offset*=b, ++place ){
+                if( digits[p][place] + 1U < b ){     // digits[p+offset] is one
+                    assert( p + offset < digits.size() && digits[p+offset][place] == digits[p][place] + 1U );
+                    ret.push_back(p+offset);    // higher than digits[p]
+                }
+                if( digits[p][place] > 0U ){    // digits[p][p-offset] is one
+                    assert( digits[p-offset][place] == digits[p][place] - 1U );
+                    ret.push_back(p-offset);    // lower than digits[p]
+                }
+            }
+            return ret;
+        }
+        std::vector<uint32_t>::size_type size() const {return digits.size();}
+        /** shortcut digits[p] accesor */
+        std::vector<uint32_t> const& operator[](uint32_t const p) const {
+            assert( p < digits.size() );
+            return digits[p];
+        }
+        /** digits[] --> count value, throw/assert if digits is not d-diml base-b number */
+        uint32_t lookup( std::vector<uint32_t> const& dig ) const {
+#ifndef NDEBUG
+            assert( dig.size() == d );
+            for( auto const dd: dig ) assert( dd < b );
+#endif
+            uint32_t ret = 0U;
+            uint32_t mul = 1U;
+            for(uint32_t dd=0U; dd<dig.size(); mul*=b, ++dd){
+                ret += dig[dd]*mul;
+            }
+            return ret;
+        }
+        void dump( std::ostream& os ) const {
+            cout<<" RippleCounter:"<<endl;
+            for(uint32_t c=0U; c<digits.size(); ++c ){
+                cout<<"\n\trc["<<c<<"] = {";
+                for(auto const d: digits[c]) cout<<" "<<d;
+                cout<<" }";
+            }
+            cout<<endl;
+        }
+    };
+
+    vector<vector<float>> x;            // vector of examples, in lowest possible dimensionality
+    vector<uint32_t> y;                 // partition of each example (initial 'class' of the example)
+    // 1. generate the trivial axis solution, (a dims)
+    vector<vector<float>> soln(p.axes);
+    {
+        for(uint32_t u=0U; u<p.axes; ++u){              // for each unit vector
+            soln[u].clear(); soln[u].resize(p.axes);    //   fill w/ 0.0
+            soln[u][u] = 1.0;                           //   set one axis to 1.0
+        }
+    }
+    // 2. generate trivial examples: 1 central example per class
+    RippleCounter rc(p.axes, p.parts);  // partition numbering, one digit per axis
+    LinearEquipartition equi(p.parts);  // numeric range for each axis-digit
+    if(1) rc.dump(cout);
+    if(1) equi.dump(cout);
+    vector<vector<float>> rcMid;        // for each partition of rc, store the coords
+    {
+        vector<float> central(p.axes);
+        for(uint32_t c=0U; c<rc.digits.size(); ++c){     // for each class 'c'
+            auto digits = rc[c];                        //   get 'digits' of this class (spatial partition)
+            for(uint32_t a=0U; a<digits.size(); ++a)    //   for each axis...
+                central[a] = equi.mid( digits[a] );     //      push it's midpoint value
+            rcMid.push_back( central );                 //   save axes-dimensional central value
+        }
+    }
+    for(uint32_t c=0U; c<rcMid.size(); ++c){
+        x.push_back( rcMid[c] );
+        y.push_back( c );
+    }
+    uint32_t nxMidpoint = x.size();
+    if(1){ // verify rc.lookup function
+        for(uint32_t r=0U; r<rc.size(); ++r){
+            auto digits = rc[r];
+            uint32_t lookup = rc.lookup(digits);
+            assert( lookup == r );
+        }
+    }
+    if(1){
+        cout<<" class central point examples: x.size()="<<x.size()<<" nxStd="<<p.nxStd;
+        for(uint32_t i=0U; i<nxMidpoint; ++i){
+            cout<<"\n\t x["<<i<<"] = {";
+            for( auto const xxx: x[i] )
+                cout<<" "<<xxx;
+            cout<<" }";
+        }
+        cout<<endl;
+    }
+    // 3a. generate all nearest-neighbor midpoints (for all axes)
+    /** Nearest-neighbor partitions and midpoints.
+     * - \c aa stores a lower neighbor, \c bb stores a \em higher neighbor
+     * - \c mid stores vector of coordinates.
+     *
+     * - partition correspond to a partition number < \c rc.b=Parm::parts on each axis
+     *   - partition corresponds to 'digits' of a base \c rc.b number
+     *   - nearest-neighbor \c bb of \c aa has identical digits, except for
+     *     one axis whose digit differs by one
+     *   - store list of neighbors ∋  <tt>bb</tt>'s digit is \em higher,
+     *     to avoid counting pairs twice
+     *   - digits of each partition are stored in RippleCounter [0,1,...]
+     *   - Each digit corresponds to coordinate value \c equi.mid(digit) in a \c LinearEquipartition
+     * - \b hardcoded to construct midpoints with \c rcMid[]
+     */
+    struct Mid {
+        static std::vector<float> midpoint( std::vector<float> const& a, std::vector<float> const& b ){
+            std::vector<float> ret;
+            ret.reserve( a.size() );
+            for(uint32_t i=0U; i<a.size(); ++i){
+                ret.emplace_back( (a[i] + b[i]) * 0.5 );
+            }
+            return ret;
+        }
+        uint32_t const aa;              ///< partition, coords rcMid[aa]
+        uint32_t const bb;              ///< partition, rc[bb] has a digit one higher than rc[aa]
+        uint32_t const ax;              ///< which axis differs, so rc[bb][ax] == rc[aa][ax] + 1
+        std::vector<float> const mid;   ///< midpoint coords
+        Mid(std::vector<std::vector<float>> const& rcMid
+            , uint32_t const aa, uint32_t const bb, uint32_t const ax)
+            : aa(aa), bb(bb), ax(ax), mid( midpoint( rcMid[aa], rcMid[bb] ))
+        {}
+    };
+    vector<Mid> mid;            ///< with \em all the nearest-neighbor midpoints
+    {// RippleCounter rc + rcMid ---> vector<Mid> mid
+        int const verbose = 0;
+        // rc.neighbors is instructional -- we want to do that,
+        //vector<tuple<uint32_t,uint32_t>> pairs; // margins are between pairs of neighbors
+        for( uint32_t aa=0U; aa<rc.size(); ++aa){                  // for each start partition
+            if(verbose) {cout<<" aa="<<aa; cout.flush(); }
+            uint32_t offset = 1U; // how big a change of 1 in 'place' is
+            for( uint32_t place=0U; place<rc.d; offset*=rc.b, ++place ){
+                //                        ^^^^ for every axis
+                if(verbose){ cout<<"   place,off="<<place<<","<<offset; cout.flush();}
+                // can we bump that digit up by one?
+                uint32_t neighbor_hi = aa + offset;
+                if( rc[aa][place] + 1U < rc.b ){ // digits[p+offset] is one higher
+                    if(verbose){cout<<" YES"; cout.flush();}
+                    assert( rc.digits[neighbor_hi][place] == rc.digits[aa][place] + 1U );
+                    mid.emplace_back(Mid(rcMid,aa,neighbor_hi,place));
+                }else if(verbose){cout<<" no "; cout.flush();}
+                // don't consider digit --> digit - 1 -- this would have all margins twice
+            }
+            if(verbose){cout<<endl;}
+        }
+        if(1){
+            cout<<" ALL margin-neighbors connect partition numbers (a,b)axis :"<<endl;
+            for(auto const& m: mid) cout<<" ("<<m.aa<<","<<m.bb<<")a"<<m.ax;
+            cout<<endl<<"\t";
+            for(uint32_t i=0U; i<std::min((uint32_t)10U, (uint32_t)mid.size()); ++i){
+                cout<<"#"<<left<<setw(3)<<i<<" ("<<mid[i].aa<<","<<mid[i].bb<<")a"<<mid[i].ax<<"\n\t\t  a@{";
+                for(auto x: rcMid[mid[i].aa]) cout<<" "<<x; cout<<" }\n\t\t  b@{";
+                for(auto x: rcMid[mid[i].bb]) cout<<" "<<x; cout<<" }\n\t\tmid@{";
+                for(auto x: mid[i].mid) cout<<" "<<x; cout<<" }";
+                cout<<endl<<"\t";
+            }
+            for(auto const&p: mid){             // print all original digits
+                auto const& digits = rc[p.aa];
+                cout<<"{"; for(auto const d: digits) cout<<" "<<d; cout<<"}";
+            }
+            cout<<endl<<"\t";
+            for(auto const&p: mid){             // print higher-neighbor digits
+                auto const& digits = rc[p.bb];  // only 1 digit has been bumped up
+                cout<<"{"; for(auto const d: digits) cout<<" "<<d; cout<<"}";
+            }
+            cout<<endl<<endl;
+        }
+    }
+    // push point a by factor f towards point b
+    auto pushpoint = []( std::vector<float>& a, double const f, std::vector<float> const& b ){
+        assert( a.size() == b.size() );
+        if( f != 0.0 ){
+            double const g = 1.0-f;
+            for(uint32_t i=0U; i<b.size(); ++i){
+                a[i] = g * a[i] + f * b[i];
+            }
+        }
+    };
+    // find nearest rc partition to random point r
+    auto nn = [&rc, &equi]( std::vector<float> const& r ) -> uint32_t {
+        assert( r.size() == rc.d );
+        vector<uint32_t> dr;    // What are per-axis closes 'digits' of r?
+        dr.reserve(rc.d);
+        for(uint32_t a=0U; a<r.size(); ++a){   // for each axis
+            dr.push_back( equi.lookup( r[a] )); //   lookup equipartition 'digit'
+        }
+        //cout<<" nn";for(auto x:dr)cout<<","<<x; cout<<" "; cout.flush();
+        return rc.lookup(dr);   // lookup those digits in the RippleCounter, rc.
+    };
+    if(1){ // verify margin operations --- correct [fast] partition lookup
+        // RESULT: If exactly on margin, digits 'lookup' is not unique
+        //         so we get SOME close neighbor but not nec. the one we started from.
+        // test quick lookup of every margin point to its partition
+        // using a 'lookup' on each axis separately to generate the 'digits'
+        for(uint32_t i=0U; i<mid.size(); ++i){
+            bool verbose=false;
+            if(verbose){cout<<" partition i="<<i<<endl;}
+            for(uint32_t n=0U; n<2U; ++n){
+                uint32_t nbr = (n==0U? mid[i].aa: mid[i].bb); // which neighbor to test
+                auto pm = mid[i].mid;                           // pm = Point on Margin
+                pushpoint( pm, 1.e-1, rcMid[nbr] );             // push a wee bit toward aa;
+                if(verbose){
+                    cout<<"   nbr "<<setw(3)<<nbr<<" {"; for(auto x: rcMid[nbr]) cout<<" "<<x; cout<<" }"<<endl;
+                    cout<<"    pm     {"; for(auto x: pm) cout<<" "<<x; cout<<" }"<<endl;
+                    cout<<"   pushed  {"; for(auto x: pm) cout<<" "<<x; cout<<" }"<<endl;
+                }
+                vector<uint32_t> dpm;           // vector of Digits of Point on Margin
+                for(uint32_t a=0U; a<pm.size(); ++a){
+                    if(verbose){cout<<" equi.lookup( "<<pm[a]<<" ) = "<<equi.lookup(pm[a])<<endl; cout.flush();}
+                    dpm.push_back( equi.lookup( pm[a] ));       // coord --> partn 'digit'
+                }
+                if(verbose){
+                    cout<<endl;
+                    cout<<" nbr {"; for(auto x: rc[nbr]) cout<<" "<<x; cout<<" }"<<endl;
+                    cout<<" dpm {"; for(auto x: dpm) cout<<" "<<x; cout<<" }";
+                }
+                uint32_t err = 0U;
+                for(uint32_t d=0U; d<dpm.size(); ++d){
+                    if( dpm[d] != rc[nbr][d] ) { ++err; }
+                    assert( dpm[d] == rc[nbr][d] );       // assert dpm digits correct.
+                }
+                if(verbose){cout<<" err="<<err<<endl;}
+                assert( err == 0U );
+                // test the 'nn' lambda function.  'pm' was pushed toward 'nbr', so...
+                assert( nn( pm ) == nbr );
+            }
+        }
+        cout<<" (quick lookup of nearest partition && nn lambda are OK)"<<endl;
+    }
+    auto dot = [] ( vector<float> const& a, vector<float> const& b ) -> float {
+        float ret=0.0;
+        for(uint32_t i=0U; i<a.size(); ++i) ret += a[i] * b[i];
+        return ret;
+    };
+    if(1){ // sample code to find {l,u} bounds for fully separable case, and print
+        // to find {l,u} bounds of each soln, using FULL set of margin points, with strict +ve margin
+        vector<vector<float>> l (soln.size(), std::vector<float>(rc.size(),numeric_limits<float>::max()));
+        vector<vector<float>> u (soln.size(), std::vector<float>(rc.size(),numeric_limits<float>::min()));
+        { // verify that soln shatters trivial x,y examples
+            float const f = fabs(p.fmargin);            // use STRICTLY POSITIVE margin
+            for(auto const& m: mid){                    // for all neighbor pairs
+                auto v = m.mid;
+                for(uint32_t n=0U; n<2U; ++n){
+                    uint32_t nbr = (n==0U? m.aa: m.bb); // for bisectors shifted a bit each way
+                    pushpoint( v, f, rcMid[nbr] );
+                    for(uint32_t s=0U; s<soln.size(); ++s){     // for each soln unit vector
+                        float vdots = dot( v, soln[s] );
+                        l[s][nbr] = min( l[s][nbr], vdots );    // update l
+                        u[s][nbr] = max( u[s][nbr], vdots );    // and u bounds
+                    }
+                }
+            }
+            if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
+                for(uint32_t s=0U; s<soln.size(); ++s){
+                    cout<<"\tl["<<s<<"] = {"; for(auto ss:l[s]) cout<<" "<<setw(10)<<ss; cout<<" }\n";
+                    cout<<"\tu["<<s<<"] = {"; for(auto ss:u[s]) cout<<" "<<setw(10)<<ss; cout<<" }\n";
+                }
+            }
+        }
+    }
     // 3. generate trivial solutions: according the p.margin
+    {// generate some examples from margin points
+        // margin = |p.margin| --> accept neighbors differing along axes 0..margin-1
+        uint32_t margin = (p.margin>0? p.margin: -p.margin);   // absolute value-->unsigned
+        assert( margin <= p.axes );
+        // rc.neighbors is instructional -- we want to do that,
+        // - but only for p.margin axes
+        // - and we will grab non-repeating pairs of neighbors
+        vector<tuple<uint32_t,uint32_t>> pairs; // margins are between pairs of neighbors
+        float f = p.fmargin;
+        if( p.margin < 0 ) f = -f;
+        for(auto const& m: mid){
+            if( m.ax < margin ){ // if |p.margin| < p.axes, use a subset of all margin points
+                // TODO margin shift from m.mid towards/away m.aa and m.bb
+                // one point exactly on margin in class aa
+                x.push_back( m.mid ); pushpoint( x.back(), f, rcMid[m.aa] );
+                y.push_back( m.aa  );
+                cout<<" y="<<m.aa<<" x["<<x.size()<<"].back={";for(auto xx:x.back())cout<<" "<<xx;cout<<" }"<<endl;
+                // other point exactly on margin in class bb
+                x.push_back( m.mid ); pushpoint( x.back(), f, rcMid[m.bb] );
+                y.push_back( m.bb  );
+                cout<<" y="<<m.bb<<" x["<<x.size()<<"].back={";for(auto xx:x.back())cout<<" "<<xx;cout<<" }"<<endl;
+            }
+        }
+    }
+    {
+        // Test rand pt R for "in margin" is not easy/speedy.
+        // Instead move R so that it 'satisfies' margin settings:
+        // - Original thought:
+        //   - find closest partn a (by looking at 'digits' of each axes independently) FAST
+        //   - find closest neighbor b
+        //   - project onto line rcMid[a]--rcMid[b],
+        //   - scale that projection by (+/-)fmargin
+        //   - and move R correspondingly
+        // - OR, EVEN SIMPLER
+        //   - use 'nn' to get closest partition midpoint P
+        //   - shrink R by f' towards P (ball-like shrinkage, maybe good-enough)
+        //   - f' == f.margin guarantees same shrinkage as margin exemplars
+        //
+    }
+    uint32_t const nxMargin = x.size();
+    if(1){
+        cout<<" Margin points:";
+        for(uint32_t i=nxMidpoint; i<nxMargin; ++i){
+            cout<<"\n\tx["<<setw(3)<<i<<"] class "<<setw(3)<<y[i]<<" @{";
+            for(auto xi: x[i]) cout<<" "<<xi;
+            cout<<"}";
+        }
+        cout<<endl;
+    }
     // 4. generate random examples (retry if any fail +ve p.margin)
-    // 5. generate labels (use non-native label if in -ve margin region)
+    double const fshrink = (p.margin<0? -p.fmargin: +p.fmargin);
+    {
+        vector<float> r(p.axes); // work vector
+        assert( rc.d == p.axes );
+        // shrink "just like" p.margin && p.fmargin would do
+        //   (i.e. same-width margin plane)
+        //   \return original partn assignment of r
+        auto nnShrink = [&rcMid,&fshrink,&nn,&pushpoint]( std::vector<float> & r ) -> uint32_t {
+            uint32_t ret = nn(r);
+            vector<float> const& to = rcMid[ ret ];       // 'to' midpoint of nn partn
+            pushpoint( r, fshrink, to );                  // move 'r' toward 'to' (if fshrink>0)
+            return ret;
+        };
+        std::mt19937_64 gen( uint64_t{0x12345678U}  );
+        std::uniform_real_distribution<float> equiRand( equi.lo, equi.hi );
+        for(uint32_t i=nxMargin; i<p.nx; ++i){
+            for(uint32_t i=0U; i<r.size(); ++i){
+                r[i] = equiRand(gen);
+            }
+            uint32_t const partn = nnShrink( r );       // margin-adjust r
+            x.push_back( r );
+            y.push_back( partn );
+        }
+    }
+    if(1){
+        cout<<" Random, margin-respecting examples: x.size()="<<x.size()<<"\n";
+        for(uint32_t i=nxMargin; i<x.size(); ++i){
+            cout<<"\tx["<<setw(3)<<i<<"] y="<<setw(3)<<y[i]<<" @ {";
+            for(auto const xi: x[i]) cout<<" "<<xi;
+            cout<<" }\n";
+        }
+    }
+    cout<<" fshrink = "<<fshrink<<endl;
+    // 4b. milde 'slc' repos like examples sorted by class.
+    vector<uint32_t> perm(y.size());
+    std::iota( perm.begin(), perm.end(), 0U);
+    std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
+    if(1){
+        cout<<" all examples, class-sorted:"<<endl;
+        for(uint32_t i=0; i<x.size(); ++i){
+            cout<<"\tx["<<setw(3)<<perm[i]<<"] y="<<setw(3)<<y[perm[i]]<<" @ {";
+            for(auto const xi: x[perm[i]]) cout<<" "<<xi;
+            cout<<" }\n";
+        }
+    }
+
+    // 5. generate label mappings by mapping partn #s y[i] --> multilabel sets
+    std::vector<std::vector<uint32_t>> ymap(rc.size());
+    // ymap[ y[i] ] is now a VECTOR of labels
+    {
+        // use a FIXED multi=2 relabelling
+        // - each of the nClassrc.size() original partitions is remapped to TWO
+        //   class labels
+        // - p --> {p, (p+1)%nClass}
+        uint32_t const multi = 2U;
+        if( p.multi != 2U ){
+            cout<<" WARNING: --multi settings other than 2 are NOT IMPLEMENTED"<<endl;
+        }
+        uint32_t nClass = rc.size();
+        for(uint32_t i=0U; i<nClass; ++i){      // for each class label
+            ymap[i].resize(multi);
+            for(uint32_t j=0U; j<multi; ++j){   // create a vector of labels
+                ymap[i][j] = (i+j)%nClass;
+            }
+        }
+        // NOTE: probably I can fully split for any multi up to p.axes,
+        // Anyhow, afer the filtering, there should now by
+        // only multi==2 remaining classes.
+    }
     // 6. generate any skew/rot transformation data
+    // TODO
     // 7. apply transforms to each of p.axes projection axes, write trainFile
+    // TODO
     // 8. apply transforms to each training examples, write axesFile
-    // [9. generate a usable MCsoln file with the 'ideal' solution]
+    // TODO
+    // 9a. generate training files x,y : mcgen-slc-dr4.repo ("slc","dr4") in text format
+    {
+        vector<uint32_t> perm(y.size());
+        std::iota( perm.begin(), perm.end(), 0U);
+        std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
+        if(1){
+            cout<<" all examples, class-sorted:"<<endl;
+            for(uint32_t i=0; i<x.size(); ++i){
+                cout<<"\tx["<<setw(3)<<perm[i]<<"] y="<<setw(3)<<y[perm[i]]<<" @ {";
+                for(auto const xi: x[perm[i]]) cout<<" "<<xi;
+                cout<<" }\n";
+            }
+        }
+        string fname("mcgen-slc-dr4.repo");
+        ofstream ofs(fname);
+        string canonicalArgs = p.str();
+        ofs<<"## mcgen trivial cube data -- canonical "<<canonicalArgs
+            <<" margin="<<p.margin<<" fmargin="<<p.fmargin<<endl;
+        ofs<<"# "<<x.size()<<" "<<p.axes<<"\n"; // # <training examples> <dimensionality>
+        // now output the slc labels
+        for(uint32_t i=0U; i<y.size(); ++i){
+            ofs<<"L"<<y[perm[i]]<<"\n";
+        }
+        // now output dense real4 training vectors, p.axes floats per line
+        for(uint32_t i=0U; i<perm.size(); ++i){
+            auto const& xp = x[perm[i]];
+            assert( xp.size() == p.axes );
+            for(uint32_t a=0U; ; ){
+                ofs<<setw(8)<<xp[a];
+                if( ++a >= p.axes ){
+                    break;
+                }
+                ofs<<" ";
+            }
+            ofs<<"\n";
+        }
+        ofs.close();
+        cout<<" Generated "<<fname<<endl;
+    }
+    // 9b. generate training files x,y : mcgen-mlc-dr4.repo ("slc","dr4") in text format
+    {
+        vector<uint32_t> perm(y.size());
+        std::iota( perm.begin(), perm.end(), 0U);
+        std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
+        string fname("mcgen-mlc-dr4.repo");
+        ofstream ofs(fname);
+        string canonicalArgs = p.str();
+        ofs<<"## mcgen trivial cube data -- canonical "<<canonicalArgs
+            <<" margin="<<p.margin<<" fmargin="<<p.fmargin<<endl;
+        ofs<<"# "<<x.size()<<" "<<p.axes<<"\n"; // # <training examples> <dimensionality>
+        // now output the slc labels
+        for(uint32_t i=0U; i<y.size(); ++i){
+            auto ylabels = ymap[ y[perm[i]] ];
+            assert( ylabels.size() >= 1U );
+            ofs<<ylabels.size()<<" ";
+            for(uint32_t l=0U; ; ){
+                ofs<<"L"<<ylabels[l];
+                if( ++l >= ylabels.size())
+                    break;
+                ofs<<" ";
+            }
+            ofs<<"\n";
+        }
+        // now output dense real4 training vectors, p.axes floats per line
+        for(uint32_t i=0U; i<perm.size(); ++i){
+            auto const& xp = x[perm[i]];
+            assert( xp.size() == p.axes );
+            for(uint32_t a=0U; ; ){
+                ofs<<setw(8)<<xp[a];
+                if( ++a >= p.axes )
+                    break;
+                ofs<<" ";
+            }
+            ofs<<"\n";
+        }
+        ofs.close();
+        cout<<" Generated "<<fname<<endl;
+    }
+    // 9c. generate test set (all rand) : mcgen-slc-dr4.test
+    // 9d. generate test set (all rand) : mcgen-mlc-dr4.test
+    // 9c. generate a usable MCfilter ".soln" file with the 'ideal' solution
+    //     --> mcgen-txt.soln  and mcgen-bin.soln
     cout<<"\nGoodbye"<<endl;
 }
 

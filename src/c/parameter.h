@@ -95,6 +95,8 @@ typedef struct
   uint32_t class_samples; ///< the number of negative classes to use at each gradient iteration. 0 to use all the classes
 } param_struct;
 
+/// comes with a pretty-printer
+std::ostream& operator<<( std::ostream& os, param_struct const& p );
 
 inline param_struct set_default_params()
 {
@@ -132,6 +134,8 @@ inline param_struct set_default_params()
   return def;
 }
 
+/** \ref erik/parameter-args.h has a boost::program_options description
+ * that can also generate useful help. */
 void print_parameter_usage();
 
 /// \name I/O (non-milde -- independent of os/util_io.hpp)

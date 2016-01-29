@@ -5,6 +5,8 @@
 #include <iostream>
 #include <stdexcept>
 #include <cctype>       // std::toupper
+#include <sstream>
+#include <iomanip>
 
 using namespace std;
 
@@ -51,6 +53,57 @@ void print_parameter_usage()
   cout << "           reoptimize_LU - optimize l and u for given projections w_prev. Implies resume is true (i.e. if no_projections > w_prev.cols() additional projections will be learned. [false]" << endl;
   cout << "           class_samples - the number of negative classes to sample for each example at each iteration. 0 to use all classes. [0]" << endl;
 }
+
+std::ostream& operator<<( std::ostream& os, param_struct const& p )
+{
+#define WIDE(OS,N,STUFF) do { \
+    std::ostringstream oss; \
+    oss<<STUFF; \
+    os<<left<<setw(N)<<oss.str(); \
+}while(0)
+    os<<"MCfilter parameters:\n";
+    uint32_t const c1=23U;
+    uint32_t const c2=22U;
+    uint32_t const c3=23U;
+    WIDE(os,c1,right<<setw(14)<<"proj "<<left<<p.no_projections);
+    WIDE(os,c2,right<<setw(11)<<"maxiter "<<left<<p.max_iter);
+    WIDE(os,c3,right<<setw(15)<<"C1 "<<left<<p.C1);
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"batchsize "<<left<<p.batch_size);
+    WIDE(os,c2,right<<setw(11)<<"report "<<left<<p.report_epoch);
+    WIDE(os,c3,right<<setw(15)<<"C2 "<<left<<p.C2);
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"etatype "<<left<<tostring(p.eta_type));
+    WIDE(os,c2,"   "<<tostring(p.reorder_type));
+    WIDE(os,c3,"      "<<left<<tostring(p.reweight_lambda));
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"eta "<<left<<p.eta);
+    WIDE(os,c2,right<<setw(11)<<"treorder "<<left<<p.reorder_epoch);
+    WIDE(os,c3,right<<setw(15)<<"negclass "<<left<<p.class_samples);
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"etamin "<<left<<p.min_eta);
+    WIDE(os,c2,right<<setw(11)<<"optlu "<<left<<p.optimizeLU_epoch);
+    WIDE(os,c3,right<<setw(15)<<"tgrad "<<left<<p.finite_diff_test_epoch);
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"threads "<<left<<p.num_threads);
+    WIDE(os,c2,right<<setw(11)<<"reportavg "<<left<<p.report_avg_epoch);
+    WIDE(os,c3,right<<setw(15)<<"ngrad "<<left<<p.no_finite_diff_tests);
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"remove_constraints "<<left<<p.remove_constraints);     // bool
+    WIDE(os,c2,right<<setw(11)<<"avg_epoch (tavg) "<<left<<p.avg_epoch);
+    WIDE(os,c3,right<<setw(15)<<"grad "<<left<<p.finite_diff_test_delta);
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"remove_class "<<left<<p.remove_class_constraints);       // bool
+    WIDE(os,c2,right<<setw(11)<<"resume "<<left<<p.resume);  // bool
+    WIDE(os,c3,right<<setw(15)<<"wt_nclass_by_nclasses "<<left<<p.ml_wt_class_by_nclasses);        // bool
+    os<<endl;
+    WIDE(os,c1,right<<setw(14)<<"reoptlu "<<left<<p.reoptimize_LU);  // bool
+    WIDE(os,c2,right<<setw(11)<<"seed "<<left<<p.seed);
+    WIDE(os,c3,right<<setw(15)<<"wt_by_nclasses "<<left<<p.ml_wt_by_nclasses);      // bool
+    os<<endl;
+    return os;
+}
+
 
 #define ENUM_CASE(NAME) case(NAME): name= #NAME; break
 std::string tostring( enum Eta_Type const e )
