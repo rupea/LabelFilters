@@ -19,6 +19,7 @@ using namespace std;
 param_struct params = set_default_params();
 int testnum = TESTNUM;
 bool use_mcsolver = true;
+bool use_dense = true;
 std::string saveBasename = std::string("");
 size_t problem = 2U;
 string problem_msg;
@@ -77,33 +78,44 @@ int testparms(int argc, char**argv, param_struct & params) {
     problem = PROBLEM;
     testnum = TESTNUM;
     use_mcsolver = true;
+    use_dense = true;
+    bool dohelp=false;
     for(int a=1; a<argc; ++a){
-        for(char* ca=argv[a]; *ca!='\0'; ++ca ){
+        for(char* ca=argv[a]; *ca!='\0'; ){
             if(*ca == 'h'){
                 cout<<" Options:"
                     <<"\n   pN          test problem N in [0,2] w/ base parameter settings [default=2]"
                     <<"\n   0-9A-Z      parameter modifiers, [default=0, no change from pN defaults]"
-                    <<"\n   m           [default] mcsolver code"
-                    <<"\n   o           original code"
+                    <<"\n   m|o         m[default] mcsolver code | o original code"
+                    <<"\n   D|S         Dense[default] | Sparse matrices"
                     <<"\n   s<string>   save file base name (only for 'm') [default=none]"
                     <<"\n   h           this help"
                     <<"\n   v           increase verbosity [default=0]"
                     <<"\n Convergence: p0 p1 p2 should converge"
                     <<"\n              p0 with 0-9A-Z should converge, but harder problems might not"
                     <<endl;
-            }else if(isdigit(*ca))      testnum = *ca - '0';
-            else if(isalpha(*ca) && isupper(*ca)) testnum = 10 + (*ca - 'A');
-            else if(*ca == 'v')         ++verbose;
-            else if(*ca == 'o')         use_mcsolver=false;
+                dohelp=true;
+            }else if(isdigit(*ca)){
+                testnum = 0U;
+                for( ; isdigit(*ca); ++ca) { testnum=10U*testnum + (*ca - '0'); }
+                goto HaveNextCA;
+            }else if(*ca == 'v')         ++verbose;
             else if(*ca == 'm')         use_mcsolver=true;
+            else if(*ca == 'o')         use_mcsolver=false;
+            else if(*ca == 'D')         use_dense=true;
+            else if(*ca == 'S')         use_dense=false;
             else if(*ca == 'p')         problem = *++ca - '0';
             else if(*ca == 's'){
                 saveBasename.assign(++ca);
                 break;
             }
+            ++ca;
+HaveNextCA:
+            continue;
         }
     }
     if(problem>2U) problem=2U;
+    if(dohelp) exit(0);
     return testnum;
 }
 
@@ -242,10 +254,11 @@ void check_solution( DenseM & weights, DenseM & lower_bounds, DenseM & upper_bou
     //
     // throw on wrong output
     //
+    int sp=(use_dense? 1: 4);   // sparsity factor: sparse uses every 4th dimension only
     switch( problem ){
       case(0):
           for(uint32_t i=0U; i<params.no_projections; ++i){
-              if( fabs(weights(0,i)) < 0.99 || fabs(weights(1,i)) > 0.1 || fabs(weights(2,i)) > 0.1 ){
+              if( fabs(weights(0*sp,i)) < 0.99 || fabs(weights(1*sp,i)) > 0.1 || fabs(weights(2*sp,i)) > 0.1 ){
                   throw std::runtime_error(" Incorrect solution for problem 0");
               }
           }
@@ -253,7 +266,7 @@ void check_solution( DenseM & weights, DenseM & lower_bounds, DenseM & upper_bou
       case(1): ;// fall-through
       case(2):
                for(uint32_t i=0U; i<params.no_projections; ++i){
-                   if( fabs(weights(0,i)+weights(2,i)) > 0.1 || fabs(weights(1,i)) > 0.1 ){
+                   if( fabs(weights(0*sp,i)+weights(2*sp,i)) > 0.1 || fabs(weights(1*sp,i)) > 0.1 ){
                        throw std::runtime_error(" Incorrect solution for problem 1");
                    }
                }
@@ -264,6 +277,31 @@ void check_solution( DenseM & weights, DenseM & lower_bounds, DenseM & upper_bou
     if( problem != PROBLEM ) cout<<"p"<<problem;
     if( testnum != TESTNUM ) cout<<testnum;
     cout<<" : Solution was correct enough (GOOD)"<<endl;
+}
+
+void mcSave(std::string saveBasename, MCsoln const& soln){            
+    if( saveBasename.size() > 0U ){
+        string saveTxt(saveBasename); saveTxt.append(".soln");
+        cout<<" Saving to file "<<saveTxt<<endl;
+        try{
+            ofstream ofs(saveTxt);
+            soln.write( ofs, MCsoln::TEXT, MCsoln::SHORT );
+            ofs.close();
+        }catch(std::exception const& e){
+            cout<<"OHOH! Error during text write of demo.soln "<<e.what()<<endl;
+            throw(e);
+        }
+        string saveBin(saveBasename); saveBin.append("-bin.soln");
+        cout<<" Saving to file "<<saveBin<<endl;
+        try{
+            ofstream ofs(saveBin);
+            soln.write( ofs, MCsoln::BINARY, MCsoln::SHORT );
+            ofs.close();
+        }catch(std::exception const& what){
+            cout<<"OHOH! Error during binary write of demo.soln"<<endl;
+            throw(what);
+        }
+    }
 }
 
 int main(int argc,char** argv)
@@ -375,66 +413,75 @@ int main(int argc,char** argv)
     srand(rand_seed);
 
     cout<<"  pre-run call to rand() returns "<<rand()<<endl;
-    if( ! use_mcsolver ){
-        cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
-        // these calls are important so that the compiler instantiates the right templates
-        DenseM weights, lower_bounds, upper_bounds;
-        DenseM w_avg, l_avg, u_avg;
-        VectorXd objective_val, o_avg;
-        solve_optimization(weights,lower_bounds,upper_bounds,objective_val
-                           ,w_avg,l_avg,u_avg,o_avg
-                           ,x,y,params);
-        check_solution( weights, lower_bounds, upper_bounds );  // throw on error
-    }else{ // default: use new MCsolver code
-        cout<<" *** BEGIN SOLUTION *** MCsolver code: "<<problem_msg<<endl;
-        MCsolver mc;
-        mc.solve( x, y, &params );
-        MCsoln      & soln = mc.getSoln();
-        DenseM      & weights = soln.weights;
-        DenseM      & lower_bounds = soln.lower_bounds;
-        DenseM      & upper_bounds = soln.upper_bounds;
-        //DenseM const& w_avg = soln.weights_avg;
-        //DenseM const& l_avg = soln.lower_bounds_avg;
-        //DenseM const& u_avg = soln.upper_bounds_avg;
-        //VectorXd const& objective_val = soln.objective_val;
-        //VectorXd const& objective_val_avg = soln.objective_val_avg;
-        if(1){
-            cout<<"upper_bounds = "<<upper_bounds<<endl;
+    if( use_dense ){
+        if( ! use_mcsolver ){
+            cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
+            // these calls are important so that the compiler instantiates the right templates
+            DenseM weights, lower_bounds, upper_bounds;
+            DenseM w_avg, l_avg, u_avg;
+            VectorXd objective_val, o_avg;
+            solve_optimization(weights,lower_bounds,upper_bounds,objective_val
+                               ,w_avg,l_avg,u_avg,o_avg
+                               ,x,y,params);
             check_solution( weights, lower_bounds, upper_bounds );  // throw on error
+        }else{ // default: use new MCsolver code
+            cout<<" *** BEGIN SOLUTION *** MCsolver code: "<<problem_msg<<endl;
+            MCsolver mc;
+            mc.solve( x, y, &params );
+            MCsoln      & soln = mc.getSoln();
+            DenseM      & weights = soln.weights;
+            DenseM      & lower_bounds = soln.lower_bounds;
+            DenseM      & upper_bounds = soln.upper_bounds;
+            //DenseM const& w_avg = soln.weights_avg;
+            //DenseM const& l_avg = soln.lower_bounds_avg;
+            //DenseM const& u_avg = soln.upper_bounds_avg;
+            //VectorXd const& objective_val = soln.objective_val;
+            //VectorXd const& objective_val_avg = soln.objective_val_avg;
+            if(1){
+                cout<<"upper_bounds = "<<upper_bounds<<endl;
+                check_solution( weights, lower_bounds, upper_bounds );  // throw on error
+            }
+            mcSave(saveBasename, soln);
         }
-        if( saveBasename.size() > 0U ){
-            string saveTxt(saveBasename); saveTxt.append(".soln");
-            cout<<" Saving to file "<<saveTxt<<endl;
-            try{
-                ofstream ofs(saveTxt);
-                soln.write( ofs, MCsoln::TEXT, MCsoln::SHORT );
-                ofs.close();
-            }catch(std::exception const& e){
-                cout<<"OHOH! Error during text write of demo.soln "<<e.what()<<endl;
-                throw(e);
+    }else{ // sparse case
+        // convert dense x into sparse representation (every 4th dimn significant)
+        SparseM xs(x.rows(),4*x.cols());
+        typedef Eigen::Triplet<double> T;
+        std::vector<T> tripletList;
+        tripletList.reserve(4*x.rows()*x.cols());
+        for(int r=0; r<x.rows(); ++r)
+            for(int c=0; c<x.cols(); ++c)
+                tripletList.push_back(T(r,4*c,x(r,c)));
+        xs.setFromTriplets(tripletList.begin(),tripletList.end());
+        if( ! use_mcsolver ){
+            cout<<" *** BEGIN SOLUTION *** original SPARSE code: "<<problem_msg<<endl;
+            DenseM weights, lower_bounds, upper_bounds;
+            DenseM w_avg, l_avg, u_avg;
+            VectorXd objective_val, o_avg;
+            solve_optimization(weights,lower_bounds,upper_bounds,objective_val
+                               ,w_avg,l_avg,u_avg,o_avg
+                               ,xs,y,params);
+            check_solution( weights, lower_bounds, upper_bounds );  // throw on error
+        }else{
+            cout<<" *** BEGIN SOLUTION *** MCsolver SPARSE code: "<<problem_msg<<endl;
+            MCsolver mc;
+            mc.solve( xs, y, &params );
+            MCsoln      & soln = mc.getSoln();
+            DenseM      & weights = soln.weights;
+            DenseM      & lower_bounds = soln.lower_bounds;
+            DenseM      & upper_bounds = soln.upper_bounds;
+            //DenseM const& w_avg = soln.weights_avg;
+            //DenseM const& l_avg = soln.lower_bounds_avg;
+            //DenseM const& u_avg = soln.upper_bounds_avg;
+            //VectorXd const& objective_val = soln.objective_val;
+            //VectorXd const& objective_val_avg = soln.objective_val_avg;
+            if(1){
+                cout<<"upper_bounds = "<<upper_bounds<<endl;
+                check_solution( weights, lower_bounds, upper_bounds );  // throw on error
             }
-            string saveBin(saveBasename); saveBin.append("-bin.soln");
-            cout<<" Saving to file "<<saveBin<<endl;
-            try{
-                ofstream ofs(saveBin);
-                soln.write( ofs, MCsoln::BINARY, MCsoln::SHORT );
-                ofs.close();
-            }catch(std::exception const& what){
-                cout<<"OHOH! Error during binary write of demo.soln"<<endl;
-                throw(what);
-            }
+            mcSave(saveBasename, soln);
         }
     }
-
-#if 0
-    // sparse case
-    SparseM xs = x.sparseView();
-    //solve_optimization(weights,lower_bounds,upper_bounds,objective_val,xs,y,params);
-    xs.conservativeResize(281,1123497);
-    DenseM sweights (1123497,1);
-    sweights.setRandom();
-    solve_optimization(sweights,lower_bounds,upper_bounds,objective_val,xs,y,params);
-#endif
 
 }
 

@@ -285,6 +285,9 @@ demo-proj2-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ -DUSE_MCSOLVER=1 $(CPPFLAGS) -I. $^ $(LDFLAGS)
 # The following test throws if the solution is not sufficiently close to the correct answer.
 # Note: inside eigen, there are signed vs. unsigned issues (error=sign-compare)
+# Warnings:
+# 	eigen has internal 'sign-compare' issues
+# 	std::random* has internal 'maybe-uninitialized' issues
 demo-quick: | libmcfilter-dbg.a
 demo-quick: erik/demo-quick.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
