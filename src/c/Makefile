@@ -74,7 +74,7 @@ profile_kmeans:
 
 
 ## extra stuff ######################### without octave ###################
-.PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests do-vg tail-vg
+.PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests do-vg tail-vg clean realclean
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
 # for better tracing...
@@ -301,7 +301,7 @@ demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 #static linkage : 2.6M executable
 #mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
-	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.
@@ -310,5 +310,9 @@ clean:
 	rm -f *.o *.lo *-dbg.o *-dbg.lo *.2o *.3o *.4o *-prof.o libmcfilter*.a libmcfilter*.so \
 		learn_projection evaluate_projection run_kmeans demo-quick demo-proj1 demo-proj-dbg \
 		demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log run_LPSR \
-	       	demo-proj2-dbg demo-mcsolver demo-proj.native mcgen demo-proj[1-4] demo-prof
+	       	demo-proj2-dbg demo-mcsolver demo-proj.native mcgen demo-proj[1-4] demo-prof xx a.out \
+		demo-parms
 	$(MAKE) -f Makefile.octave clean
+
+realclean: clean
+	rm -f mcgen*.repo *.log *.txt DenseM.bin *.soln *.repo boolmatrix.bin *.profile

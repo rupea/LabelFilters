@@ -27,10 +27,14 @@ namespace mcgen {
     namespace ndim {
         typedef std::vector<double> Vector;
         void randFill( Vector& v, double lo, double hi ); ///< fill v[] with rands in [lo,hi]
-        void randCube( Vector& v);      ///< fill v[] with values in [0,+1]
-        void randDirn( Vector& v);      ///< fill v[] with a rand unit vector (seq rotns alg)
-        Vector&& randCube(uint32_t sz); ///< resize and fill v[] with values in [0,+1]
-        Vector&& randDirn(uint32_t sz); ///< resize and fill v[] with a rand unit vector (seq rotns alg)
+        template<class RandGenerator> inline
+        void randCube( RandGenerator &g, Vector& v, float const lo=0.0f, float const hi=1.0f);
+        template<class RandGenerator>
+        void randDirn( RandGenerator &g, Vector& v);      ///< fill v[] with a rand unit vector (seq rotns alg)
+        template<class RandGenerator>
+        Vector&& randCube(RandGenerator &g, uint32_t const sz, float const lo=0.0f, float const hi=1.0f);
+        template<class RandGenerator>
+        Vector&& randDirn(RandGenerator &g, uint32_t sz); ///< resize and fill v[] with a rand unit vector (seq rotns alg)
         //randBall(Vector& v);            ///< fill v[] with vector magnitude <= 1
         /** \name vector transforms
          * Once training and solution examples are generated for a trivial set
@@ -67,21 +71,23 @@ namespace mcgen {
     namespace opt {
         class Parms {
         public:
-            Parms();                        ///< construct with defaults, and call init()
+            Parms();                    ///< construct with defaults, and call init()
 
             /// \name core settings
             //@{
-            uint32_t axes;                  ///< [3] # projection axes to separate examples
-            bool     ball;                  ///< [*] true = examples on unit ball, false = rotated unit hypercube
-            uint32_t dim;                   ///< [3] dimension of each training example
-            int32_t  margin;                ///< [+axes] |margin|<=a 0=none, +ve=separable, -ve=non-separable
-            double   fmargin;               ///< [0.01] distance multiplier for margin example generation
-            uint32_t parts;                 ///< [2] each axis separates into parts, nClass = parts ^ axes [2^3]
-            bool     trivial;               ///< [1]: soln is first \c axes unitvecs (skew,rot=0), 0: use skew,rot!=0
-            uint32_t skew;                  ///< [0] skew < axes dims toward (1,0,0,...) of trivial soln
-            uint32_t rot;                   ///< [0] then project into axes < rot < dim and do a random rotation
-            uint32_t seed;                  ///< [0] rand number seed
-            uint32_t multi;                 ///< [2] besides slc, generate a multi-labelling with up to this many labels per example.
+            uint32_t axes;              ///< [3] # projection axes to separate examples
+            bool     ball;              ///< [*] true = examples on unit ball, false = rotated unit hypercube
+            uint32_t dim;               ///< [3] dimension of each training example
+            int32_t  margin;            ///< [+axes] |margin|<=a 0=none, +ve=separable, -ve=non-separable
+            double   fmargin;           ///< [0.01] distance multiplier for margin example generation
+            uint32_t parts;             ///< [2] each axis separates into parts, nClass = parts ^ axes [2^3]
+            bool     trivial;           ///< [1]: soln is first \c axes unitvecs (skew,rot=0), 0: use skew,rot!=0
+            uint32_t skew;              ///< [0] skew < axes dims toward (1,0,0,...) of trivial soln
+            uint32_t rot;               ///< [0] then rotate rot<=axes axes randomly
+            bool     noise;             ///< [false] 
+            uint32_t embed;             ///< [0] !=0 => after noise, axes --> embed dims with rand normed xform
+            uint32_t seed;              ///< [0] rand number seed
+            uint32_t multi;             ///< [2] besides slc, generate a multi-labelling with up to this many labels per example.
             //@}
             /// \name non-core settings set via init()
             //@{
@@ -136,8 +142,59 @@ namespace mcgen {
     }//opt::
     namespace ndim {
         //typedef std::vector<double> Vector;
-        //void randCube( Vector& v);     ///< fill v[] with values in [-1,+1]
-        //void randDirn( Vector& v);     ///< fill v[] with a rand unit vector (seq rotns alg)
+        template<class RandGenerator> inline
+        void randCube( RandGenerator &g, std::vector<float>& v, float const lo/*=0.0f*/, float const hi/*=1.0f*/){
+            std::uniform_real_distribution<float> equiRand( lo, hi );
+            for(auto &x: v) x= equiRand(g);
+        }
+        template<class RandGenerator> inline
+        void randDirn( RandGenerator &g, std::vector<float>& v){
+            double x2=0.0;
+            double x2Thresh = v.size()*1.e-12;
+            do{
+                std::normal_distribution<float> normal;
+                x2=0.0;
+                for(auto &x: v){
+                    x = normal(g);
+                    x2 += x * x;
+                }
+            }while(x2<x2Thresh);
+            x2=1.0 / std::sqrt(x2);
+            for(auto &x: v) x *= x2;    //normalize the random dirn
+        }
+        template<class RandGenerator>
+        Vector&& randCube(RandGenerator &g, uint32_t const sz, float const lo/*=0.0f*/, float const hi/*=1.0f*/){
+            Vector v;
+            v.reserve(sz);
+            std::uniform_real_distribution<float> equiRand( lo, hi );
+            for(uint32_t i=0U; i<sz; ++i){
+                v.push_back( equiRand(g) );
+            }
+            return v;
+        }
+        template<class RandGenerator>
+        Vector&& randDirn(RandGenerator &g, uint32_t const sz){
+            Vector v;
+            v.reserve(sz);
+            std::normal_distribution<float> normal();
+            double x2=0.0;
+            double x2Thresh = v.size()*1.e-12;
+            for(uint32_t i=0U; i<sz; ++i){
+                double x= normal(g);
+                x2 += x * x;
+                v.push_back(x);
+            }
+            while( x2<x2Thresh ){ // very rarely...
+                x2 = 0.0;
+                for(auto &x: v){
+                    x= normal(g);
+                    x2 += x * x;
+                }
+            }
+            x2=1.0 / std::sqrt(x2);
+            for(auto &x: v) x *= x2;    //normalize the random dirn
+            return v;
+        }
         /** SkewerMult changes the angle wrt the chosen axis, wrt
          * some origin on that axis.
          * - This can quickly generate a skewed distribution
@@ -373,7 +430,7 @@ namespace mcgen {
 
         Parms::Parms()
             : axes( 3U )
-              , ball( true )
+              , ball( false )
               , dim( 3U )
               , margin( 3U )
               , fmargin( 0.01 )
@@ -388,27 +445,31 @@ namespace mcgen {
             //init();
         }
         void Parms::init(){
-            int const verbose=0;
+            int const verbose=1;
             nClass = parts;
-            if(verbose) {cout<<" nClass="<<parts; cout.flush();}
+            if(verbose) cout<<" Parms::init";
+            if(verbose>=2) {cout<<" nClass="<<parts; cout.flush();}
             for(uint32_t i=1U; i<axes; ++i){
                 nClass *= parts;
-                if(verbose){cout<<" .."<<i<<".."<<nClass; cout.flush();}
+                if(verbose>=2){cout<<"   "<<i<<".."<<nClass; cout.flush();}
             }
-            if(verbose) cout<<endl;
-            nxStd = nClass;
-            if(verbose){cout<<" nxStd=nClass="<<nxStd; cout.flush();}
+            if(verbose) cout<<" nClass=p^a="<<parts<<"^"<<axes<<"="<<nClass;
+            uint32_t m = static_cast<uint32_t>((margin>0? margin: -margin));
+            if( m > axes ) throw std::runtime_error("Parms::init ERROR: --margin cannot be > --axes");
+            uint32_t nMargin = 0U;
             if( margin != 0 ){
-                uint32_t m = static_cast<uint32_t>((margin>0? margin: -margin));
-                nxStd += 2 * m *axes * (parts-1U);
-                if(verbose){cout<<" += [2|m|a(p-1)=2*|"<<margin<<"|*"<<axes<<"*("<<parts-1U<<")] --> "<<nxStd; cout.flush();}
+                nMargin = 4U * m * (axes-1U) * (parts-1U);
+                if(verbose)cout<<" nMargin=4|m|(a-1)(p-1)=4*"<<m<<"*"<<axes-1U<<"*"<<parts-1U<<"="<<nMargin;
             }
-            uint32_t nxMinimum = std::max(4*axes, 2*nxStd);
-            nx = std::max( nx, nxMinimum );                     // nx must be at least some minimum value
+            nxStd = nClass + nMargin;
+            if(verbose)cout<<" nxStd=nClass+nMargin="<<nClass<<"+"<<nMargin<<"="<<nxStd;
+
+            uint32_t nMin = std::max(4*axes, (axes-m)*nxStd);
+            nx = std::max( nxStd+nx, nMin ) - nxStd; // nx might increase, forcing some min # examples
             // - 1st of nClass nxStd examples are ~ [farthest] class centers
             // - rest of nxStd are margin-tightening examples
             // - remaining (nx-nxStd) randomly scattered over example space.
-            if(verbose) cout<<endl;
+            if(verbose)cout<<" nMin="<<nMin<<" nx="<<nx<<endl;
         }
 
         static void helpUsage( std::ostream& os ){
@@ -430,12 +491,13 @@ namespace mcgen {
                  , " examples on unit ball")
                 ("cube,c", po::value<bool>()->implicit_value(true)->default_value(true)
                  , "[*] ... or examples in [deformed? r,s] unit cube")
-                ("dim,d", po::value<uint32_t>()->default_value(3U)
-                 , "embedding dimension of training data, d >= a")
+                ("dim,d", po::value<uint32_t>()->default_value(0U)
+                 , "dimension of training data, d >= a")
+                ("fmargin,f", po::value<double>()->default_value(0.01)
+                 , "push factor related to margin width")
                 ("margin,m", po::value<int32_t>()
                  , "[a] |m|<=a, add 2|m|a(p-1) margin tightness examples."
                  "  +ve: separable, -ve: non-separable, 0: no margin-examples")
-                ("fmargin,f", po::value<double>()->default_value(0.01),"push factor related to margin width")
                 ("parts,p", po::value<uint32_t>()->default_value(2U)
                  , "p>=2 parts to divide each -a axis into. # classes = p^a [8]")
                 ("seed", po::value<uint32_t>()->default_value(0U) , "rand seed")
@@ -444,11 +506,14 @@ namespace mcgen {
                 ("trivial,t"
                  , "[*] soln: unit vectors in 1st -a dimensions form projection axes")
                 ("skew,s", po::value<uint32_t>()->default_value(0U)
-                 , "after t, rot last 0<s<a-1 dims (2..s+1) toward 1st unit vector (1,0,0...) (axes-->non-orthog)")
+                 , "after t, rot last 0<s<a-1 dims toward 1st unit vector (1,0,0...) (axes-->non-orthog)")
                 ("rot,r", po::value<uint32_t>()->default_value(0U)
-                 , "after t+s, move into a<=r<=d dims & rotate randomly (keep lengths,angles)")
-                ("examples,x", po::value<uint32_t>()
-                 , "[0] How many, silently adjusted up to max(a*4, 2*<pre-determined examples>")
+                 , "after t+s, rotate first r<=a dims randomly (keep lengths,angles)")
+                ("noise,n", po::value<bool>()->implicit_value(true)->default_value(false)
+                 , "fill dim > axes with noise?")
+                ("embed,e", po::value<uint32_t>()->default_value(0U)
+                 , "embed a<=e<=d, after noise, default=a=NOOP")
+                ("examples,x", po::value<uint32_t>(), "[0] extra random examples")
                 ;
         }
         static void helpExamples( std::ostream& os ){
@@ -463,8 +528,11 @@ namespace mcgen {
                 "\n       # = 2^3 + 2*|3|*3*(2-1) = 8 + 18 = 26 predetermined points"
                 "\n       default training examples (x) = max(4*3, 2*26) = 52"
                 "\n - Ex. a=3 p=2 m=0 ---> # = 8 , default (x) = max(4*3, 8) = 12"
+                "\n - t trivial soln: sig in 1st a dims, higher dims ~ noise/zero"
                 "\n - s skewed signal still in 1st a dims"
-                "\n - r moves signal into 1st a<=r<=d dims, higher dims ~ noise"
+                "\n - r rot signal within 1st r<=a dims"
+                "\n - n noise the dimensions from axes to dim (default: zero them)"
+                "\n - e embed if e>a into e<=d dims"
                 ;
         }
         /** \c p might not reflect values it would have after init() */
@@ -472,20 +540,19 @@ namespace mcgen {
             Parms def;          // get default core values (well, some have been inited to nonzero)
             ostringstream s;
             s<<'a'<<axes;                               // non-optional
-            if( ball != def.ball ) s<<(ball? 'b': 'c'); // optional
-            s<<'d'<<dim;                                // non-optional
+            if( ball != def.ball ) s<<(ball? 'b': 'c');
             if( margin != static_cast<int32_t>(axes) ) s<<'m'<<margin;
             //if( parts != def.parts ) s<<'p'<<parts;     // optional
-            s<<'p'<<parts;                              // non-optional
+            if( parts != 2U ) s<<'p'<<parts;
             if( ! trivial ){
                 assert( skew > 0U || rot > 0U );
                 if( skew != 0U ) s<<'s'<<skew;
                 if( rot != 0U ) s<<'r'<<rot;
             }
-            // nx is tricky: it is non-core, but default value is set by init()
-            def = *this;
-            def.init();          // default value is now cp.nx
-            if( nx != def.nx && nx != 0U ) s<<'x'<<def.nx;
+            if(noise && dim > axes) s<<'n';
+            if(embed>=axes) s<<'e'<<embed;
+            if( dim > axes ) s<<'d'<<dim;
+            if(nx>0U) s<<'x'<<nx;
             return s.str();
         }
         void argsParse( int argc, char**argv, struct Parms& parms ){
@@ -496,6 +563,7 @@ namespace mcgen {
                 cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
             }
 #endif
+            bool keepgoing = true;
             try {
                 po::options_description desc("Options");
                 init( desc );                    // create a description of the options
@@ -517,13 +585,13 @@ namespace mcgen {
                     helpUsage( cout );
                     cout<<desc<<endl;
                     helpExamples(cout);
-                    return;
+                    keepgoing=false;
                 }
 
                 po::notify(vm); // at this point, raise any exceptions for 'required' args
 
                 parms.axes = vm["axes"].as<uint32_t>();
-                parms.dim = vm["dim"].as<uint32_t>();
+                parms.dim = std::max( parms.axes, vm["dim"].as<uint32_t>() );
                 if( vm.count("margin") ) {
                     parms.margin = vm["margin"].as<int32_t>();
                     cout<<" parms.margin --> "<<parms.margin<<endl;
@@ -534,6 +602,8 @@ namespace mcgen {
                 parms.seed = vm["seed"].as<uint32_t>();
                 parms.multi = vm["seed"].as<uint32_t>();
                 parms.parts = vm["parts"].as<uint32_t>();
+                parms.noise = vm["noise"].as<bool>();
+                cout<<" DBG noise = "<<parms.noise<<endl;
                 //if( vm.count("trivial") ) {
                 //    int32_t const t = vm["trivial"].as<int32_t>();
                 //    if( t != 0 && t != 1 ) throw runtime_error("-t must be zero or 1");
@@ -541,6 +611,11 @@ namespace mcgen {
                 //}
                 parms.skew = vm["skew"].as<uint32_t>();
                 parms.rot = vm["rot"].as<uint32_t>();
+                parms.embed = vm["embed"].as<uint32_t>();
+                if( parms.embed && parms.rot ){
+                    cout<<" embed step makes rot unnecessary: ignoring --rot="<<parms.rot<<endl;
+                    parms.rot = 0U;
+                }
                 //if( ! parms.trivial && (parms.skew == 0U && parms.rot == 0U))
                 //    throw runtime_error("-t0 needs either -s or -r");
                 if( parms.skew != 0U || parms.rot != 0U ) // supplying -s or -r implies non-trivial
@@ -565,6 +640,7 @@ namespace mcgen {
                 cerr<<"Command-line parsing exception of unknown type!"<<endl;
                 throw;
             }
+            if( ! keepgoing ) exit(0);
             return;
         }
     }//opt::
@@ -593,6 +669,9 @@ namespace mcgen {
         WIDE(os,c1,right<<setw(14)<<"margin "<<left<<p.margin);
         WIDE(os,c2,right<<setw(14)<<"fmargin "<<left<<p.fmargin);
         WIDE(os,c3,right<<setw(14)<<"skew "<<left<<p.skew);
+        os<<endl;
+        WIDE(os,c2,right<<setw(14)<<"noise "<<left<<p.noise);
+        WIDE(os,c1,right<<setw(14)<<"embed "<<left<<p.embed);
         os<<endl;
         WIDE(os,c1,right<<setw(14)<<"nClass "<<left<<p.nClass);
         WIDE(os,c2,right<<setw(14)<<"nxStd "<<left<<p.nxStd);
@@ -628,7 +707,7 @@ int main(int argc, char** argv)
     cout<<" Parameter dump, after init():\n"<<p<<endl;
 
     string canonicalArgs = p.str();
-    cout<<"         canonical args: "<<canonicalArgs
+    cout<<"\tcanonical args: "<<canonicalArgs
         <<" margin="<<p.margin<<" nClass="<<p.nClass<<" nxStd="<<p.nxStd<<" nx="<<p.nx<<endl;
     p.init();
     cout<<"         canonical args: "<<canonicalArgs
@@ -1012,7 +1091,24 @@ int main(int argc, char** argv)
             }
         }
     }
-    {
+    if( x.size() != p.nxStd ){
+        cout<<"ERROR:  x.size() == "<<x.size()<<", but expected p.nxStd="<<p.nxStd<<endl;
+        exit(0);
+    }
+    uint32_t const nxMargin = x.size();
+    if(1){
+        cout<<" Margin points:";
+        for(uint32_t i=nxMidpoint; i<nxMargin; ++i){
+            cout<<"\n\tx["<<setw(3)<<i<<"] class "<<setw(3)<<y[i]<<" @{";
+            for(auto xi: x[i]) cout<<" "<<xi;
+            cout<<"}";
+        }
+        cout<<endl;
+    }
+    // 4. generate random examples (retry if any fail +ve p.margin)
+    std::mt19937_64 gen( uint64_t{0x12345678U}  );
+    double const fshrink = (p.margin<0? -p.fmargin: +p.fmargin);
+    if(p.nx>0U){
         // Test rand pt R for "in margin" is not easy/speedy.
         // Instead move R so that it 'satisfies' margin settings:
         // - Original thought:
@@ -1026,20 +1122,6 @@ int main(int argc, char** argv)
         //   - shrink R by f' towards P (ball-like shrinkage, maybe good-enough)
         //   - f' == f.margin guarantees same shrinkage as margin exemplars
         //
-    }
-    uint32_t const nxMargin = x.size();
-    if(1){
-        cout<<" Margin points:";
-        for(uint32_t i=nxMidpoint; i<nxMargin; ++i){
-            cout<<"\n\tx["<<setw(3)<<i<<"] class "<<setw(3)<<y[i]<<" @{";
-            for(auto xi: x[i]) cout<<" "<<xi;
-            cout<<"}";
-        }
-        cout<<endl;
-    }
-    // 4. generate random examples (retry if any fail +ve p.margin)
-    double const fshrink = (p.margin<0? -p.fmargin: +p.fmargin);
-    {
         vector<float> r(p.axes); // work vector
         assert( rc.d == p.axes );
         // shrink "just like" p.margin && p.fmargin would do
@@ -1051,7 +1133,6 @@ int main(int argc, char** argv)
             pushpoint( r, fshrink, to );                  // move 'r' toward 'to' (if fshrink>0)
             return ret;
         };
-        std::mt19937_64 gen( uint64_t{0x12345678U}  );
         std::uniform_real_distribution<float> equiRand( equi.lo, equi.hi );
         for(uint32_t i=nxMargin; i<p.nx; ++i){
             for(uint32_t i=0U; i<r.size(); ++i){
@@ -1063,7 +1144,7 @@ int main(int argc, char** argv)
         }
     }
     if(1){
-        cout<<" Random, margin-respecting examples: x.size()="<<x.size()<<"\n";
+        cout<<" "<<p.nx<<" random, margin-respecting examples: x.size()="<<x.size()<<"\n";
         for(uint32_t i=nxMargin; i<x.size(); ++i){
             cout<<"\tx["<<setw(3)<<i<<"] y="<<setw(3)<<y[i]<<" @ {";
             for(auto const xi: x[i]) cout<<" "<<xi;
@@ -1107,12 +1188,138 @@ int main(int argc, char** argv)
         // Anyhow, afer the filtering, there should now by
         // only multi==2 remaining classes.
     }
-    // 6. generate any skew/rot transformation data
+    // 6a. generate any skew transforms of trivial soln
     // TODO
-    // 7. apply transforms to each of p.axes projection axes, write trainFile
+    // 6b. generate any rot transforms of trivial soln
     // TODO
-    // 8. apply transforms to each training examples, write axesFile
-    // TODO
+    // 7a. expand trivial soln into higher dim with noise/zeros
+    if(p.dim > p.axes){
+        // soln expands by adding zeros
+        for(uint32_t i=0U; i<soln.size(); ++i){
+            soln[i].resize(p.dim);
+        }
+        std::uniform_real_distribution<float> equiRand( equi.lo, equi.hi );
+        cout<<" p.dim="<<p.dim<<" > p.dim="<<p.dim<<", p.noise = "<<p.noise<<endl;
+        for(uint32_t i=0U; i<x.size(); ++i){
+            auto & xi = x[i];
+            xi.resize( p.dim );
+            if(p.noise){        // fill higher dims with rand unif noise?
+                for(uint32_t j=p.axes; j<p.dim; ++j){
+                    xi[j] = equiRand(gen) ;
+                }
+            }
+        }
+        cout<<"exanded to "<<p.dim<<", x.size()="<<x.size()<<(p.noise?" with noise":"")<<endl;
+        if(1){
+            cout<<" all examples, class-sorted, expanded to dim="<<p.dim<<" :"<<endl;
+            for(uint32_t i=0; i<x.size(); ++i){
+                cout<<"\tx["<<setw(3)<<perm[i]<<"] y="<<setw(3)<<y[perm[i]]<<" @ {";
+                for(auto const xi: x[perm[i]]) cout<<" "<<xi;
+                cout<<" }\n";
+            }
+        }
+    }
+    // 7b. rand full-rank rotn of signal unit vectors to mix signal into noise dims
+    cout<<" p.embed = "<<p.embed<<endl;
+    if(p.embed){ //p.embed==0U **skips** this transform
+        // axis basis vector transformation defined by unit-vector remappings
+        vector<vector<float>> abase(p.axes, vector<float>(p.dim,0.0f));
+        assert( p.embed <= p.dim );
+        assert( p.embed >= p.axes );
+        assert( abase[0].size() == p.dim );
+        if( p.embed >= p.dim ){ 
+            for(uint32_t u=0U; u<=p.axes; ++u){ // for each unit-vector, replace with random dirn
+                double dotmax=0.0;
+                do {
+                    ndim::randDirn( gen, abase[u] );
+                    dotmax = 0.0;
+                    for(uint32_t j=0U; j<u; ++j){ 
+                        double dot=0.0;
+                        for(uint32_t i=0U; i<abase[u].size(); ++i)   // dot(abase[u],abase[j])
+                            dot += abase[u][i] * abase[j][i];
+                        dotmax = std::max( dot, std::fabs(dot) );
+                    }
+                }while( dotmax > 0.999 );  // try again if 2 unit vectors xform to nearly same direction
+            }
+        }else{ // embed into subset of p.dim dimensions
+            vector<float> emb( p.embed, 0.0f );
+            assert( emb.size() < abase[0].size() );
+            cout<<" embed="<<emb.size()<<" p.embed="<<p.embed<<endl;
+            for(uint32_t u=0U; u<p.axes; ++u){ // for each unit-vector, replace with random dirn
+                assert( abase[u].size() == p.dim );
+                double dotmax=0.0;
+                do {
+                    ndim::randDirn( gen, emb );
+                    dotmax = 0.0;
+                    //cout<<" u="<<u; cout.flush();
+                    for(uint32_t j=0U; j<u; ++j){ 
+                        double dot=0.0;
+                        for(uint32_t i=0U; i<emb.size(); ++i)   // dot(emb,abase[u])
+                            dot += emb[i] * abase[j][i];
+                        //cout<<" dot="<<dot; cout.flush();
+                        dotmax = std::max( dot, std::fabs(dot) );
+                    }
+                    //cout<<" dotmax="<<dotmax; cout.flush();
+                }while( dotmax > 0.999 );  // try again if 2 unit vectors xform to nearly same direction
+                for(uint32_t i=0U; i<p.embed; ++i) abase[u][i] = emb[i];
+                //for(uint32_t i=emb.size(); i<p.dim; ++i) abase[u][i] = 0.0f;
+                //cout<<" done"<<endl;
+            }
+        }
+        if(1){
+            cout<<"axes unit-vecs --> new basis abase["<<abase.size()<<"]:"<<endl;
+            for(uint32_t a=0U; a<abase.size(); ++a){
+                cout<<"\tabase["<<a<<"] = {";
+                for(auto const& aa: abase[a]) cout<<" "<<aa;
+                cout<<" }, dim "<<abase[a].size()<<endl;
+            }
+        }
+        // apply abase basis transform to both examples and solns
+        {
+#if 0
+            for(uint32_t d=0U; d<abase.size(); ++d){
+                for(auto const& xx: x){
+                    vector<float> const& dnew = abase[d]; // new unit vector for dimension d
+                    cout<<"xx.size = "<<xx.size()<<" dnew.size = "<<dnew.size()<<endl;
+                }
+                for(auto & s: soln){                   // same basis xform for soln vectors
+                    cout<<" soln.size = "<<s.size()<<endl;
+                }
+            }
+#endif
+            for(uint32_t d=0U; d<abase.size(); ++d){
+                vector<float> const& dnew = abase[d]; // new unit vector for dimension d
+                for(auto & xx: x){
+                    assert( xx.size() == dnew.size() );
+                    double const xxd = xx[d];                   // old 'd' component.
+                    xx[d] = 0.0;
+                    for(uint32_t i=0U; i<dnew.size(); ++i)
+                        xx[i] += xxd * dnew[i];                 // is now in dnew dirn
+                }
+                for(auto & xx: soln){                   // same basis xform for soln vectors
+                    assert( xx.size() == dnew.size() );
+                    double const xxd = xx[d];                   // old 'd' component.
+                    xx[d] = 0.0;
+                    for(uint32_t i=0U; i<dnew.size(); ++i)
+                        xx[i] += xxd * dnew[i];                 // is now in dnew dirn
+                }
+            }
+        }
+        if(1){
+            cout<<" all examples, class-sorted, embedded into embed="<<p.embed<<" :"<<endl;
+            for(uint32_t i=0; i<x.size(); ++i){
+                cout<<"\tx["<<setw(3)<<perm[i]<<"] y="<<setw(3)<<y[perm[i]]<<" @ {";
+                for(auto const xi: x[perm[i]]) cout<<" "<<xi;
+                cout<<" }\n";
+            }
+            cout<<" all solns, class-sorted, embedded into embed="<<p.embed<<" :"<<endl;
+            for(uint32_t i=0; i<soln.size(); ++i){
+                cout<<"\tsoln["<<setw(3)<<i<<"] = {"; for(auto const si: soln[i]) cout<<" "<<si; cout<<" }\n";
+            }
+        }
+    }
+
+
     // 9a. generate training files x,y : mcgen-slc-dr4.repo ("slc","dr4") in text format
     if(1){
         vector<uint32_t> perm(y.size());
@@ -1126,7 +1333,12 @@ int main(int argc, char** argv)
                 cout<<" }\n";
             }
         }
-        string fname("mcgen-slc-dr4.repo");
+        string fname;
+        {
+            stringstream oss;
+            oss<<"mcgen-"<<p.str()<<"-slc-dr4.repo";
+            fname = oss.str();
+        }
         ofstream ofs(fname);
         string canonicalArgs = p.str();
         ofs<<"## mcgen trivial cube data -- canonical "<<canonicalArgs
@@ -1134,15 +1346,16 @@ int main(int argc, char** argv)
         ofs<<"# "<<x.size()<<" "<<p.axes<<"\n"; // # <training examples> <dimensionality>
         // now output the slc labels
         for(uint32_t i=0U; i<y.size(); ++i){
-            ofs<<"L"<<y[perm[i]];
+            ofs //<<"L"
+                <<y[perm[i]];
             // *********** IMMEDIATELY FOLLOWED ************ by the training data (grr, milde-repo.pdf)
             ofs<<" ";
             auto const& xp = x[perm[i]];
-            assert( xp.size() == p.axes );
+            assert( xp.size() == p.dim );
             for(uint32_t a=0U; ; ){
                 ofs     <<setw(8)
                     <<xp[a];
-                if( ++a >= p.axes )
+                if( ++a >= xp.size() )
                     break;
                 ofs<<" ";
             }
@@ -1156,7 +1369,12 @@ int main(int argc, char** argv)
         vector<uint32_t> perm(y.size());
         std::iota( perm.begin(), perm.end(), 0U);
         std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
-        string fname("mcgen-mlc-dr4.repo");
+        string fname;
+        {
+            stringstream oss;
+            oss<<"mcgen-"<<p.str()<<"-mlc-dr4.repo";
+            fname = oss.str();
+        }
         ofstream ofs(fname);
         string canonicalArgs = p.str();
         ofs<<"## mcgen trivial cube data -- canonical "<<canonicalArgs
@@ -1168,7 +1386,7 @@ int main(int argc, char** argv)
             assert( ylabels.size() >= 1U );
             ofs<<ylabels.size()<<" ";
             for(uint32_t l=0U; ; ){
-                ofs     <<"L"
+                ofs //<<"L"
                     <<ylabels[l];
                 if( ++l >= ylabels.size())
                     break;
@@ -1178,11 +1396,11 @@ int main(int argc, char** argv)
             ofs<<" ";
             // now output dense real4 training vectors, p.axes floats ON REST OF SAME LINE
             auto const& xp = x[perm[i]];
-            assert( xp.size() == p.axes );
+            assert( xp.size() == p.dim );
             for(uint32_t a=0U; ; ){
                 ofs     <<setw(8)
                     <<xp[a];
-                if( ++a >= p.axes )
+                if( ++a >= xp.size() )
                     break;
                 ofs<<" ";
             }

@@ -17,6 +17,7 @@ dpb.log
 dpa?.log
 dpb?.log
 mcgen
+mcgen*.repo
 *.bin
 *.diff
 demo-proj-dbg
