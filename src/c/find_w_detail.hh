@@ -383,8 +383,8 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
     multipliers.setZero();
     //  sortedLU_gradient.setZero();
 #if MCTHREADS
-    #pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
     #pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(1)
+    //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
     //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(1) if(idx_chunks > 1)
     //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(2) if(idx_chunks > 1)
 #endif

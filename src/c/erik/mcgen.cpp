@@ -1411,7 +1411,9 @@ int main(int argc, char** argv)
     }
     // 9c. generate test set (all rand) : mcgen-slc-dr4.test
     // 9d. generate test set (all rand) : mcgen-mlc-dr4.test
-    // 9c. generate a usable MCfilter ".soln" file with the 'ideal' solution
+    // 9e. generate training file : mcgen-slc-sr4.test
+    // 9f. generate training file : mcgen-mlc-sr4.test
+    // 10. generate a usable MCfilter ".soln" file with the 'ideal' solution
     //     --> mcgen-txt.soln  and mcgen-bin.soln
     cout<<"\nGoodbye"<<endl;
 }
