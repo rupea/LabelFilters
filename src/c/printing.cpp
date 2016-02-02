@@ -41,14 +41,6 @@ template<typename EigenType>
 void print_mat_size(const EigenType& mat);
 **********/
 
-std::string print_report(const SparseM& x)
-{
-  ostringstream oss;
-  int nnz = x.nonZeros();
-  oss << "x:non-zeros: " << nnz << ", avg. nnz/row: " << nnz / x.rows();
-  return oss.str();
-}
-
 std::string print_report(const DenseM& x)
 {
   return std::string();

@@ -20,10 +20,45 @@ param_struct params = set_default_params();
 int testnum = TESTNUM;
 bool use_mcsolver = true;
 bool use_dense = true;
+bool use_external = false;
 std::string saveBasename = std::string("");
 size_t problem = 2U;
 string problem_msg;
 int verbose = 0;
+
+#include <type_traits>
+#include <typeinfo>
+#ifndef _MSC_VER
+#  include <cxxabi.h>
+#endif
+//#include <memory>
+//#include <string>
+//#include <cstdlib>
+template <class T>
+    std::string type_name()
+{
+    typedef typename std::remove_reference<T>::type TR;
+    std::unique_ptr<char, void(*)(void*)> own
+        (
+#ifndef _MSC_VER
+         abi::__cxa_demangle(typeid(TR).name(), nullptr,
+                             nullptr, nullptr),
+#else
+         nullptr,
+#endif
+         std::free
+        );
+    std::string r = own != nullptr ? own.get() : typeid(TR).name();
+    if (std::is_const<TR>::value)
+        r += " const";
+    if (std::is_volatile<TR>::value)
+        r += " volatile";
+    if (std::is_lvalue_reference<T>::value)
+        r += "&";
+    else if (std::is_rvalue_reference<T>::value)
+        r += "&&";
+    return r;
+}
 
 /** given a d-dimensional \c corner, and a list of d d-dimensional
  * edge vectors, return a skewed d-dimensional hyperrectangle \c rect.
@@ -79,6 +114,7 @@ int testparms(int argc, char**argv, param_struct & params) {
     testnum = TESTNUM;
     use_mcsolver = true;
     use_dense = true;
+    use_external = false;
     bool dohelp=false;
     for(int a=1; a<argc; ++a){
         for(char* ca=argv[a]; *ca!='\0'; ){
@@ -88,6 +124,7 @@ int testparms(int argc, char**argv, param_struct & params) {
                     <<"\n   0-9A-Z      parameter modifiers, [default=0, no change from pN defaults]"
                     <<"\n   m|o         m[default] mcsolver code | o original code"
                     <<"\n   D|S         Dense[default] | Sparse matrices"
+                    <<"\n   X           eXternal-memory x-matrix"
                     <<"\n   s<string>   save file base name (only for 'm') [default=none]"
                     <<"\n   h           this help"
                     <<"\n   v           increase verbosity [default=0]"
@@ -104,6 +141,7 @@ int testparms(int argc, char**argv, param_struct & params) {
             else if(*ca == 'o')         use_mcsolver=false;
             else if(*ca == 'D')         use_dense=true;
             else if(*ca == 'S')         use_dense=false;
+            else if(*ca == 'X')         use_external=true;
             else if(*ca == 'p')         problem = *++ca - '0';
             else if(*ca == 's'){
                 saveBasename.assign(++ca);
@@ -115,14 +153,18 @@ HaveNextCA:
         }
     }
     if(problem>2U) problem=2U;
-    if(dohelp) exit(0);
+    cout<<"\tmcsolver="<<use_mcsolver<<" dense="<<use_dense<<" external="<<use_external
+        <<" testnum="<<testnum<<" saveBasename='"<<saveBasename<<"'"<<endl;
+    if(dohelp){
+        exit(0);
+    }
     return testnum;
 }
 
 // apply 0-9 parameter modifiers
 void apply_testnum(param_struct & params)
 {
-    cout<<" demo-proj running testnum "<<testnum;
+    cout<<"\tdemo-mcsolver running testnum "<<testnum;
     switch( testnum ){
       case(0):
           cout<<" all parameters default";
@@ -220,7 +262,7 @@ void apply_testnum(param_struct & params)
 }
 
 /** partly destroys the solution by colwise renormalizing \c weights */
-void check_solution( DenseM & weights, DenseM & lower_bounds, DenseM & upper_bounds )
+void check_solution( DenseM & weights, DenseM const& lower_bounds, DenseM const& upper_bounds )
 {
     cout<<" post-run call to rand() returns "<<rand()<<endl;
     cout<<" quick demo of 3 translations of a "<<problem_msg<<" along the x axis"<<endl;
@@ -308,7 +350,7 @@ int main(int argc,char** argv)
 {
 
 #ifdef _OPENMP
-    cout<<" _OPENMP defined, omp_get_max_threads ... "<<omp_get_max_threads()<<endl;
+    cout<<"\t_OPENMP defined, omp_get_max_threads ... "<<omp_get_max_threads()<<endl;
 #endif
     //  DenseM weights(40000,1),lower_bounds(1000,1),upper_bounds(1000,1), x(10000,40000);
     //  VectorXd y(10000),objective_val;
@@ -394,6 +436,7 @@ int main(int argc,char** argv)
               edges<<0.1,0,0,  0,0.1,0,  sqrt(18.0),0,sqrt(18.0);
               break;
         }
+        cout<<"\t";
         // first skewed rectangular prism
         corner<<0,0,0;
         hyperRect( corner, edges, verts );
@@ -412,74 +455,138 @@ int main(int argc,char** argv)
     // Starting off a new calculation:
     srand(rand_seed);
 
+#define SOLVE_ORIG( XXX, MSG ) do{ \
+    cout<<" *** BEGIN SOLUTION *** original x ~ "<<type_name<decltype(XXX)>() \
+    <<"\n\t"<<MSG<<": "<<problem_msg<<endl; \
+    DenseM weights, lower_bounds, upper_bounds; \
+    DenseM w_avg, l_avg, u_avg; \
+    VectorXd objective_val, o_avg; \
+    solve_optimization(weights,lower_bounds,upper_bounds,objective_val \
+                       ,w_avg,l_avg,u_avg,o_avg, XXX, y,params); \
+    check_solution( weights, lower_bounds, upper_bounds );/*throw on error*/ \
+}while(0)
+#define SOLVE_MCSOLVER( XXX, MSG ) do{ \
+    cout<<" *** BEGIN SOLUTION *** MCsolver x ~ "<<type_name<decltype(XXX)>() \
+    <<"\n\t"<<MSG<<": "<<problem_msg<<endl; \
+    MCsolver mc; \
+    mc.solve( XXX, y, &params ); \
+    MCsoln& soln = mc.getSoln(); \
+    if(1){ \
+        DenseM      & weights = soln.weights; \
+        DenseM const& lower_bounds = soln.lower_bounds; \
+        DenseM const& upper_bounds = soln.upper_bounds; \
+        cout<<"upper_bounds = "<<upper_bounds<<endl; \
+        check_solution( weights, lower_bounds, upper_bounds );/*throw on error*/ \
+    } \
+    mcSave(saveBasename, soln); \
+}while(0)
     cout<<"  pre-run call to rand() returns "<<rand()<<endl;
     if( use_dense ){
-        if( ! use_mcsolver ){
-            cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
-            // these calls are important so that the compiler instantiates the right templates
-            DenseM weights, lower_bounds, upper_bounds;
-            DenseM w_avg, l_avg, u_avg;
-            VectorXd objective_val, o_avg;
-            solve_optimization(weights,lower_bounds,upper_bounds,objective_val
-                               ,w_avg,l_avg,u_avg,o_avg
-                               ,x,y,params);
-            check_solution( weights, lower_bounds, upper_bounds );  // throw on error
-        }else{ // default: use new MCsolver code
-            cout<<" *** BEGIN SOLUTION *** MCsolver code: "<<problem_msg<<endl;
-            MCsolver mc;
-            mc.solve( x, y, &params );
-            MCsoln      & soln = mc.getSoln();
-            DenseM      & weights = soln.weights;
-            DenseM      & lower_bounds = soln.lower_bounds;
-            DenseM      & upper_bounds = soln.upper_bounds;
-            //DenseM const& w_avg = soln.weights_avg;
-            //DenseM const& l_avg = soln.lower_bounds_avg;
-            //DenseM const& u_avg = soln.upper_bounds_avg;
-            //VectorXd const& objective_val = soln.objective_val;
-            //VectorXd const& objective_val_avg = soln.objective_val_avg;
-            if(1){
-                cout<<"upper_bounds = "<<upper_bounds<<endl;
-                check_solution( weights, lower_bounds, upper_bounds );  // throw on error
+        if( ! use_external ){
+            if( ! use_mcsolver ){
+                SOLVE_ORIG( x, "dense" );
+            }else{ // default: use new MCsolver code
+                SOLVE_MCSOLVER( x, "dense" );
             }
-            mcSave(saveBasename, soln);
+        }else{
+            typedef Eigen::Map<DenseM> ExtDenseM;               // external-memory
+            typedef Eigen::Map<const DenseM> ExtConstDenseM;    // external-memory r/o
+            cout<<"Types\t"<<type_name<ExtDenseM>()
+                <<"\n\t"<<type_name<ExtConstDenseM>()<<endl<<endl;
+            ExtConstDenseM const xm( &x(0), x.rows(), x.cols() );
+            if(0){ // print both, to verify they look the same
+                cout<<" x["<<x.rows()<<","<<x.cols()<<"]\n\t";
+                for(int r=0U; r<x.rows(); ++r) cout<<" "<<x.row(r)<<"\n\t";
+                cout<<endl;
+                cout<<" xm["<<x.rows()<<","<<x.cols()<<"]\n\t";
+                for(int r=0U; r<x.rows(); ++r) cout<<" "<<xm.row(r)<<"\n\t";
+                cout<<endl;
+            }
+#ifndef NDEBUG
+            if(1){ // assert they behave the same
+                assert( x.rows() == xm.rows() );
+                assert( x.cols() == xm.cols() );
+                for(int r=0U; r<x.rows(); ++r){
+                    for(int c=0U; c<x.cols(); ++c){
+                        assert( x(r,c) == xm(r,c) );
+                    }
+                }
+                cout<<"\tGOOD: DenseM and Map<DenseM> have all elements identical"<<endl;
+            }
+#endif
+            SOLVE_ORIG( xm, "dense external" );
         }
     }else{ // sparse case
-        // convert dense x into sparse representation (every 4th dimn significant)
-        SparseM xs(x.rows(),4*x.cols());
-        typedef Eigen::Triplet<double> T;
-        std::vector<T> tripletList;
-        tripletList.reserve(4*x.rows()*x.cols());
-        for(int r=0; r<x.rows(); ++r)
-            for(int c=0; c<x.cols(); ++c)
-                tripletList.push_back(T(r,4*c,x(r,c)));
-        xs.setFromTriplets(tripletList.begin(),tripletList.end());
-        if( ! use_mcsolver ){
-            cout<<" *** BEGIN SOLUTION *** original SPARSE code: "<<problem_msg<<endl;
-            DenseM weights, lower_bounds, upper_bounds;
-            DenseM w_avg, l_avg, u_avg;
-            VectorXd objective_val, o_avg;
-            solve_optimization(weights,lower_bounds,upper_bounds,objective_val
-                               ,w_avg,l_avg,u_avg,o_avg
-                               ,xs,y,params);
-            check_solution( weights, lower_bounds, upper_bounds );  // throw on error
-        }else{
-            cout<<" *** BEGIN SOLUTION *** MCsolver SPARSE code: "<<problem_msg<<endl;
-            MCsolver mc;
-            mc.solve( xs, y, &params );
-            MCsoln      & soln = mc.getSoln();
-            DenseM      & weights = soln.weights;
-            DenseM      & lower_bounds = soln.lower_bounds;
-            DenseM      & upper_bounds = soln.upper_bounds;
-            //DenseM const& w_avg = soln.weights_avg;
-            //DenseM const& l_avg = soln.lower_bounds_avg;
-            //DenseM const& u_avg = soln.upper_bounds_avg;
-            //VectorXd const& objective_val = soln.objective_val;
-            //VectorXd const& objective_val_avg = soln.objective_val_avg;
-            if(1){
-                cout<<"upper_bounds = "<<upper_bounds<<endl;
-                check_solution( weights, lower_bounds, upper_bounds );  // throw on error
+        if( ! use_external ){
+            // convert dense x into sparse representation (every 4th dimn significant)
+            SparseM xs(x.rows(),4*x.cols());
+            typedef Eigen::Triplet<double> T;
+            std::vector<T> tripletList;
+            tripletList.reserve(4*x.rows()*x.cols());
+            for(int r=0; r<x.rows(); ++r)
+                for(int c=0; c<x.cols(); ++c)
+                    tripletList.push_back(T(r,4*c,x(r,c)));
+            xs.setFromTriplets(tripletList.begin(),tripletList.end());
+            if( ! use_mcsolver ){
+                SOLVE_ORIG( xs, "sparse" );
+            }else{
+                SOLVE_MCSOLVER( xs, "sparse" );
             }
-            mcSave(saveBasename, soln);
+        }else{
+            // Let's do this "long-hand"
+            typedef ExtConstSparseM::Index Index;
+            Index const rows = x.rows();
+            Index const cols = x.cols() * 4;
+            Index const nnz = x.rows() * x.cols();
+            std::vector<Index> outerIndexPtr;
+            std::vector<Index> innerIndexPtr;
+            ExtSparseM::Scalar * valuePtr = x.data();
+            outerIndexPtr.reserve( x.rows() );
+            innerIndexPtr.reserve( nnz+1 );
+            Index row_idx=0U;
+            Index col_idx=0U;
+            for(uint32_t r=0; r<x.rows(); ++r){ // Instructional... "CRS compressed row storage"
+                outerIndexPtr.push_back(row_idx );
+                col_idx = 0;
+                for(uint32_t c=0; c<x.cols(); ++c){ // store "every nonzero offset within this row"
+                    innerIndexPtr.push_back( 4*c ); // dense cols --> every 4th col
+                    ++col_idx;
+                }
+                row_idx += col_idx;
+            }
+            outerIndexPtr.push_back(row_idx);   // and "end of data"
+            ExtConstSparseM xsm( rows, cols, nnz, &outerIndexPtr[0], &innerIndexPtr[0], valuePtr );
+            cout<<"Types\tExtSparseM "<<type_name<ExtSparseM>()
+                <<   "\n\tvaluePtr   "<<type_name<decltype(valuePtr)>()
+                <<   "\n\tIndex      "<<type_name<Index>()
+                <<endl<<endl;
+            if(1){ // print both, to verify sparse has mapped x --> every 4th column
+                cout<<" x["<<x.rows()<<","<<x.cols()<<"]\n\t";
+                for(int r=0U; r<x.rows(); ++r) cout<<" "<<x.row(r)<<"\n\t";
+                cout<<endl;
+                cout<<" xsm["<<x.rows()<<","<<x.cols()<<"]\n\t";
+                for(int r=0U; r<x.rows(); ++r) cout<<" "<<xsm.row(r)<<"\t"; // hmm xsm.row(r) prints trailing newline!
+                cout<<endl;
+            }
+#ifndef NDEBUG
+            if(1){ // assert they behave the same
+                assert( xsm.rows() == x.rows() );
+                assert( xsm.cols() == 4*x.cols() );
+                for(int r=0U; r<x.rows(); ++r){
+                    for(int c=0U; c<x.cols(); ++c){
+                        //assert( x(r,c) == xsm(r,4*c) );       // <-- missing operator()(int&,int)
+                        assert( x(r,c) == xsm.coeff(r,4*c) );
+                    }
+                }
+                cout<<"\tGOOD: SparseM and MappedSparseM have all elements identical"<<endl;
+            }
+#endif
+            if( ! use_mcsolver ){
+                SOLVE_ORIG( xsm, "sparse" );
+            }else{
+                SOLVE_MCSOLVER( xsm, "sparse" );
+            }
+            cout<<" ** SPARSE EXTERNAL ** TBD **"<<endl;
         }
     }
 

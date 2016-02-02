@@ -32,15 +32,14 @@
  *    - SparseM
  */
 
-template<typename EigenType>
+template<typename EIGENTYPE>
 void solve_optimization(DenseM& weights, DenseM& lower_bounds,
-                        DenseM& upper_bounds,
-                        VectorXd& objective_val,
+                        DenseM& upper_bounds, VectorXd& objective_val,
                         DenseM& weights_avg, DenseM& lower_bounds_avg,
-                        DenseM& upper_bounds_avg,
-                        VectorXd& objective_val_avg,
-                        const EigenType& x, const SparseMb& y,
-                        const param_struct& params);
+                        DenseM& upper_bounds_avg, VectorXd& objective_val_avg,
+                        EIGENTYPE const& x,
+                        SparseMb const& y,
+                        param_struct const& params);
 
 #if 1 // proposed for lua api.
 /** Corresponds to data stored in an MCFilter "solution" file.

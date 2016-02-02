@@ -335,7 +335,7 @@ class WeightVector
       return my_scale*((x.row(row)*my_weights)(0,0));
     }
 
-  template<typename EigenType> inline void project(VectorXd& proj, const EigenType& x) const
+  template<typename EigenType> inline void project(VectorXd& proj, EigenType const& x) const
     {
       proj = (x*my_weights)*my_scale;
     }
@@ -356,17 +356,21 @@ class WeightVector
  private:
   // have these functions private because they do no error checking
   /** 18% faster than sparse version */
-  void gradient_update_nochecks(const DenseM& x, const size_t row, const double eta)
+  template<typename DERIVED>
+  void gradient_update_nochecks(Eigen::DenseBase<DERIVED> const& x, const size_t row, const double eta)
   {
       my_weights -= x.row(row).transpose() * (eta/my_scale);
       my_norm_sq = my_weights.squaredNorm() * my_scale*my_scale;
   }
-  void gradient_update_nochecks(const SparseM& x, const size_t row, const double eta)
+#if 0 // *** *** IF *** *** Eigen::MappedSparseMatrix had full support...
+  template<typename DERIVED>
+  void gradient_update_nochecks(Eigen::SparseMatrixBase<DERIVED> const& x, const size_t row, const double eta)
   {
+      //typedef typename Eigen::SparseMatrix<_Scalar,_Options,_Index> const MatType;
       // avoid boudary checks inside the loop.
       // check that sizes match here.
       //      assert(x.cols()==my_weights.size());
-      typename DenseM::InnerIterator it(x, row);
+      typename Eigen::SparseMatrixBase<DERIVED>::InnerIterator it(x, row);
       double norm_update = 0;
       double eta1 = eta/my_scale;
       for (; it; ++it )
@@ -380,6 +384,51 @@ class WeightVector
       }
       my_norm_sq += norm_update*my_scale*my_scale;
   }
+#else
+  template<typename _Scalar, int _Options, typename _Index>
+  void gradient_update_nochecks(Eigen::SparseMatrix<_Scalar,_Options,_Index> const& x, const size_t row, const double eta)
+  {
+      typedef typename Eigen::SparseMatrix<_Scalar,_Options,_Index> const MatType;
+      // avoid boudary checks inside the loop.
+      // check that sizes match here.
+      //      assert(x.cols()==my_weights.size());
+      typename MatType::InnerIterator it(x, row);
+      double norm_update = 0;
+      double eta1 = eta/my_scale;
+      for (; it; ++it )
+      {
+          int col = it.col();
+          double val = my_weights.coeff(col);
+          norm_update -= val*val;
+          val -= (it.value() * eta1);
+          norm_update += val*val;
+          my_weights.coeffRef(col) = val;
+      }
+      my_norm_sq += norm_update*my_scale*my_scale;
+  }
+  // MappedSparseMatrix has VERY reduced functionality -- it lack (r,c), InnerIterator, ...
+  // (actually, this ugly impl might work for both)
+  template<typename Scalar, int _Flags, typename _Index>
+  void gradient_update_nochecks(Eigen::MappedSparseMatrix<Scalar,_Flags,_Index> const& x, const size_t row, const double eta)
+  {
+      _Index const ixRow = x.outerIndexPtr()[row];
+      _Index const ixRowNext = x.outerIndexPtr()[row+1U];
+      Scalar const* rowValues = &x.valuePtr()[ ixRow ];
+      _Index const*       ixCol = &x.innerIndexPtr()[ ixRow ];
+      _Index const* const ixEnd = ixCol + (ixRowNext - ixRow);
+      double norm_update = 0;
+      double eta1 = eta/my_scale;
+      for (; ixCol<ixEnd; ++rowValues,++ixCol )
+      {
+          double val = my_weights.coeff(*ixCol);
+          norm_update -= val*val;
+          val -= ( *rowValues * eta1);
+          norm_update += val*val;
+          my_weights.coeffRef(*ixCol) = val;
+      }
+      my_norm_sq += norm_update*my_scale*my_scale;
+  }
+#endif
 
   // we could have a separate function for dense vectors that automatically resets the scale
   // but we do this to keep things simple for now.

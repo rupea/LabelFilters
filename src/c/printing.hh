@@ -3,6 +3,7 @@
 
 #include "printing.h"
 #include <iostream>
+#include <sstream>
 #include <stdexcept>
 #include <boost/function_output_iterator.hpp>
 #include <boost/iterator/function_input_iterator.hpp>
@@ -489,6 +490,15 @@ void print_mat_size(const Eigen::VectorXd& mat)
     using namespace std;
     cout << "(" << mat.size() << ")";
 }
+template< typename DERIVED >
+std::string print_report(const Eigen::SparseMatrixBase<DERIVED>& x)
+{
+    std::ostringstream oss;
+    int nnz = x.nonZeros();
+    oss << "x:non-zeros: " << nnz << ", avg. nnz/row: " << nnz / x.rows();
+    return oss.str();
+}
+
 
 
 #endif // PRINTING_HH

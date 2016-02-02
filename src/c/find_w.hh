@@ -23,15 +23,14 @@
 #include <iomanip>
 
 // --------------- inline template definition to solve optimization problem ----------------
-    template<typename EigenType> inline
+    template<typename EIGENTYPE> inline
 void solve_optimization(DenseM& weights, DenseM& lower_bounds,
-                        DenseM& upper_bounds,
-                        VectorXd& objective_val,
+                        DenseM& upper_bounds, VectorXd& objective_val,
                         DenseM& weights_avg, DenseM& lower_bounds_avg,
-                        DenseM& upper_bounds_avg,
-                        VectorXd& objective_val_avg,
-                        const EigenType& x, const SparseMb& y,
-                        const param_struct& params)
+                        DenseM& upper_bounds_avg, VectorXd& objective_val_avg,
+                        EIGENTYPE const& x,
+                        SparseMb const& y,
+                        param_struct const& params)
 
 {
     using namespace std;

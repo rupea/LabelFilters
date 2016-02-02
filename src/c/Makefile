@@ -76,7 +76,7 @@ profile_kmeans:
 ## extra stuff ######################### without octave ###################
 .PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests do-vg tail-vg clean realclean
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
-DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-error=sign-compare -Werror
+DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-sign-compare -Werror
 # for better tracing...
 DBGFLAGS += -O1
 %-dbg.o: %.cpp
