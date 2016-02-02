@@ -534,6 +534,17 @@ int main(int argc,char** argv)
             }
         }else{
             // Let's do this "long-hand"
+            // We need to supply innerIndexPrt, OuterIndexPtr and ValuePtr
+            // Compressed Row Storage Example:
+            //   Matrix  00  -   -   -     1 nonzero
+            //           -   -   12  13    2 nonzero
+            //           20  21  -   -     2 nonzero
+            //   nnz = 1 + 2 + 2 = 5
+            //   -----------------------------
+            //   Value[nnz]   00 12  13 20 21
+            //   Inner[nnz]    0  2   3  0  1
+            //   Outer[rows+1] 0.1......3.....5  (Outer[rows+1] == nnz)
+            // 1. Allocate space for Inner,Outer,Value vectors
             typedef ExtConstSparseM::Index Index;
             Index const rows = x.rows();
             Index const cols = x.cols() * 4;
@@ -543,6 +554,7 @@ int main(int argc,char** argv)
             ExtSparseM::Scalar * valuePtr = x.data();
             outerIndexPtr.reserve( x.rows() );
             innerIndexPtr.reserve( nnz+1 );
+            // 2. Fill in values
             Index row_idx=0U;
             Index col_idx=0U;
             for(uint32_t r=0; r<x.rows(); ++r){ // Instructional... "CRS compressed row storage"
@@ -555,6 +567,9 @@ int main(int argc,char** argv)
                 row_idx += col_idx;
             }
             outerIndexPtr.push_back(row_idx);   // and "end of data"
+            // 3. Define external-memory version sparse matrix
+            //    (Note: Eigen support for MappedSparseMatrix is INCOMPLETE,
+            //           missing 'Scalar const', 'InnerIterator', etc.)
             ExtConstSparseM xsm( rows, cols, nnz, &outerIndexPtr[0], &innerIndexPtr[0], valuePtr );
             cout<<"Types\tExtSparseM "<<type_name<ExtSparseM>()
                 <<   "\n\tvaluePtr   "<<type_name<decltype(valuePtr)>()

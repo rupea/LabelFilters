@@ -370,7 +370,7 @@ class WeightVector
       // avoid boudary checks inside the loop.
       // check that sizes match here.
       //      assert(x.cols()==my_weights.size());
-      typename Eigen::SparseMatrixBase<DERIVED>::InnerIterator it(x, row);
+      typename DERIVED::InnerIterator it(x, row);       // lookup issue for MappedSparseMatrix?
       double norm_update = 0;
       double eta1 = eta/my_scale;
       for (; it; ++it )
@@ -384,7 +384,7 @@ class WeightVector
       }
       my_norm_sq += norm_update*my_scale*my_scale;
   }
-#else
+#elif 1
   template<typename _Scalar, int _Options, typename _Index>
   void gradient_update_nochecks(Eigen::SparseMatrix<_Scalar,_Options,_Index> const& x, const size_t row, const double eta)
   {
@@ -411,6 +411,24 @@ class WeightVector
   template<typename Scalar, int _Flags, typename _Index>
   void gradient_update_nochecks(Eigen::MappedSparseMatrix<Scalar,_Flags,_Index> const& x, const size_t row, const double eta)
   {
+#if 1
+      // Ahaa. InnerIterator is there, but has was having type lookup issues
+      typedef typename Eigen::SparseMatrix<Scalar,_Flags,_Index> MatType;
+      typename MatType::InnerIterator it(x, row);
+      double norm_update = 0;
+      double eta1 = eta/my_scale;
+      for (; it; ++it )
+      {
+          int col = it.col();
+          double val = my_weights.coeff(col);
+          norm_update -= val*val;
+          val -= (it.value() * eta1);
+          norm_update += val*val;
+          my_weights.coeffRef(col) = val;
+      }
+      my_norm_sq += norm_update*my_scale*my_scale;
+#else
+      // low-level impl (assumes row-wise Compressed Row Storage)
       _Index const ixRow = x.outerIndexPtr()[row];
       _Index const ixRowNext = x.outerIndexPtr()[row+1U];
       Scalar const* rowValues = &x.valuePtr()[ ixRow ];
@@ -427,6 +445,7 @@ class WeightVector
           my_weights.coeffRef(*ixCol) = val;
       }
       my_norm_sq += norm_update*my_scale*my_scale;
+#endif
   }
 #endif
 
