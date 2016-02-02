@@ -197,8 +197,8 @@ void MCsoln::write_ascii( std::ostream& os, enum Len len/*=SHORT*/ ) const
 #define IO_VEC( OS, VEC, SZ, ERRMSG ) do {eigen_io_txt(OS,VEC); CHK_VEC_DIM( VEC,SZ,ERRMSG );}while(0)
     try{
         IO_MAT(os, weights_avg , d     , nProj, "Bad weights_avg dimensions");
-        IO_MAT(os, lower_bounds_avg, nClass, nProj, "Bad weights_avg dimensions");
-        IO_MAT(os, upper_bounds_avg, nClass, nProj, "Bad weights_avg dimensions");
+        IO_MAT(os, lower_bounds_avg, nClass, nProj, "Bad lower_bounds_avg dimensions");
+        IO_MAT(os, upper_bounds_avg, nClass, nProj, "Bad upper_bounds_avg dimensions");
         magicEof1 = magicEof;
         io_txt(os,magicEof1);
     } catch(exception const& e){ RETHROW("MCsoln SHORT data read error"); }
@@ -324,9 +324,9 @@ void MCsoln::write_binary( std::ostream& os, enum Len len/*=SHORT*/ ) const
 #define IO_MAT( OS, MAT, R, C, ERRMSG ) do{eigen_io_bin(OS,MAT); CHK_MAT_DIM( MAT,R,C,ERRMSG );}while(0)
 #define IO_VEC( OS, VEC, SZ, ERRMSG ) do {eigen_io_bin(OS,VEC); CHK_VEC_DIM( VEC,SZ,ERRMSG );}while(0)
     try{
-        IO_MAT(os, weights_avg , d     , nProj, "Bad weights_avg dimensions");
-        IO_MAT(os, lower_bounds, nClass, nProj, "Bad weights_avg dimensions");
-        IO_MAT(os, upper_bounds, nClass, nProj, "Bad weights_avg dimensions");
+        IO_MAT(os, weights_avg     , d     , nProj, "Bad weights_avg dimensions");
+        IO_MAT(os, lower_bounds_avg, nClass, nProj, "Bad lower_bounds_avg dimensions");
+        IO_MAT(os, upper_bounds_avg, nClass, nProj, "Bad upper_bounds_avg dimensions");
         magicEof1 = magicEof;
         io_bin(os,magicEof1);
     } catch(exception const& e){ RETHROW("MCsoln SHORT data read error"); }
@@ -340,9 +340,9 @@ void MCsoln::write_binary( std::ostream& os, enum Len len/*=SHORT*/ ) const
     }catch(exception const& e){ RETHROW("MCsoln optional data write error"); }
 
     try{
-        IO_MAT(os, weights      , d     , nProj, "Bad weights dimensions");
-        IO_MAT(os, lower_bounds , nClass, nProj, "Bad lower_bounds dimensions");
-        IO_MAT(os, upper_bounds , nClass, nProj, "Bad lower_bounds dimensions");
+        IO_MAT(os, weights     , d     , nProj, "Bad weights dimensions");
+        IO_MAT(os, lower_bounds, nClass, nProj, "Bad lower_bounds dimensions");
+        IO_MAT(os, upper_bounds, nClass, nProj, "Bad lower_bounds dimensions");
         IO_VEC(os, objective_val, nClass, "Bad objective_val dimensions");
         magicEof3 = magicEof;
         io_bin(os, magicEof3);

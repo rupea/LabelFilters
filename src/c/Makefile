@@ -305,6 +305,9 @@ demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 #mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+# link with libmcfilter allows saving a .soln file ...
+mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.

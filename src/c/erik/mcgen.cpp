@@ -10,6 +10,9 @@
 #include <random>
 #include <fstream>
 //#include "r64.h"      // lets use c++11 stuff...
+#ifndef USE_LIBMCFILTER
+#define USE_LIBMCFILTER 0
+#endif
 
 // fwd and function declarations
 namespace mcgen {
@@ -89,11 +92,12 @@ namespace mcgen {
             uint32_t seed;              ///< [0] rand number seed
             uint32_t multi;             ///< [2] besides slc, generate a multi-labelling with up to this many labels per example.
             //@}
-            /// \name non-core settings set via init()
+            /// \name non-core settings set (some via \c init() )
             //@{
-            uint32_t nClass;                ///< = parts ^ axes
-            uint32_t nxStd;                 ///< pre-determined examples 1 per nClass + (margin!=0? 2*|margin|*a*(parts-1)
-            uint32_t nx;                    ///< default (and silent minimum) is max(4*axes, nxStd)
+            bool     write;             ///< write some .repo/.soln data files (text mode for now)
+            uint32_t nClass;            ///< = parts ^ axes
+            uint32_t nxStd;             ///< pre-determined examples 1 per nClass + (margin!=0? 2*|margin|*a*(parts-1)
+            uint32_t nx;                ///< default (and silent minimum) is max(4*axes, nxStd)
             //@}
 
             /** Must call after after changing core variables.
@@ -438,6 +442,11 @@ namespace mcgen {
               , trivial( true )
               , skew( 0U )
               , rot( 0U )
+              , noise( false )
+              , embed( 0U )
+              , seed( 0U )
+              , multi( 2U )
+              , write( true )
               , nClass( 0U ) // set via init()
               , nxStd( 0U )     // set via init()
               , nx( 0U )        // set via init()
@@ -694,8 +703,41 @@ namespace mcgen {
 
 // -------- main program --------
 
+#if USE_LIBMCFILTER
+#include "find_w.h"
+
+using namespace std;
+void mcSave(std::string saveBasename, MCsoln const& soln){            
+    if( saveBasename.size() > 0U ){
+        cout<<" In mcSave("<<saveBasename<<", MCsoln)"<<endl;
+        using namespace std;
+        string saveTxt(saveBasename); saveTxt.append(".soln");
+        cout<<" Saving to file "<<saveTxt<<endl;
+        try{
+            ofstream ofs(saveTxt);
+            soln.write( ofs, MCsoln::TEXT, MCsoln::SHORT );
+            ofs.close();
+        }catch(std::exception const& e){
+            cout<<"OHOH! Error during text write of demo.soln "<<e.what()<<endl;
+            throw(e);
+        }
+        string saveBin(saveBasename); saveBin.append("-bin.soln");
+        cout<<" Saving to file "<<saveBin<<endl;
+        try{
+            ofstream ofs(saveBin);
+            soln.write( ofs, MCsoln::BINARY, MCsoln::SHORT );
+            ofs.close();
+        }catch(std::exception const& what){
+            cout<<"OHOH! Error during binary write of demo.soln"<<endl;
+            throw(what);
+        }
+    }
+}
+#endif
+
 using namespace std;
 using namespace mcgen;
+
 int main(int argc, char** argv)
 {
     opt::Parms p;
@@ -1209,6 +1251,8 @@ int main(int argc, char** argv)
                 }
             }
         }
+        // Q: also expand the midpoint helper info?
+        // A: No, this could mean recreating (to reflect to noise midpoints in x!!)
         cout<<"exanded to "<<p.dim<<", x.size()="<<x.size()<<(p.noise?" with noise":"")<<endl;
         if(1){
             cout<<" all examples, class-sorted, expanded to dim="<<p.dim<<" :"<<endl;
@@ -1353,7 +1397,7 @@ int main(int argc, char** argv)
             auto const& xp = x[perm[i]];
             assert( xp.size() == p.dim );
             for(uint32_t a=0U; ; ){
-                ofs     <<setw(8)
+                ofs <<setw(8)
                     <<xp[a];
                 if( ++a >= xp.size() )
                     break;
@@ -1398,7 +1442,7 @@ int main(int argc, char** argv)
             auto const& xp = x[perm[i]];
             assert( xp.size() == p.dim );
             for(uint32_t a=0U; ; ){
-                ofs     <<setw(8)
+                ofs <<setw(8)
                     <<xp[a];
                 if( ++a >= xp.size() )
                     break;
@@ -1411,10 +1455,196 @@ int main(int argc, char** argv)
     }
     // 9c. generate test set (all rand) : mcgen-slc-dr4.test
     // 9d. generate test set (all rand) : mcgen-mlc-dr4.test
-    // 9e. generate training file : mcgen-slc-sr4.test
+    // 9e. generate training file : mcgen-slc-sr4.repo
+    if(1){
+        vector<uint32_t> perm(y.size());
+        std::iota( perm.begin(), perm.end(), 0U);
+        std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
+        if(0){
+            cout<<" all examples, class-sorted:"<<endl;
+            for(uint32_t i=0; i<x.size(); ++i){
+                cout<<"\tx["<<setw(3)<<perm[i]<<"] y="<<setw(3)<<y[perm[i]]<<" @ {";
+                for(auto const xi: x[perm[i]]) cout<<" "<<xi;
+                cout<<" }\n";
+            }
+        }
+        string fname;
+        {
+            stringstream oss;
+            oss<<"mcgen-"<<p.str()<<"-slc-sr4.repo";
+            fname = oss.str();
+        }
+        ofstream ofs(fname);
+        string canonicalArgs = p.str();
+        ofs<<"## mcgen trivial cube data -- canonical "<<canonicalArgs
+            <<" margin="<<p.margin<<" fmargin="<<p.fmargin<<endl;
+        ofs<<"# "<<x.size()<<" "<<p.axes<<"\n"; // # <training examples> <dimensionality>
+        // now output the slc labels
+        for(uint32_t i=0U; i<y.size(); ++i){
+            ofs //<<"L"
+                <<y[perm[i]];
+            // *********** IMMEDIATELY FOLLOWED ************ by the training data (grr, milde-repo.pdf)
+            ofs<<" ";
+            auto const& xp = x[perm[i]];
+            assert( xp.size() == p.dim );       // xp always dense here
+            {
+                uint32_t nnz=0U;
+                for(auto const xxp: xp) if( xxp != 0 ) ++nnz;
+                ofs <<setw(5)<<right<<nnz;
+            }
+            for(uint32_t a=0U, col=0U; ; ){
+                if( xp[a] != 0.0 ){
+                    ofs <<" "<<setw(5)<<right<<col<<":"<<setw(8)<<left<<xp[a];
+                }
+                if( ++a >= xp.size() )
+                    break;
+                ++col;
+            }
+            ofs<<"\n";
+        }
+        ofs.close();
+        cout<<" Generated "<<fname<<endl;       // mcgen-slc-dr4.repo
+    }
     // 9f. generate training file : mcgen-mlc-sr4.test
-    // 10. generate a usable MCfilter ".soln" file with the 'ideal' solution
-    //     --> mcgen-txt.soln  and mcgen-bin.soln
+    {
+        vector<uint32_t> perm(y.size());
+        std::iota( perm.begin(), perm.end(), 0U);
+        std::stable_sort( perm.begin(), perm.end(), [&y](uint32_t const a, uint32_t const b){return y[a]<y[b];} );
+        if(0){
+            cout<<" all examples, class-sorted:"<<endl;
+            for(uint32_t i=0; i<x.size(); ++i){
+                cout<<"\tx["<<setw(3)<<perm[i]<<"] y="<<setw(3)<<y[perm[i]]<<" @ {";
+                for(auto const xi: x[perm[i]]) cout<<" "<<xi;
+                cout<<" }\n";
+            }
+        }
+        string fname;
+        {
+            stringstream oss;
+            oss<<"mcgen-"<<p.str()<<"-mlc-sr4.repo";
+            fname = oss.str();
+        }
+        ofstream ofs(fname);
+        string canonicalArgs = p.str();
+        ofs<<"## mcgen trivial cube data -- canonical "<<canonicalArgs
+            <<" margin="<<p.margin<<" fmargin="<<p.fmargin<<endl;
+        ofs<<"# "<<x.size()<<" "<<p.axes<<"\n"; // # <training examples> <dimensionality>
+        // now output the slc labels
+        for(uint32_t i=0U; i<y.size(); ++i){
+            auto ylabels = ymap[ y[perm[i]] ];
+            assert( ylabels.size() >= 1U );
+            ofs<<ylabels.size()<<" ";
+            for(uint32_t l=0U; ; ){
+                ofs //<<"L"
+                    <<ylabels[l];
+                if( ++l >= ylabels.size())
+                    break;
+                ofs<<" ";
+            }
+            // *********** IMMEDIATELY FOLLOWED ************ by the training data (grr, milde-repo.pdf)
+            ofs<<" ";
+            auto const& xp = x[perm[i]];
+            assert( xp.size() == p.dim );       // xp always dense here
+            {
+                uint32_t nnz=0U;
+                for(auto const xxp: xp) if( xxp != 0 ) ++nnz;
+                ofs <<setw(5)<<right<<nnz;
+            }
+            for(uint32_t a=0U, col=0U; ; ){
+                if( xp[a] != 0.0 ){
+                    ofs <<" "<<setw(5)<<right<<col<<":"<<setw(8)<<left<<xp[a];
+                }
+                if( ++a >= xp.size() )
+                    break;
+                ++col;
+            }
+            ofs<<"\n";
+        }
+        ofs.close();
+        cout<<" Generated "<<fname<<endl;       // mcgen-slc-dr4.repo
+    }
+    // 10. generate a usable MCfilter ".mc" file with JUST weights of the 'ideal' solution
+    //     --> mcgen-txt.mc  and mcgen-bin.mc
+    {
+#if ! USE_LIBMCFILTER
+        cout<<" Not linked with libmcfilter, NO .soln file output"<<endl;
+#else
+        assert( soln.size() == p.axes );
+        assert( x[0].size() == p.dim );
+        cout<<" Forming MCsoln (as Eigen column matrices) ..."<<endl;
+        MCsoln mcs;
+        mcs.d           = p.dim;
+        mcs.nProj       = p.axes;
+        mcs.nClass      = p.nClass;     // NO class remap
+        //mcs.fname       =
+        { // copy vector<vector<float>> weights ---> Eigen DenseM MCsoln::weights_avg
+            mcs.weights_avg.conservativeResize( mcs.d, mcs.nProj );   // soln, as col. vectors
+            for(uint32_t d=0U; d<mcs.d; ++d){
+                for(uint32_t s=0U; s<mcs.nProj; ++s){
+                    mcs.weights_avg.coeffRef(d,s) = soln[s][d];
+                }
+            }
+            cout<<"\tw["<<mcs.weights_avg.rows()<<","<<mcs.weights_avg.cols()<<"]\n"
+                <<mcs.weights_avg<<endl;
+            assert( mcs.weights_avg.rows() == mcs.d );
+            assert( mcs.weights_avg.cols() == mcs.nProj );
+        }
+        { // sample code to find {l,u} bounds for fully separable case, and print
+            // to find {l,u} bounds of each soln, using FULL set of margin points, with strict +ve margin
+            DenseM & l = mcs.lower_bounds_avg;
+            DenseM & u = mcs.upper_bounds_avg;
+            l.conservativeResize(mcs.nClass, mcs.nProj);
+            u.conservativeResize(mcs.nClass, mcs.nProj);
+            for(int i=0U; i<mcs.nClass; ++i){
+                for(uint32_t p=0U; p<mcs.nProj; ++p){
+                    l.coeffRef(i,p) = numeric_limits<double>::max();
+                    u.coeffRef(i,p) = numeric_limits<double>::min();
+                }
+            }
+            {// This time form ACTUAL {l,u} bounds of training examples [p.nx x p.dim]
+                // (last time was for trivial soln and idealized margin pushpoint)
+                // TODO XXX Best: project/rot/skew/embed the idealized margin-expansions XXX
+                // (but that is a lot more typing)
+                // soln will still be good if |m|=a in parms, because the idealized margin-expansions
+                // will always be in the training data, 'x'.
+                for(uint32_t i=0U; i<x.size(); ++i){
+                    auto const& v = x[i];
+                    auto cls = y[i];            // NOT the remapped class label
+                    //auto v = m.mid; // OHOH: this ideal split-point has only p.axes dims
+                    assert( v.size() == p.dim );
+                    assert( cls < mcs.nClass );
+                    for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
+                        float const vdots = dot( v, soln[p] );
+                        l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
+                        u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
+                    }
+                }
+                if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
+                    cout<<" {l,u} solns from Eigen col(p).transpose() ...:";
+                    for(uint32_t p=0U; p<soln.size(); ++p){
+                        cout<<"\n\tl["<<p<<"] = "<<l.col(p).transpose();
+                        cout<<"\n\tu["<<p<<"] = "<<u.col(p).transpose();
+                    }
+                    cout<<endl;
+                }
+            }
+        }
+        string fnameSolnBase;
+        {
+            stringstream oss;
+            oss<<"mcgen-"<<p.str();
+            fnameSolnBase = oss.str();
+        }
+        assert( mcs.weights_avg.rows() == mcs.d );
+        assert( mcs.weights_avg.cols() == mcs.nProj );
+        assert( mcs.lower_bounds_avg.rows() == mcs.nClass );
+        assert( mcs.lower_bounds_avg.cols() == mcs.nProj );
+        assert( mcs.upper_bounds_avg.rows() == mcs.nClass );
+        assert( mcs.upper_bounds_avg.cols() == mcs.nProj );
+        mcSave( fnameSolnBase, mcs );
+#endif //USE_LIBMCFILTER
+    }
+
     cout<<"\nGoodbye"<<endl;
 }
 
