@@ -1754,6 +1754,10 @@ int main(int argc, char** argv)
                 ofstream ofs(fname);
                 eigen_io_bin( ofs, sy ); // y is sparse bool
                 // 32 nonzero elements stored in 672 bytes  <--- FIXME (printing.hh, eigen_io_bin)
+                // --> 32 nonzero elements stored in 441 bytes  (smaller outerindex)
+                // --> 32 nonzero elements stored in 217 bytes  (smaller innerindex)
+                // --> 32 nonzero elements stored in 113 bytes  (values as boost::dynamic_bitset)
+                // --- now get rid of useless '1' if ALL the bits are set (bool optimization)
                 ofs.close();
             }
             uint64_t fsize_bytes;
@@ -1821,7 +1825,10 @@ int main(int argc, char** argv)
             {
                 ofstream ofs(fname);
                 eigen_io_bin( ofs, sy ); // y is sparse bool
-                // 32 nonzero elements stored in 672 bytes  <--- FIXME (printing.hh, eigen_io_bin)
+                // 64 nonzero elements stored in 1056 bytes !!!
+                // --> 64 nonzero elements stored in 825 bytes
+                // --> 64 nonzero elements stored in 377 bytes
+                // --> 64 nonzero elements stored in 145 bytes
                 ofs.close();
             }
             uint64_t fsize_bytes;

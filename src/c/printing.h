@@ -102,6 +102,10 @@ namespace detail {
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x );
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws="\n" );
     TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x );
+    template<int Options, typename Index> // bool override:
+    std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index> const& x );
+    template<int Options, typename Index> // bool override:
+    std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x );
 #undef MATRIX
 #undef TMATRIX
     //@}

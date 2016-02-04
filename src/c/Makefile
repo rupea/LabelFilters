@@ -323,4 +323,4 @@ clean:
 	$(MAKE) -f Makefile.octave clean
 
 realclean: clean
-	rm -f mcgen*.repo *.log *.txt DenseM.bin *.soln *.repo boolmatrix.bin *.profile
+	rm -f *.log *.txt DenseM.bin *.soln *.repo boolmatrix.bin *.profile mcgen*.bin
