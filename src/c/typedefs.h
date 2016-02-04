@@ -28,4 +28,7 @@ typedef Eigen::MappedSparseMatrix<double, Eigen::RowMajor> ExtConstSparseM;
 
 typedef std::vector<boost::dynamic_bitset<>*> ActiveDataSet;
 
+typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> DenseMf;
+typedef Eigen::SparseMatrix<float,Eigen::RowMajor> SparseMf;
+
 #endif

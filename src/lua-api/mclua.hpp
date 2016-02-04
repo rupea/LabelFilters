@@ -36,49 +36,80 @@ namespace MILDE {
 
     /** lua interface functions for scr_MCparm object.
      *
+     * One way to use it:
+     *
      * Initialize lua namespace (script_MCparm)
      * ~~~{.lua}
-     *   require('milde')
-     *   mc = require('mcparm')
+     require('milde')
+     mc = require('libmclua')
      * ~~~
      * Construct default parameters (+ print, convert to lua table)
      * ~~~{.lua}
-     *   p = mc.new()       -- default parms
-     *   print(p:str())     -- print: empty, because all values at default
-     *   print(p:str(true)) -- print, verbose option
-     *   t=p.get()          -- lua table (empty) of nondefault parms
-     *   t=p.get(true)      -- lua table of all parms
+     p = mc.new()       -- default parms
+     print(p:str())     -- print: empty, because all values at default
+     print(p:str(true)) -- print, verbose option
+     t=p.get()          -- lua table (empty) of nondefault parms
+     t=p.get(true)      -- lua table of all parms
      * ~~~
      * Modify parameters
      * ~~~{.lua}
-     *   p = mc.new()
-     *   t={}
-     *   t.no_projections = 7.7777        -- int, ignores trailing .77777
-     *   t.avg_epoch = 10                 -- size_t
-     *   t.update_type = "MINIBATCH_SGD"  -- enum, using full value
-     *   t.eta_type = "sqrt"              -- enum, using a lowercase substr
-     *   t.C1 = 7.7777                    -- double, so .7777 not ignored
-     *   t.resume = 1                     -- bool
-     *
-     *   p:set(t) -- <------- existing keys of p are overwritten by any settings in t
-     *   print(p:str())    -- now have some nondefault parameters
+     p = mc.new()
+     t={}
+     t.no_projections = 7.7777        -- int, ignores trailing .77777
+     t.avg_epoch = 10                 -- size_t
+     t.update_type = "MINIBATCH_SGD"  -- enum, using full value
+     t.eta_type = "sqrt"              -- enum, using a lowercase substr
+     t.C1 = 7.7777                    -- double, so .7777 not ignored
+     t.resume = 1                     -- bool
+p:set(t) -- <------- existing keys of p are overwritten by any settings in t
+print(p:str())    -- now have some nondefault parameters
      * ~~~
      *
-     * Note: getargs and setargs use the normal milde version, base on \c Args
+     * Note: getargs and setargs use the normal milde version, based on \c Args
      *       but I prefer the get/set versions based on \c ArgMap.
+     *
+     * - Alternate usage
+     *   - maybe nicer, if want to extend \em mc with 'solve' function
+     *     - i.e. more than just script_MCparm can fit into it :)
+     * ~~~{.lua}
+     require("milde")
+     require("libmclua")
+     -- create a lua mcparm object
+     mc = libmclua.mc.new()     -- the only function in namespace libmclua.mcparm
+     print(mc:str(true))
+     print(mc:type())
+     print(mc:str())
+     print(mc:str(true))                           -- verbose listing (a handy reference)
+     tab=mc:getargs()                              -- get all NON-DEFAULT args as string table
+     for k,v in pairs(tab) do print(k,v) end       -- this will be empty
+     tabargs=mc:getargs(true)                      -- get ALL args as table:str->str
+     for k,v in pairs(tabargs) do print(k,v) end   -- now non-empty
+     tab=mc:getargs(true)                          -- get ALL args as table:str->lua_type
+     for k,v in pairs(tab) do print(k,v) end       -- ("looks" the same as printout of tabargs)
+     -- note: enums are not converted to string nicely?
+     * ~~~
+     * Consider:
+     * - mc.load( [fname:str] )                                 -- attach x,y data from repo-like format
+     *   - just try various combos of slc/mlc and dr4/sr4, but \em not as milde repo
+     *   - read into \b Eigen types (currently DenseM/SparseM of \em double )
+     *     - because milde repo handles row-wise data, and \em MCFilter requires matrix x,y input
+     * - mc.solve( [("fname.soln"):str], [ascii(false):bool] )  -- solve and write MCsoln
      */
     struct script_MCparm {
         static int f___gc();
         static int f_type();
         // f_get may be a bit more convenient to use than getargs
         //    E.g., don't need tonumber(string) for assertions.
-        static int f_get();     ///< string -> lua builtin type -- copy of MCfilter parms
-        static int f_getargs(); ///< string -> string table -- copy of MCfilter parms
+        static int f_get();     ///< string -> lua builtin type -- copy of MCfilter parms (ArgMap)
+        static int f_getargs(); ///< string -> string table -- copy of MCfilter parms (Args)
         static int f_set();     ///< set(<table>) overwrite parameter entries
         static int f_setargs(); ///< set(<table>) (string keys) overwrite parms
         static int f_str();     ///< str([verbose:bool=0]) nondefault (or all) parms
         // constructors
         static int f_new();  // return a default-constructed "param_struct"
+
+        // MCsolver/MCsoln functions
+        static int f_load();    ///< load(<fname:str>) -> 0/1 ~ bad/good
     };
 
     /** Actually, should create a solver class that, besides \c solve_optimization,

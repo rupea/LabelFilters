@@ -5,6 +5,7 @@
  */
 
 #include "evaluate.h"
+#include "predict.hh"   // oh, actually need the inline defn of predict for library
 #include "utils.h"
 #include "EigenIO.h"
 
@@ -14,7 +15,7 @@ void predict_chunk(PredictionSet* predictions, size_t& nact,
 		   const size_t start_class, const ActiveDataSet* active,
 		   predtype thresh, int k, bool verbose)
 {
-  int pred_k = k>10?k:10;
+  size_t pred_k = (k>10U?static_cast<size_t>(k):size_t{10U});
   //size_t n = x.rows();
   if (verbose)
     {

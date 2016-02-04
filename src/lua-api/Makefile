@@ -80,7 +80,7 @@ lib: libmclua.so libmclua-dbg.so
 LIBMCLUA_SRC:=mclua.cpp
 
 # To ease linking, wire the mcfilter library & path into the lua library
-# (so that require('mcparm') will auto-load libmcfilter.so without doing
+# (so that require('libmclua') will auto-load libmcfilter.so without doing
 #  complicated song and dance in lua)
 # rpath setting stored within libmclua*.so should be an absolute path
 #  TODO: eventually, perhaps to some milde install directory?

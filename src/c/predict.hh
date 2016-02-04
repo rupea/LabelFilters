@@ -13,7 +13,7 @@
 #include <gperftools/profiler.h>
 #endif
 
-template <typename Eigentype>
+template <typename Eigentype> inline
 ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
                           const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat,
                           bool verbose = false)
@@ -25,7 +25,7 @@ ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
   ActiveDataSet* active;
 
   // non-templated from this point forward (no longer need 'x')
-  active = detail::projectionsToActiveSet( no_active, projections, wmat, lmat, umat, verbose );
+  active = projectionsToActiveSet( no_active, projections, lmat, umat, verbose );
 
   #ifdef PROFILE
   ProfilerStop();
@@ -34,13 +34,13 @@ ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
 }
 
 
-template <typename Eigentype>
+template <typename Eigentype> inline
 PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
                          ActiveDataSet const* active, size_t& nact,
-                         bool verbose             = false,
-                         predtype keep_thresh     = boost::numeric::bounds<predtype>::lowest(),
-                         size_t keep_size         = boost::numeric::bounds<size_t>::highest(),
-                         size_t const start_class = 0)
+                         bool verbose             /*= false*/,
+                         predtype keep_thresh     /*= boost::numeric::bounds<predtype>::lowest()*/,
+                         size_t keep_size         /*= boost::numeric::bounds<size_t>::highest()*/,
+                         size_t const start_class /*= 0*/)
 {
   using namespace std;
   size_t n = x.rows();
@@ -123,14 +123,14 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 
 
 /** Beware: \c w here is a linear xform that gets pre-applied to x. */
-template <typename Eigentype>
+template <typename Eigentype> inline
 void predict( PredictionSet* predictions,
               Eigentype const& x, DenseColMf const& w, 
               ActiveDataSet const* active, size_t& nact,
-              bool verbose             = false,
-              predtype keep_thresh     = boost::numeric::bounds<predtype>::lowest(),
-              size_t keep_size         = boost::numeric::bounds<size_t>::highest(),
-              size_t const start_class = 0)
+              bool verbose             /*= false*/,
+              predtype keep_thresh     /*= boost::numeric::bounds<predtype>::lowest()*/,
+              size_t keep_size         /*= boost::numeric::bounds<size_t>::highest()*/,
+              size_t const start_class /*= 0*/)
 {
   size_t n = x.rows();
   size_t noClasses = w.cols();

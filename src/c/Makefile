@@ -112,8 +112,10 @@ check-oct-headers: EigenOctave.h
 		$(CXX) -c $$header $(CPPFLAGS) $(OCTAVE_CFLAGS) -o /dev/null; \
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
+
+
 lib: libs-only demo-proj1 demo-quick
-test: lib demo-printing demo-io do-tests mcgen
+test: lib demo-printing demo-io do-tests mcgen mcgenx
 long: clean
 	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
 	&& $(MAKE) -j20 do-tests \

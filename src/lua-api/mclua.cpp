@@ -1,5 +1,6 @@
 
 #include "mclua.hpp"
+#include "lua.hpp"
 
 #include "base/app_state.hpp"
 #include "script_lua/lua_interpreter.hpp"
@@ -51,6 +52,7 @@ FUN(getargs)    // return all parameters as string->string table
 FUN(set)        // overwrite keys in supplied string->luatype table
 FUN(setargs)    // overwrite keys in supplied string->string table
 FUN(str)
+FUN(load)       // read x,y training data
 
 FUN(new)     // construct a default 'mcparm' parameter set
 ;
@@ -73,6 +75,22 @@ namespace MILDE {
             scr_USR( scr_MCparm, x, ERR_LBL );
             GAS.d_si->put_ccstr( "mcparm" );
             return 1;
+        }scr_CATCH;
+    }
+
+    int script_MCparm::f_load() ///< loads an x,y dataset (repo)
+    {
+        scr_TRY( "<mc>.load(<fname:str>)-><str>" ){
+            scr_STR( fname, ERR_LBL );
+            if(0){
+                // read stuff HERE ...
+                GAS.d_si->put_int( 1 );             // good read
+                return 1;
+            }else{
+                std::ostringstream oss;
+                oss<<"Error: <mc>:load( fname = "<<fname<<" ) failed\n";
+                throw std::runtime_error(oss.str());
+            }
         }scr_CATCH;
     }
 
@@ -114,7 +132,7 @@ namespace MILDE {
             MCSET(uint8,optimizeLU_epoch);
             MCSET(bool,remove_constraints);
             MCSET(bool,remove_class_constraints);
-            MCSET(int,reweight_lambda);
+            MCSET_ENUM(fromstring,reweight_lambda);
             MCSET_ENUM(fromstring,reorder_type); // enum Reorder_Type
             MCSET(bool,ml_wt_by_nclasses);
             MCSET(bool,ml_wt_class_by_nclasses);
@@ -171,7 +189,7 @@ namespace MILDE {
             MCSET_size_t( optimizeLU_epoch );
             MCSET_bool(   remove_constraints );
             MCSET_bool(   remove_class_constraints );
-            MCSET_int(    reweight_lambda );
+            MCSET_enum(   reweight_lambda );
             MCSET_enum(   reorder_type ); // enum Reorder_Type
             MCSET_bool(   ml_wt_by_nclasses );
             MCSET_bool(   ml_wt_class_by_nclasses );
@@ -208,7 +226,7 @@ namespace MILDE {
             scr_USR( scr_MCparm, x, ERR_LBL );
             bool all = false;
             {   scr_BOOL( a, GOT_ALL );
-                scr_STK("<mcparm>:str( <verbose:bool> ) -> <cccstr>");
+                scr_STK("<mcparm>:str( <all:bool> ) -> <cccstr>");
                 all = a;
             }
 GOT_ALL:
@@ -263,7 +281,7 @@ GOT_ALL:
             scr_USR( scr_MCparm, x, ERR_LBL );
             bool all = false;
             {   scr_BOOL( a, GOT_ALL );
-                scr_STK("<mcparm>:str( <verbose:bool> ) -> <cccstr>");
+                scr_STK("<mcparm>:get( <all:bool> ) -> <table:string->various>");
                 all = a;
             }
 GOT_ALL:
@@ -400,18 +418,74 @@ static const struct luaL_Reg lua_mcparm_lib_m [] = {
     LUA_FUN(set),
     LUA_FUN(setargs),
     LUA_FUN(str),
+    LUA_FUN(load),
     {0,0}
 };
 static const struct luaL_Reg lua_mc_lib_f [] = {
     LUA_FUN(new)
 };
 
-// needs libraries milde_core and mcfilter
-extern "C" DLLEXP int luaopen_mcparm( lua_State *)
+/** needs libraries milde_core and mcfilter.
+ * Usage from within milde \em lua_cpp :
+~~~{.lua}
+  require("milde")
+  -- create a lua mcparm object
+  -- auto-invokes libmclua.mcparm during luaopen_libmclua, so remember return value
+  mc=require("libmclua")
+  --mc = libmclua.mc.new()     -- the only function in namespace libmclua.mcparm, now auto-invoked
+
+  -- enum consts can be used, though, as:
+  print(libmclua.ETA_LIN)                       -- enum value '2', see parameter.h
+  for k,v in pairs(libmclua) do print(k,v) end  -- print out enums (and 'mc' subtable with 'mc.new()')
+
+  -- use the lua mcparm object
+  print(mc:type())
+  print(mc:str())
+  print(mc:str(true))                           -- verbose listing (a handy reference)
+  tabArgs=mc:getargs()                          -- get all NON-DEFAULT args as string table (milde \b Args)
+  for k,v in pairs(tabArgs) do print(k,v) end   -- this will be empty
+  tabArgs=mc:getargs(true)                      -- get ALL args as table:str->str (milde \b Args)
+  for k,v in pairs(tabArgs) do print(k,v) end   -- now non-empty
+
+  -- I like this one a little better (uses milde \b ArgMap interface)
+  tab=mc:get(true)                              -- get ALL args as table:str->lua_type (milde \b ArgMap)
+  for k,v in pairs(tab) do print(k,v) end       -- named enums, and nicer printout for native lua values
+
+  mc:set({no_projections=4,update_type="SAFE_SGD"})     -- set new values for 2 fields
+  print(mc:str())                                       -- print out shows the 2 non-default values
+  -- TODO accept either "SAFE_SGD" or numerical libmclua.SAFE_SGD for enum types ?
+~~~
+\sa script_MCparm
+ */
+extern "C" DLLEXP int luaopen_libmclua( lua_State * L )
 {
     MILDE_li()->register_class( OBJNAME(scr_MCparm), "mcparm", lua_mcparm_lib_m );
     // constructors
-    MILDE_li()->register_namespace( "script_MCparm", "mc", lua_mc_lib_f );
+    //   put table 'mc' into table 'libmclua'
+    MILDE_li()->register_namespace( "libmclua", "mc", lua_mc_lib_f );
+    // lua stack: table named 'libmclua', with one entry, 'libmclua.mc'
+    script_MCparm::f_new();             // automagically invoke libmclua.mc.new()
+
+    lua_getglobal(L,"libmclua"); // get the table
+    // ... or even lua_getlobal(MILDE_li()->d_lua,"libmclua");
+    // push some handy constants...
+#define ADD_ENUM( ENUM ) do {\
+    lua_pushnumber(L, ENUM); \
+    lua_setfield(L,-2,#ENUM); \
+}while(0)
+    ADD_ENUM(ETA_CONST);        // modify the table ... lua now has "libmclua.ETA_CONST"
+    ADD_ENUM(ETA_SQRT);
+    ADD_ENUM(ETA_LIN);
+    ADD_ENUM(ETA_3_4);
+    ADD_ENUM(MINIBATCH_SGD);
+    ADD_ENUM(SAFE_SGD);
+    ADD_ENUM(REORDER_AVG_PROJ_MEANS);
+    ADD_ENUM(REORDER_PROJ_MEANS);
+    ADD_ENUM(REORDER_RANGE_MIDPOINTS);
+    ADD_ENUM(REWEIGHT_NONE);
+    ADD_ENUM(REWEIGHT_LAMBDA);
+    ADD_ENUM(REWEIGHT_ALL);
+    lua_pop(L,1);               // pop the table
     return 1;
 }
 

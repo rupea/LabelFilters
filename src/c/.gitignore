@@ -18,6 +18,10 @@ dpa?.log
 dpb?.log
 mcgen
 mcgen*.repo
+mcgen*.soln
+mcgen*.log
+mcgenx
+test*.soln
 *.bin
 *.diff
 demo-proj-dbg

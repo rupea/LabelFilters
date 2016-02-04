@@ -214,6 +214,7 @@ namespace detail {
         uint64_t cols = x.cols();
         io_bin(os,rows);
         io_bin(os,cols);
+        // XXX always as float ?
         io_bin(os,(void const*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
         return os;
     }
@@ -225,6 +226,7 @@ namespace detail {
         io_bin(is,cols);
         //cout<<" \trows "<<rows<<" cols "<<cols<<endl;
         x.resize(rows,cols);
+        // XXX always as float ?
         io_bin(is,(void*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
         return is;
     }
@@ -310,12 +312,13 @@ namespace detail {
         typedef uint64_t Idx;
 #define IDX_IO(IDX) do{ Idx idx=static_cast<Idx>(IDX); io_bin(os,idx); \
     /*cout<<" idx "<<idx<<endl;*/ \
-}while(0);
+}while(0)
 #define REAL_IO(REAL) do{ Real r=static_cast<Real>(REAL); io_bin(os,r); \
     /*cout<<" oval "<<r<<endl;*/ \
-}while(0);
+}while(0)
         if( x.isCompressed() ){
-            //cout<<" TEST COMPRESSED SPARSE BINARY OUTPUT"<<endl; cout.flush();
+            int const verbose = 0;
+            if(verbose){cout<<" TEST COMPRESSED SPARSE BINARY OUTPUT"<<endl; cout.flush();}
             //os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
             Idx const rows = x.outerSize();
             Idx const cols = x.innerSize();
@@ -324,14 +327,25 @@ namespace detail {
             //os<<' '<<nData; os.flush();       // makes input 'reserve' efficient
             Idx const nData = x.outerIndexPtr()[ x.outerSize() ]; // # of possibly non-zero items
             io_bin(os,nData);
-            //os<<"\n\t"; //os<<"outerIndexPtr[] ";
-            //for(int i=0U; i<x.outerSize()   + 1   ; ++i) os<<" "<<x.outerIndexPtr()[i];
-            for(Idx i=0U; i<rows  + 1   ; ++i) IDX_IO(x.outerIndexPtr()[i]);
-
-            //os<<"\n\t"; //os<<"innerIndexPtr[] ";
-            //for(int i=0U; i< nData; ++i) os<<" "<<x.innerIndexPtr()[i];
-            // XXX can be a single i/o if no type conversion.
-            for(Idx i=0U; i< nData; ++i) IDX_IO(x.innerIndexPtr()[i]);
+            if(0){ // XXX store sparse Idx in 4 [,2,1] bytes (dep. on nData)
+            }else{ // original, VERY wide Idx
+                //os<<"\n\t"; //os<<"outerIndexPtr[] ";
+                //for(int i=0U; i<x.outerSize()   + 1   ; ++i) os<<" "<<x.outerIndexPtr()[i];
+                for(Idx i=0U; i<rows  + 1   ; ++i){
+                    assert( static_cast<Idx>(x.outerIndexPtr()[i]) <= nData );
+                    IDX_IO(x.outerIndexPtr()[i]);
+                }
+            }
+            if(0){ // XXX store sparse Idx in 4 [,2,1] bytes (dep. on cols)
+            }else{ // original, VERY wide Idx
+                //os<<"\n\t"; //os<<"innerIndexPtr[] ";
+                //for(int i=0U; i< nData; ++i) os<<" "<<x.innerIndexPtr()[i];
+                // XXX can be a single i/o if no type conversion.
+                for(Idx i=0U; i< nData; ++i){
+                    assert( static_cast<Idx>(x.innerIndexPtr()[i]) < cols );
+                    IDX_IO(x.innerIndexPtr()[i]);
+                }
+            }
 
             //os<<"\n\t"; //os<<"valuePtr[] ";
             //for(int i=0U; i< nData; ++i) os<<" "<<x.valuePtr()[i];
@@ -379,7 +393,8 @@ namespace detail {
     }
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x ){
         using namespace std;
-        //cout<<" SPARSE-binary-input"<<endl;
+        int const verbose = 0;
+        if(verbose){cout<<" TEST COMPRESSED SPARSE BINARY INPUT"<<endl; cout.flush();}
         //io_bin(is,(void*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
         typedef float Real;     // we will convert to 'real' for binary i/o (maybe save space)
         typedef uint64_t Idx;
@@ -393,25 +408,35 @@ namespace detail {
         io_bin(is,nData);
         //cout<<"\trows "<<rows<<" cols "<<cols<<endl;
         x.resize(rows,cols);
-        x.setZero();
-        x.makeCompressed();
-        x.reserve( nData );
-        //cout<<" sparse binary input o x i = "<<rows<<" x "<<cols<<" nData="<<nData<<endl;
+        //x.setZero();
+        //x.makeCompressed();
+        x.resizeNonZeros( nData );      assert( x.data().size() == nData );
+        if(verbose){
+            cout<<" sparse binary input o x i = "<<rows<<" x "<<cols<<" nData="<<nData<<endl;
+            cout<<" outer/inner/data Size() = "<<x.outerSize()<<" "<<x.innerSize()<<" "<<x.data().size()
+                <<" rows,cols = "<<x.rows()<<","<<x.cols()<<" x.size()="<<x.size()<<endl;
+        }
+        assert( x.outerSize() == rows );
+        assert( x.innerSize() == cols );
+        assert( x.data().size() == nData );
+        // XXX look at 'low-level insertBack ???'
 
         auto idxp = x.outerIndexPtr();
-        for(size_t i=0U; i<rows+1U; ++i){
+        for(size_t i=0U; i<rows; ++i){
             *idxp++ = NEXT_IDX;
             //cout<<" oip["<<i<<"]="<<x.outerIndexPtr()[i]<<endl;
         }
-        size_t osz = x.outerIndexPtr()[rows];
-        assert( osz == nData );
+        *idxp++ = NEXT_IDX;             // is it rows, or rows+1?
+        if(verbose){cout<<"x.outerIndexPtr()[rows] = "<<x.outerIndexPtr()[rows]<<endl;cout.flush();}
+        assert( x.outerIndexPtr()[rows] == nData );
+
         idxp = x.innerIndexPtr();
-        for(size_t i=0U; i<osz; ++i){
+        for(size_t i=0U; i<nData; ++i){
             *idxp++ = NEXT_IDX;
             //cout<<" iip["<<i<<"]="<<x.innerIndexPtr()[i]<<endl;
         }
         auto valp = x.valuePtr();
-        for(size_t i=0U; i<osz; ++i){
+        for(size_t i=0U; i<nData; ++i){
             *valp++ = NEXT_VAL;
             //cout<<" val["<<i<<"]="<<x.valuePtr()[i]<<endl;
         }

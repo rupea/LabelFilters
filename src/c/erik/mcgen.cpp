@@ -705,6 +705,9 @@ namespace mcgen {
 
 #if USE_LIBMCFILTER
 #include "find_w.h"
+#include "printing.hh"
+//#include <experimental/filesystem>      // file_size, oops gcc-5.x !
+#include <sys/stat.h>                     // stat
 
 using namespace std;
 void mcSave(std::string saveBasename, MCsoln const& soln){            
@@ -733,6 +736,22 @@ void mcSave(std::string saveBasename, MCsoln const& soln){
         }
     }
 }
+
+/** don't print the SparseMb \c bool values - we know what they look like */
+template<typename DERIVED>
+void dump( std::ostream& os, Eigen::SparseMatrixBase<DERIVED> const& sy ){
+    cout<<"SparseMb["<<sy.rows()<<" x "<<sy.cols()<<"], size "<<sy.size()
+        <<" nonZeros=data.size="<<sy.derived().data().size()<<" compressed="<<sy.derived().isCompressed()
+        <<" :\n\tOuterPtrs:";
+    for(uint32_t i=0U; i<sy.outerSize(); ++i){cout<<" "<<sy.derived().outerIndexPtr()[i];}
+    cout<<" $\n\tInnerPtrs:";
+    for(uint32_t i=0U; i<sy.derived().data().size(); ++i){
+        assert( sy.derived().innerIndexPtr()[i] < sy.innerSize() );
+        cout<<" "<<sy.derived().innerIndexPtr()[i];
+    }
+    cout<<endl;
+}
+
 #endif
 
 using namespace std;
@@ -1176,7 +1195,7 @@ int main(int argc, char** argv)
             return ret;
         };
         std::uniform_real_distribution<float> equiRand( equi.lo, equi.hi );
-        for(uint32_t i=nxMargin; i<p.nx; ++i){
+        for(uint32_t i=nxMargin; i<nxMargin+p.nx; ++i){
             for(uint32_t i=0U; i<r.size(); ++i){
                 r[i] = equiRand(gen);
             }
@@ -1192,6 +1211,10 @@ int main(int argc, char** argv)
             for(auto const xi: x[i]) cout<<" "<<xi;
             cout<<" }\n";
         }
+    }
+    if( x.size() != p.nxStd + p.nx ){
+        cout<<"ERROR:  x.size() == "<<x.size()<<", but expected p.nxStd+p.nx="<<p.nxStd<<"+"<<p.nx<<"="<<p.nxStd+p.nx<<endl;
+        exit(0);
     }
     cout<<" fshrink = "<<fshrink<<endl;
     // 4b. milde 'slc' repos like examples sorted by class.
@@ -1408,7 +1431,7 @@ int main(int argc, char** argv)
         ofs.close();
         cout<<" Generated "<<fname<<endl;       // mcgen-slc-dr4.repo
     }
-    // 9b. generate training files x,y : mcgen-mlc-dr4.repo ("slc","dr4") in text format
+    // 9b. generate training files x,y : mcgen-PARMS-mlc-dr4.repo ("slc","dr4") in text format
     if(1){
         vector<uint32_t> perm(y.size());
         std::iota( perm.begin(), perm.end(), 0U);
@@ -1453,9 +1476,7 @@ int main(int argc, char** argv)
         ofs.close();
         cout<<" Generated "<<fname<<endl;       // mcgen-mlc-dr4.repo
     }
-    // 9c. generate test set (all rand) : mcgen-slc-dr4.test
-    // 9d. generate test set (all rand) : mcgen-mlc-dr4.test
-    // 9e. generate training file : mcgen-slc-sr4.repo
+    // 9e. generate training file : mcgen-PARMS-slc-sr4.repo
     if(1){
         vector<uint32_t> perm(y.size());
         std::iota( perm.begin(), perm.end(), 0U);
@@ -1494,7 +1515,8 @@ int main(int argc, char** argv)
             }
             for(uint32_t a=0U, col=0U; ; ){
                 if( xp[a] != 0.0 ){
-                    ofs <<" "<<setw(5)<<right<<col<<":"<<setw(8)<<left<<xp[a];
+                    // Note: milde repo load does NOT use ":" as the sparse separator
+                    ofs <<" "<<setw(5)<<right<<col<<" "<<setw(8)<<left<<xp[a];
                 }
                 if( ++a >= xp.size() )
                     break;
@@ -1505,7 +1527,7 @@ int main(int argc, char** argv)
         ofs.close();
         cout<<" Generated "<<fname<<endl;       // mcgen-slc-dr4.repo
     }
-    // 9f. generate training file : mcgen-mlc-sr4.test
+    // 9f. generate training file : mcgen-PARMS-mlc-sr4.repo
     {
         vector<uint32_t> perm(y.size());
         std::iota( perm.begin(), perm.end(), 0U);
@@ -1552,7 +1574,8 @@ int main(int argc, char** argv)
             }
             for(uint32_t a=0U, col=0U; ; ){
                 if( xp[a] != 0.0 ){
-                    ofs <<" "<<setw(5)<<right<<col<<":"<<setw(8)<<left<<xp[a];
+                    // Note: milde repo load does NOT use ":" as the sparse separator
+                    ofs <<" "<<setw(5)<<right<<col<<" "<<setw(8)<<left<<xp[a];
                 }
                 if( ++a >= xp.size() )
                     break;
@@ -1563,7 +1586,287 @@ int main(int argc, char** argv)
         ofs.close();
         cout<<" Generated "<<fname<<endl;       // mcgen-slc-dr4.repo
     }
-    // 10. generate a usable MCfilter ".mc" file with JUST weights of the 'ideal' solution
+    // 9c. generate test set (all rand) : mcgen-slc-dr4.test
+    // 9d. generate test set (all rand) : mcgen-mlc-dr4.test
+#if USE_LIBMCFILTER
+    // 10a. create disk files that could be be used for milde "external" disk_array (with some work)
+    //      These are just binary "eigen" dumps.
+    if(1){
+        using namespace detail; // eigen_io_bin
+        string fname;
+        { ostringstream oss; oss<<"mcgen-"<<p.str()<<"-x-D.bin"; fname = oss.str(); }
+        { // write x into fname, dense binary
+            //DenseM  ex;       // 96 elements in 784 bytes
+            DenseMf ex;         // 96 elements in 400 bytes
+            {
+                // x is plain vector<vector<float>>     --> Eigen DenseMf
+                assert( x.size() == p.nxStd + p.nx );
+                assert( x[0].size() == p.dim );
+                ex.resize( x.size(), p.dim );
+                for(uint32_t r=0U; r<x.size(); ++r){
+                    for(uint32_t c=0U; c<p.dim; ++c ){
+                        ex.coeffRef(r,c) = static_cast<float>(x[r][c]);
+                    }
+                }
+                //cout<<"x as SparseMf:\n"<<ex<<endl;
+                ofstream ofs(fname);
+                eigen_io_bin( ofs, ex ); // x is Dense
+                ofs.close();
+            }
+            uint64_t fsize_bytes;
+            {
+                struct stat st;
+                stat(fname.c_str(), &st);
+                fsize_bytes = st.st_size;         // total size, in bytes
+            }
+            cout<<" Wrote 'x' file "<<fname<<" [ "<<ex.rows()<<" x "<<ex.cols()<<" ] : "
+                <<ex.rows()*ex.cols()<<" elements stored in "<<fsize_bytes<<" bytes"<<endl;
+            if(1){ // read it back and assert equivalent data
+                decltype(ex) fx;
+                ifstream ifs(fname);
+                eigen_io_bin( ifs, fx );
+                ifs.close();
+                assert( fx.rows() == ex.rows() );
+                assert( fx.cols() == fx.cols() );
+                double const diff = (fx-ex).squaredNorm();
+                assert( diff < 1.e-8 );
+                cout<<"\tGood, read back "<<fname<<" as DenseMf with sumsqr-difference "<<diff<<endl;
+            }
+#if 0
+            if(1){ // read it back with conversion to DenseM ("always store as DenseMf")
+                ifstream ifs(fname);
+                uint64_t rows,cols;
+                io_bin(ifs,rows);
+                io_bin(ifs,cols);
+                DenseM fx(rows,cols);
+                fx.setZero();
+                assert( fx.rows() == ex.rows() );
+                assert( fx.cols() == fx.cols() );
+                Eigen::VectorXf rowr;
+                rowr.resize(cols);
+                rowr.setZero();
+                for(uint64_t r=0U; r<rows; ++r){
+                    io_bin( ifs, (void*)rowr.data(), size_t(cols*sizeof(float)) ); // valgrind?
+#ifndef NDEBUG
+                    double const diff = (rowr-ex.row(r).transpose()).squaredNorm();
+                    assert( diff < 1.e-8 );
+#endif
+                    for(uint64_t c=0U; c<cols; ++c){
+                        fx.coeffRef(r,c) = static_cast<double>(rowr.coeff(c));
+                    }
+                }
+                ifs.close();
+                cout<<"\tGood, read-back float file --> DenseM (doubles) OK"<<endl;
+            }
+#endif
+        }
+        { ostringstream oss; oss<<"mcgen-"<<p.str()<<"-x-S.bin"; fname = oss.str(); }
+        { // write x into fname, sparse binary of ** float **
+            assert( x.size() > 0 );
+            assert( x.size() == y.size() );
+            assert( x.size() == p.nxStd + p.nx );
+            assert( x[0].size() == p.dim );
+            SparseMf ex( x.size(), p.dim );
+            {
+                // x is plain vector<vector<float>>
+                uint64_t nnz=0U;
+                for(uint32_t i=0; i<x.size(); ++i)
+                    for(uint32_t j=0; j<x[i].size(); ++j)
+                        if( static_cast<float>(x[i][j]) != 0.0f )
+                            ++nnz;
+
+                typedef Eigen::Triplet<float> T;
+                std::vector<T> tripletList;
+                tripletList.reserve( nnz );
+                for(uint32_t i=0; i<x.size(); ++i)
+                    for(uint32_t j=0; j<x[i].size(); ++j)
+                        if( static_cast<float>(x[i][j]) != 0.0f )
+                            tripletList.push_back( T(i,j,x[i][j]) );
+
+                ex.setFromTriplets( tripletList.begin(), tripletList.end() );
+            }
+            {
+                ofstream ofs(fname);
+                eigen_io_bin( ofs, ex ); // x is Dense
+                ofs.close();
+            }
+            uint64_t fsize_bytes;
+            {
+                struct stat st;
+                stat(fname.c_str(), &st);
+                fsize_bytes = st.st_size;         // total size, in bytes
+            }
+            cout<<" Wrote 'x' file "<<fname<<" [ "<<ex.rows()<<" x "<<ex.cols()<<" ] : "
+                <<ex.rows()*ex.cols()<<" elements stored in "<<fsize_bytes<<" bytes"<<endl;
+            cout<<" ex:\n"; dump(cout,ex);  // no values, outer/inner index lists only
+            //cout<<" ex:\n"<<ex<<endl;   // with values
+            if(1){ // read it back and assert equivalent data
+                SparseMf fx;
+                ifstream ifs(fname);
+                eigen_io_bin( ifs, fx );
+                ifs.close();
+                assert( fx.rows() == ex.rows() );
+                assert( fx.cols() == fx.cols() );
+                double const diff = (fx-ex).squaredNorm();
+                assert( diff < 1.e-8 );
+                cout<<"\tGood, read back "<<fname<<" as SparseMf with sumsqr-difference "<<diff<<endl;
+            }
+            if(1){ // read it back with conversion to SparseM
+                // This should be AUTOMATIC  -- it is now, for SparseM, but not yet for DenseM
+                SparseM fx;
+                ifstream ifs(fname);
+                eigen_io_bin( ifs, fx );
+                ifs.close();
+                assert( fx.rows() == ex.rows() );
+                assert( fx.cols() == ex.cols() );
+                assert( fx.data().size() == ex.data().size() );
+                for(uint32_t o=0U; o<fx.outerSize(); ++o){
+                    assert( fx.outerIndexPtr()[o] == ex.outerIndexPtr()[o] );
+                }
+                for(uint32_t i=0U; i<fx.innerSize() + 1 ; ++i){
+                    assert( fx.innerIndexPtr()[i] == ex.innerIndexPtr()[i] );
+                }
+                for(uint32_t d=0U; d<fx.data().size(); ++d){
+                    assert( static_cast<float>(fx.valuePtr()[d]) == static_cast<float>(ex.valuePtr()[d]) );
+                }
+                cout<<"\tGood, read-back float file -->SparseM (doubles) OK"<<endl;
+            }
+        }
+        { ostringstream oss; oss<<"mcgen-"<<p.str()<<"-slc-y.bin"; fname = oss.str(); }
+        {
+            SparseMb sy( y.size(), p.nClass );  // eigen sparse-y
+            {
+                sy.resizeNonZeros(y.size());
+                // y is plain vector<uint32_t>, single label per example
+                assert( y.size() == p.nxStd + p.nx );
+                typedef Eigen::Triplet<bool> T;
+                std::vector<T> tripletList;
+                tripletList.reserve( y.size() );
+                for(uint32_t r=0U; r<y.size(); ++r){
+                    assert( y[r] < p.nClass );
+                    tripletList.push_back( T(r,y[r],true) );
+                }
+                sy.setFromTriplets( tripletList.begin(), tripletList.end() );
+                //sy.prune(KEEPFUNC);  // if all bool 0's removed, then don't need to store values at all XXX
+                sy.makeCompressed();
+            }
+            {
+                ofstream ofs(fname);
+                eigen_io_bin( ofs, sy ); // y is sparse bool
+                // 32 nonzero elements stored in 672 bytes  <--- FIXME (printing.hh, eigen_io_bin)
+                ofs.close();
+            }
+            uint64_t fsize_bytes;
+            {
+                struct stat st;
+                stat(fname.c_str(), &st);
+                fsize_bytes = st.st_size;         // total size, in bytes
+            }
+            cout<<" Wrote 'y' file "<<fname<<" [ "<<sy.rows()<<" x "<<sy.cols()<<" ] : "
+                //<<sy.outerIndexPtr()[sy.outerSize()]
+                <<"SparseMb with "<<sy.nonZeros()
+                <<" nonzero elements stored in "<<fsize_bytes<<" bytes"
+                <<"\n(OUCH!)\n\n"
+                <<endl;
+            if(1){ // read it back and assert equivalent data
+                SparseMb fy;
+                ifstream ifs(fname);
+                eigen_io_bin( ifs, fy );
+                ifs.close();
+                cout<<"sy "; dump(cout,sy);     // short output
+                cout<<"fy "; dump(cout,fy);
+                assert( fy.isCompressed() );
+                assert( fy.rows() == sy.rows() );
+                assert( fy.cols() == sy.cols() );
+                assert( fy.data().size() == sy.data().size() );
+                for(uint32_t r=0U; r<sy.rows(); ++r){
+                    assert( sy.outerIndexPtr()[r+1] == sy.outerIndexPtr()[r] + 1 );
+                }
+                for(uint32_t o=0U; o<fy.outerSize(); ++o){
+                    assert( fy.outerIndexPtr()[o] == sy.outerIndexPtr()[o] );
+                }
+                for(uint32_t i=0U; i<fy.innerSize() + 1 ; ++i){
+                    assert( fy.innerIndexPtr()[i] == sy.innerIndexPtr()[i] );
+                }
+                for(uint32_t d=0U; d<fy.data().size(); ++d){
+                    assert( fy.valuePtr()[d] == sy.valuePtr()[d] );
+                }
+                double const diff = (fy-sy).squaredNorm();
+                assert( diff == 0.0 );
+                cout<<"\tGood, read back "<<fname<<" as SparseMb OK, diff="<<diff<<endl;
+            }
+        }
+        { ostringstream oss; oss<<"mcgen-"<<p.str()<<"-mlc-y.bin"; fname = oss.str(); }
+        {
+            SparseMb sy( y.size(), p.nClass );  // eigen sparse-y, mlc this time (ymap)
+            {
+                assert( ymap.size() == p.nClass );
+                assert( y.size() == p.nxStd + p.nx );
+                // ymap[cl] is vector<uint32_t>, multiple labels per example
+                typedef Eigen::Triplet<bool> T;
+                std::vector<T> tripletList;
+                uint64_t nnz = 0U;      for(auto const& cl: y){ nnz+=ymap[cl].size(); }
+                tripletList.reserve( nnz );
+                for(size_t i=0U; i<y.size(); ++i){
+                    for(auto const cls: ymap[y[i]]){
+                        assert( cls < p.nClass );
+                        tripletList.push_back( T(i,cls,true) );
+                    }
+                }
+                sy.resizeNonZeros(nnz);
+                sy.setFromTriplets( tripletList.begin(), tripletList.end() );
+                //sy.prune(KEEPFUNC);  // if all bool 0's removed, then don't need to store values at all XXX
+                sy.makeCompressed();
+            }
+            {
+                ofstream ofs(fname);
+                eigen_io_bin( ofs, sy ); // y is sparse bool
+                // 32 nonzero elements stored in 672 bytes  <--- FIXME (printing.hh, eigen_io_bin)
+                ofs.close();
+            }
+            uint64_t fsize_bytes;
+            {
+                struct stat st;
+                stat(fname.c_str(), &st);
+                fsize_bytes = st.st_size;         // total size, in bytes
+            }
+            cout<<" Wrote 'y' file "<<fname<<" [ "<<sy.rows()<<" x "<<sy.cols()<<" ] : "
+                //<<sy.outerIndexPtr()[sy.outerSize()]
+                <<"SparseMb with "<<sy.nonZeros()
+                <<" nonzero elements stored in "<<fsize_bytes<<" bytes"
+                <<"\n(OUCH!)\n\n"
+                <<endl;
+            if(1){ // read it back and assert equivalent data
+                SparseMb fy;
+                ifstream ifs(fname);
+                eigen_io_bin( ifs, fy );
+                ifs.close();
+                cout<<"sy "; dump(cout,sy);     // short output
+                cout<<"fy "; dump(cout,fy);
+                assert( fy.isCompressed() );
+                assert( fy.rows() == sy.rows() );
+                assert( fy.cols() == sy.cols() );
+                assert( fy.data().size() == sy.data().size() );
+                for(uint32_t r=0U; r<sy.rows(); ++r){ // only if ymap[i].size() is always 2...
+                    assert( sy.outerIndexPtr()[r+1] == sy.outerIndexPtr()[r] + 2 );
+                }
+                for(uint32_t o=0U; o<fy.outerSize(); ++o){
+                    assert( fy.outerIndexPtr()[o] == sy.outerIndexPtr()[o] );
+                }
+                for(uint32_t i=0U; i<fy.innerSize() + 1 ; ++i){
+                    assert( fy.innerIndexPtr()[i] == sy.innerIndexPtr()[i] );
+                }
+                for(uint32_t d=0U; d<fy.data().size(); ++d){
+                    assert( fy.valuePtr()[d] == sy.valuePtr()[d] );
+                }
+                double const diff = (fy-sy).squaredNorm();
+                assert( diff == 0.0 );
+                cout<<"\tGood, read back "<<fname<<" as SparseMb OK, diff="<<diff<<endl;
+            }
+        }
+    }
+#endif
+    // 10b. generate a usable MCfilter ".mc" file with JUST weights of the 'ideal' solution
     //     --> mcgen-txt.mc  and mcgen-bin.mc
     {
 #if ! USE_LIBMCFILTER

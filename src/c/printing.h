@@ -92,6 +92,8 @@ namespace detail {
      * - input always forms a compressed matrix
      * - \b Unsupported: special types of sparse matrix (sym,...)
      * - \b Unsupported: retaining matrix properties (sym, row-wise, ...)
+     * \todo Eigen Sparse Idx i/o --> reduced byte size (in printing.hh)
+     * \todo Eigen Sparse bool values are irrelevant (once pruned), so files can be very short
      */
     //@{
 #define TMATRIX template<typename Scalar, int Options, typename Index>
