@@ -133,6 +133,16 @@ int main(int,char**)
         //assert( memcmp((void const*)&a, (void const*)&b, sizeof(param_struct)) == 0 );
         cout<<"Good, parms.bin read back equivalent data"<<endl;
     }
+#if 0
+    // write & read-back MCsoln (short) TODO
+    {
+        MCsoln soln;
+    }
+    // write & read-back MCsoln (short) TODO
+    {
+        MCsoln soln;
+    }
+#endif
     
     cout<<"\nGoodbye"<<endl;
     return 0;

@@ -21,6 +21,7 @@ mcgen*.repo
 mcgen*.soln
 mcgen*.log
 mcgenx
+mcdumpsoln
 test*.soln
 *.bin
 *.diff

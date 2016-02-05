@@ -8,6 +8,19 @@
 #include <boost/function_output_iterator.hpp>
 #include <boost/iterator/function_input_iterator.hpp>
 
+#if 0
+#define PRINTING_HH_DBG( STUFF ) do{ \
+    std::cerr<<STUFF; std::cerr.flush(); \
+}while(0)
+#define PRINTING_HH_DBG2( STUFF ) do{ \
+    std::cerr<<" printing.hh:"<<__PRETTY_FUNCTION__<<":"<<__LINE__<<STUFF<<std::endl; \
+}while(0)
+#else
+// Enabling these may break some utilities
+#define PRINTING_HH_DBG( STUFF ) do{}while(0)
+#define PRINTING_HH_DBG2( STUFF ) do{}while(0)
+#endif
+
 namespace detail {
     template<typename T> inline std::ostream&
         io_txt( std::ostream& os, T const& x, char const* ws="\n" )
@@ -20,7 +33,12 @@ namespace detail {
         { return os.write(reinterpret_cast<char const*>(&x),sizeof(T)); }
     template<typename T> inline std::istream&
         io_bin( std::istream& is, T& x )
-        { return is.read (reinterpret_cast<char*>(&x),sizeof(T)); }
+        {
+            assert( is.good() );
+            is.read (reinterpret_cast<char*>(&x),sizeof(T));
+            //std::cout<<" Rsz"<<sizeof(T)<<" value "<<x<<std::endl;
+            return is;
+        }
 
     inline std::ostream& io_bin( std::ostream& os, void const* p, size_t bytes ){
         return os.write((char*)p,bytes);
@@ -52,8 +70,10 @@ namespace detail {
         uint32_t len=(uint32_t)(x.size() * sizeof(std::string::traits_type::char_type));
         io_bin(os,len);
         if(os.fail()) throw std::overflow_error("failed string-len-->std::ostream");
-        os.write(x.data(),len);
-        if(os.fail()) throw std::overflow_error("failed string-data-->std::ostream");
+        if(len){
+            os.write(x.data(),len);
+            if(os.fail()) throw std::overflow_error("failed string-data-->std::ostream");
+        }
         return os;
     }
     template<> inline std::istream& io_bin( std::istream& is, std::string& x ){
@@ -61,8 +81,12 @@ namespace detail {
         io_bin(is,len);
         if(is.fail()) throw std::underflow_error("failed std::istream-->string-len");
         x.resize(len,'\0');     // reserve string memory
-        is.read(&x[0], len);    // read full string content
-        if(is.fail()) throw std::underflow_error("failed std::istream-->string-data");
+        if(len){
+            //std::cout<<" io_bin(string_len="<<len<<std::endl;
+            is.read(&x[0], len);    // read full string content
+            if(is.fail()) throw std::underflow_error("failed std::istream-->string-data");
+        }
+        assert( is.good() );
         return is;
     }
     // -------- helpers for boost iterator adapters --------
@@ -181,10 +205,10 @@ namespace detail {
     // Ohoh, but compiler needs help to resolve template types...
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws/*="\n"*/ ){
         using namespace std;
-        uint64_t rows = x.outerSize();
-        uint64_t cols = x.innerSize();
-        //cout<<" eigen_io_txt( "<<rows<<" x "<<cols<<" ): ";
-        os<<x.outerSize()<<' '<<x.innerSize();
+        uint64_t rows = x.rows();
+        uint64_t cols = x.cols();
+        //cout<<" eigen_io_txt( rxc "<<x.rows()<<" x "<<x.cols()<<" ) oxi "<<x.outerSize()<<"x"<<x.innerSize();
+        os<<x.rows()<<' '<<x.cols();
         size_t const sz = size_t(rows)*size_t(cols);
         typename MATRIX::Scalar const* data = x.data();
         for(size_t i=0U; i<sz; ++i)
@@ -210,19 +234,20 @@ namespace detail {
     // dense output
     TMATRIX std::ostream& eigen_io_bin_plain( std::ostream& os, MATRIX const& x ){
         using namespace std;
-        //cout<<" MATRIX-output rows "<<x.rows()<<" cols "<<x.cols()<<endl;
+        PRINTING_HH_DBG(" MATRIX-output rows "<<x.rows()<<" cols "<<x.cols()<<endl);
         // well, actually rows,cols are of typename MATRIX::INDEX
-        uint64_t rows = x.outerSize();
-        uint64_t cols = x.innerSize();
+        uint64_t rows = x.rows();
+        uint64_t cols = x.cols();
         io_bin(os,rows);
         io_bin(os,cols);
         io_bin(os,(void const*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
         return os;
     }
     TMATRIX std::ostream& eigen_io_bin_float( std::ostream& os, MATRIX const& x ){
-        //cout<<" MATRIX-output double->float rows "<<x.rows()<<" cols "<<x.cols()<<endl;
-        uint64_t rows = x.outerSize();
-        uint64_t cols = x.innerSize();
+        uint64_t rows = x.rows();
+        uint64_t cols = x.cols();
+        using namespace std;
+        PRINTING_HH_DBG(" MATRIX-output double->float rows "<<x.rows()<<" cols "<<x.cols()<<endl);
         io_bin(os,rows);
         io_bin(os,cols);
         //assert( static_cast<Derived>(x).data().size() == rows*cols );
@@ -234,7 +259,7 @@ namespace detail {
     }
     TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x ){
         if( std::is_same<typename MATRIX::Scalar, double>::value ){
-            std::cout<<" (double-->float write demotion)"; std::cout.flush();
+            PRINTING_HH_DBG(" ["<<x.rows()<<"x"<<x.cols()<<"] (double-->float write demotion)");
             eigen_io_bin_float( os, x );
         }else{
             eigen_io_bin_plain( os, x );
@@ -254,20 +279,25 @@ namespace detail {
         return is;
     }
     TMATRIX std::istream& eigen_io_bin_float( std::istream& is, MATRIX      & x ){
-        uint64_t rows,cols;
-        io_bin(is,rows);
-        io_bin(is,cols);
-        x.resize(rows,cols);
-        //std::cout<<" MATRIX-input float->double  rows "<<rows<<" cols "<<cols<<std::endl;
-        uint64_t nData = rows*cols;
+        using namespace std;
+        uint64_t rows;
+        uint64_t cols;
+        io_bin(is,(uint64_t&)rows);
+        PRINTING_HH_DBG2(" MATRIX-input float->double  rows "<<rows<<endl);
+        io_bin(is,(uint64_t&)cols);
+        PRINTING_HH_DBG("                             cols "<<cols<<endl);
+        x.resize(rows,cols);            // valgrind!!
         typename MATRIX::Scalar *xdata = x.data();
+        uint64_t nData = rows*cols;
         for(float tmp[1024] ; nData > 1024U; nData -= 1024U ){
+            PRINTING_HH_DBG(".");
             io_bin(is,(void*)tmp,size_t(1024U*sizeof(float)));
             for(uint32_t j=0U; j<1024U; ++j){
                 *xdata++ = static_cast<typename MATRIX::Scalar>( tmp[j] );
             }
         }
         for( ; nData; --nData ){
+            PRINTING_HH_DBG("+");
             float tmp;
             io_bin(is,tmp);
             *xdata++ = static_cast<typename MATRIX::Scalar>( tmp );
@@ -276,7 +306,7 @@ namespace detail {
     }
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x ){
         if( std::is_same<typename MATRIX::Scalar, double>::value ){
-            std::cout<<" (float-->double read demotion)"; std::cout.flush();
+            PRINTING_HH_DBG(" (float-->double read promotion)");
             eigen_io_bin_float( is, x );
         }else{
             eigen_io_bin_plain( is, x );
@@ -362,8 +392,9 @@ namespace detail {
     // generic sparse binary output (extra 'isBool' flag)
     TMATRIX std::ostream& eigen_io_bin_impl( std::ostream& os, MATRIX const& x, bool const isBool ){
         using namespace std;
-        cout<<" SPARSE-"<<(isBool?"bool":"float")<<"-output rows "<<x.rows()<<" cols "
-            <<x.cols()<<" isCompressed()="<<x.isCompressed()<<endl;
+        int const verbose = 0;
+        PRINTING_HH_DBG(" SPARSE-"<<(isBool?"bool":"float")<<"-output rows "<<x.rows()<<" cols "
+            <<x.cols()<<" isCompressed()="<<x.isCompressed()<<endl);
         typedef float Real;     // we will convert to 'real' for binary i/o (maybe save space)
         typedef uint64_t Idx;
 #define IDX_IO(IDX,TYPE) do{ TYPE idx=static_cast<TYPE>(IDX); io_bin(os,idx); \
@@ -373,15 +404,15 @@ namespace detail {
     /*cout<<" oval "<<r<<endl;*/ \
 }while(0)
         if( x.isCompressed() ){
-            int const verbose = 0;
             if(verbose){cout<<" TEST COMPRESSED SPARSE BINARY OUTPUT"<<endl; cout.flush();}
             //os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
-            Idx const rows = x.outerSize();
-            Idx const cols = x.innerSize();
+            Idx const rows = x.rows();
+            Idx const cols = x.cols();
             io_bin(os,rows);
             io_bin(os,cols);
             //os<<' '<<nData; os.flush();       // makes input 'reserve' efficient
             Idx const nData = x.outerIndexPtr()[ x.outerSize() ]; // # of possibly non-zero items
+            if(verbose) cout<<" r x c "<<x.rows()<<" x "<<x.cols()<<" o x i "<<x.outerSize()<<" x "<<x.innerSize()<<" nData="<<nData<<endl;
             io_bin(os,nData);
             if(nData < numeric_limits<uint_least8_t>::max()){
                 for(Idx i=0U; i<rows  + 1   ; ++i){
@@ -445,17 +476,20 @@ namespace detail {
                 // NOTE: slight inefficiency because nData is now stored twice (again as dbs header item)
             }
         }else{
-            //cout<<" TEST UNCOMPRESSED SPARSE BINARY OUTPUT"<<endl; cout.flush();
+            // Here, the trick is to output what the compressed format WOULD look like.
+            // This means that we correct for the "dead space" in the uncompressed sparse matrix !
+            PRINTING_HH_DBG("TEST UNCOMPRESSED SPARSE BINARY OUTPUT"<<endl);
+            assert( x.innerNonZeroPtr() != nullptr );
             // after MATRIX::compress(), innerNonZerPtr() returns NULL, so cannot use the following
             //os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
-            Idx const rows = x.outerSize();
-            Idx const cols = x.innerSize();
-            //cout<<" o x c "<<rows<<" x "<<cols; cout.flush();
+            Idx const rows = x.rows();
+            Idx const cols = x.cols();
             io_bin(os,rows);
             io_bin(os,cols);
             //int const nData = x.nonZeros();           // not required
             //os<<' '<<nData; os.flush();       // makes input 'reserve' efficient
             Idx const nData = x.nonZeros();             // ISSUE XXX differs from valuePtr() treatment of compressed!
+            if(verbose) cout<<" r x c "<<x.rows()<<" x "<<x.cols()<<" o x i "<<x.outerSize()<<" x "<<x.innerSize()<<" nData="<<nData<<endl;
             //cout<<" nData="<<nData; cout.flush();
             io_bin(os,nData);
             //typename MATRIX::Index inzSum;
@@ -463,16 +497,18 @@ namespace detail {
             //os<<"\n\t"; //os<<"outerIndexPtr[] ";
             if(nData < numeric_limits<uint_least8_t>::max()){
                 for(Idx i=0U; i<rows  + 1   ; ++i){
-                    IDX_IO(x.outerIndexPtr()[i], uint_least8_t);
+                    IDX_IO(inzSum, uint_least8_t);
                     inzSum += static_cast<Idx>(x.innerNonZeroPtr()[i]);
                 }
             }else if(nData < numeric_limits<uint_least16_t>::max()){
                 for(Idx i=0U; i<rows  + 1   ; ++i){
-                    IDX_IO(x.outerIndexPtr()[i], uint_least16_t);
+                    IDX_IO(inzSum, uint_least16_t);
+                    inzSum += static_cast<Idx>(x.innerNonZeroPtr()[i]);
                 }
             }else if(nData < numeric_limits<uint_least32_t>::max()){
                 for(Idx i=0U; i<rows  + 1   ; ++i){
-                    IDX_IO(x.outerIndexPtr()[i], uint_least32_t);
+                    IDX_IO(inzSum, uint_least32_t);
+                    inzSum += static_cast<Idx>(x.innerNonZeroPtr()[i]);
                 }
             }else{ // original, VERY wide Idx
                 for(int i=0U; i<x.outerSize()   + 1   ; ++i){
@@ -554,7 +590,7 @@ namespace detail {
         io_bin(is,rows);
         io_bin(is,cols);
         io_bin(is,nData);
-        //cout<<"\trows "<<rows<<" cols "<<cols<<endl;
+        if(verbose) cout<<"\trows "<<rows<<" cols "<<cols<<" nData "<<nData<<endl;
         x.resize(rows,cols);
         //x.setZero();
         //x.makeCompressed();
@@ -710,7 +746,5 @@ std::string print_report(const Eigen::SparseMatrixBase<DERIVED>& x)
     oss << "x:non-zeros: " << nnz << ", avg. nnz/row: " << nnz / x.rows();
     return oss.str();
 }
-
-
-
+#undef PRINTING_HH_DBG
 #endif // PRINTING_HH

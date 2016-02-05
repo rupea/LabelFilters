@@ -109,7 +109,7 @@ void hyperRect( VectorXd const& corner, DenseM const& edges, DenseM& rect )
 
 
 // parse arguments
-int testparms(int argc, char**argv, param_struct & params) {
+int testparms(int argc, char**argv) {
     problem = PROBLEM;
     testnum = TESTNUM;
     use_mcsolver = true;
@@ -356,7 +356,7 @@ int main(int argc,char** argv)
     //  VectorXd y(10000),objective_val;
     const size_t nex = 3*8;                 // 3 cubes of 8 vertices each
     params = set_default_params();
-    testparms(argc,argv, params);
+    testparms(argc,argv);
     assert( problem <= 2U );
 
     params.update_type    = MINIBATCH_SGD;

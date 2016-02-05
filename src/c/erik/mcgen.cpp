@@ -714,7 +714,7 @@ void mcSave(std::string saveBasename, MCsoln const& soln){
     if( saveBasename.size() > 0U ){
         cout<<" In mcSave("<<saveBasename<<", MCsoln)"<<endl;
         using namespace std;
-        string saveTxt(saveBasename); saveTxt.append(".soln");
+        string saveTxt(saveBasename); saveTxt.append("-txt.soln");
         cout<<" Saving to file "<<saveTxt<<endl;
         try{
             ofstream ofs(saveTxt);
