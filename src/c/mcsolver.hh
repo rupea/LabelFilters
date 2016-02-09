@@ -8,7 +8,7 @@
 #include "find_w_detail.hh"
 #include "mcupdate.h"
 #include "constants.h"          // PRINT_O
-#include "printing.h"
+#include "printing.hh"          // print_report
 #include <iomanip>
 #include <vector>
 

@@ -1622,6 +1622,7 @@ int main(int argc, char** argv)
             cout<<" Wrote 'x' file "<<fname<<" [ "<<ex.rows()<<" x "<<ex.cols()<<" ] : "
                 <<ex.rows()*ex.cols()<<" elements stored in "<<fsize_bytes<<" bytes"<<endl;
             if(1){ // read it back and assert equivalent data
+#if 1
                 decltype(ex) fx;
                 ifstream ifs(fname);
                 eigen_io_bin( ifs, fx );
@@ -1631,9 +1632,7 @@ int main(int argc, char** argv)
                 double const diff = (fx-ex).squaredNorm();
                 assert( diff < 1.e-8 );
                 cout<<"\tGood, read back "<<fname<<" as DenseMf with sumsqr-difference "<<diff<<endl;
-            }
-#if 0
-            if(1){ // read it back with conversion to DenseM ("always store as DenseMf")
+#else
                 ifstream ifs(fname);
                 uint64_t rows,cols;
                 io_bin(ifs,rows);
@@ -1657,8 +1656,8 @@ int main(int argc, char** argv)
                 }
                 ifs.close();
                 cout<<"\tGood, read-back float file --> DenseM (doubles) OK"<<endl;
-            }
 #endif
+            }
         }
         { ostringstream oss; oss<<"mcgen-"<<p.str()<<"-x-S.bin"; fname = oss.str(); }
         { // write x into fname, sparse binary of ** float **
@@ -1747,17 +1746,24 @@ int main(int argc, char** argv)
                     tripletList.push_back( T(r,y[r],true) );
                 }
                 sy.setFromTriplets( tripletList.begin(), tripletList.end() );
-                //sy.prune(KEEPFUNC);  // if all bool 0's removed, then don't need to store values at all XXX
+                struct KeepTrue {
+                    bool operator()( SparseMb::Index const&, SparseMb::Index const&, SparseMb::Scalar const value ) const
+                    {
+                        return value==true;
+                    }
+                };
+                sy.prune( KeepTrue() );
                 sy.makeCompressed();
             }
             {
                 ofstream ofs(fname);
-                eigen_io_bin( ofs, sy ); // y is sparse bool
+                //eigen_io_bin( ofs, sy ); // y is sparse bool
                 // 32 nonzero elements stored in 672 bytes  <--- FIXME (printing.hh, eigen_io_bin)
                 // --> 32 nonzero elements stored in 441 bytes  (smaller outerindex)
                 // --> 32 nonzero elements stored in 217 bytes  (smaller innerindex)
                 // --> 32 nonzero elements stored in 113 bytes  (values as boost::dynamic_bitset)
                 // --- now get rid of useless '1' if ALL the bits are set (bool optimization)
+                eigen_io_binbool( ofs, sy ); // y is sparse bool, compressed, only-true : 93 bytes
                 ofs.close();
             }
             uint64_t fsize_bytes;
@@ -1775,7 +1781,10 @@ int main(int argc, char** argv)
             if(1){ // read it back and assert equivalent data
                 SparseMb fy;
                 ifstream ifs(fname);
-                eigen_io_bin( ifs, fy );
+                //std::array<char,4> magic = {'S', 'M', 'b', 'b' };
+                //io_bin( ifs, magic );
+                //cout<<" magic "<<magic[0]<<magic[1]<<magic[2]<<magic[3]; cout.flush();
+                eigen_io_binbool( ifs, fy );
                 ifs.close();
                 cout<<"sy "; dump(cout,sy);     // short output
                 cout<<"fy "; dump(cout,fy);
@@ -1792,12 +1801,14 @@ int main(int argc, char** argv)
                 for(uint32_t i=0U; i<fy.innerSize() + 1 ; ++i){
                     assert( fy.innerIndexPtr()[i] == sy.innerIndexPtr()[i] );
                 }
+#if 0 // now we use eigen_io_binbool, so all values are 'true'
                 for(uint32_t d=0U; d<fy.data().size(); ++d){
                     assert( fy.valuePtr()[d] == sy.valuePtr()[d] );
                 }
                 double const diff = (fy-sy).squaredNorm();
                 assert( diff == 0.0 );
-                cout<<"\tGood, read back "<<fname<<" as SparseMb OK, diff="<<diff<<endl;
+#endif
+                cout<<"\tGood, read back "<<fname<<" as SparseMb OK"<<endl;
             }
         }
         { ostringstream oss; oss<<"mcgen-"<<p.str()<<"-mlc-y.bin"; fname = oss.str(); }
@@ -1819,16 +1830,25 @@ int main(int argc, char** argv)
                 }
                 sy.resizeNonZeros(nnz);
                 sy.setFromTriplets( tripletList.begin(), tripletList.end() );
-                //sy.prune(KEEPFUNC);  // if all bool 0's removed, then don't need to store values at all XXX
+                // if all bool 0's removed, then don't need to store values at all XXX
+                struct KeepTrue {
+                    bool operator()( SparseMb::Index const&, SparseMb::Index const&, SparseMb::Scalar const value ) const
+                    {
+                        return value==true;
+                    }
+                };
+                sy.prune( KeepTrue() );
+                //sy.prune( 1 );  // simpler equiv // but doesn't work for bool
                 sy.makeCompressed();
             }
             {
                 ofstream ofs(fname);
-                eigen_io_bin( ofs, sy ); // y is sparse bool
+                //eigen_io_bin( ofs, sy ); // y is sparse bool
                 // 64 nonzero elements stored in 1056 bytes !!!
                 // --> 64 nonzero elements stored in 825 bytes
                 // --> 64 nonzero elements stored in 377 bytes
                 // --> 64 nonzero elements stored in 145 bytes
+                eigen_io_binbool( ofs, sy ); // y sparse, compressed, only-true: 125 bytes
                 ofs.close();
             }
             uint64_t fsize_bytes;
@@ -1846,7 +1866,7 @@ int main(int argc, char** argv)
             if(1){ // read it back and assert equivalent data
                 SparseMb fy;
                 ifstream ifs(fname);
-                eigen_io_bin( ifs, fy );
+                eigen_io_binbool( ifs, fy );
                 ifs.close();
                 cout<<"sy "; dump(cout,sy);     // short output
                 cout<<"fy "; dump(cout,fy);
@@ -1863,12 +1883,15 @@ int main(int argc, char** argv)
                 for(uint32_t i=0U; i<fy.innerSize() + 1 ; ++i){
                     assert( fy.innerIndexPtr()[i] == sy.innerIndexPtr()[i] );
                 }
+#if 0 // skip the "all-true" values
                 for(uint32_t d=0U; d<fy.data().size(); ++d){
                     assert( fy.valuePtr()[d] == sy.valuePtr()[d] );
                 }
                 double const diff = (fy-sy).squaredNorm();
                 assert( diff == 0.0 );
                 cout<<"\tGood, read back "<<fname<<" as SparseMb OK, diff="<<diff<<endl;
+#endif
+                cout<<"\tGood, read back "<<fname<<" as SparseMb OK"<<endl;
             }
         }
     }

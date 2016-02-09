@@ -73,7 +73,7 @@ void options(int argc, char**argv) {
             "\n      mcdumpsoln -imcgen-a3-txt.soln     # to cout"
             "\n      mcdumpsoln -Imcgen-a3-bin.soln -Tmy-txt.soln"
             "\n 2. prettier text view of any .soln file"
-            "\n      cat mcgen-a3-txt.soln | mcdumpsoln P"
+            "\n      mcdumpsoln P < mcgen-a3-txt.soln "
             "\n      cat mcgen-a3-bin.soln | mcdumpsoln p 2| less"
             "\n      mcdumpsoln -QPImcgen-a3-bin.soln"
             "\n 3. rewrite any .soln as short binary"
@@ -132,10 +132,13 @@ int main(int argc,char**argv){
     }
     if(pretty){
         // kinda pretty-print
-        cerr<<"--------- d="<<soln.d<<" nProj="<<soln.nProj<<" nClass="<<soln.nClass<<" fname="<<soln.fname<<endl;
+        cerr<<"--------- d="<<soln.d<<" nProj="<<soln.nProj<<" nClass="<<soln.nClass<<" fname='"<<soln.fname<<"'"<<endl;
         cerr<<"--------- MCsolver parameters:\n"<<soln.parms; //<<endl;
         cerr<<"--------- last iter t="<<soln.t<<" C1="<<soln.C1<<" C2="<<soln.C2<<" lambda="<<soln.lambda<<" eta_t="<<soln.eta_t<<endl;
-        cerr<<"--------- w:\n"<<soln.weights_avg<<endl;
+        cerr<<"--------- weights_avg"<<prettyDims(soln.weights_avg)
+            <<" lower_bounds_avg"<<prettyDims(soln.lower_bounds_avg)
+            <<" upper_bounds"<<prettyDims(soln.upper_bounds_avg)<<endl;
+        cerr<<"--------- weights_avg:\n"<<soln.weights_avg<<endl;
         cerr<<"--------- lower_bounds_avg:\n"<<soln.lower_bounds_avg<<endl;
         cerr<<"--------- upper_bounds_avg:\n"<<soln.upper_bounds_avg<<endl;
         //cerr<<"--------- medians:\n"<<soln.medians<<endl; // NOT YET THERE

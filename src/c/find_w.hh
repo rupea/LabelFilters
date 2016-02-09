@@ -20,6 +20,7 @@
 #include <gperftools/profiler.h>
 #endif
 
+#include <iostream>
 #include <iomanip>
 
 // --------------- inline template definition to solve optimization problem ----------------

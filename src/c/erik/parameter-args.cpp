@@ -56,6 +56,46 @@ namespace opt {
             ("reoptlu", value<bool>()->default_value(false), "reoptimize {l,u} bounds of existing soln?")
             ;
     }
+
+    void extract( po::variables_map const& vm, param_struct & parms ){
+        //if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
+        //if( vm.count("proj") )
+        parms.no_projections        = vm["proj"].as<uint32_t>();
+        parms.C1	                =vm["C1"].as<double>();   //10.0;
+        parms.C2	                =vm["C2"].as<double>();   //1.0;
+        parms.max_iter	        =vm["maxiter"].as<uint32_t>(); //1e6;
+        parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
+        parms.update_type 	        = MINIBATCH_SGD;        //MINIBATCH_SGD;
+        if(vm.count("update")) fromstring( vm["update"].as<string>(), parms.update_type );
+        parms.eps	                =vm["eps"].as<double>(); //1e-4;
+        parms.eta	                =vm["eta"].as<double>(); //0.1;
+        parms.eta_type 	        = ETA_LIN;
+        if(vm.count("etatype")) fromstring( vm["etatype"].as<string>(), parms.eta_type );
+        parms.min_eta	        =vm["etamin"].as<double>(); // 0;
+        parms.optimizeLU_epoch	=vm["optlu"].as<uint32_t>(); //10000; // expensive
+        parms.reorder_epoch	        =vm["treorder"].as<uint32_t>(); //1000;
+        parms.reorder_type 	= REORDER_AVG_PROJ_MEANS; // defaults to REORDER_PROJ_MEANS if averaging is off
+        if(vm.count("order")) fromstring( vm["reorder"].as<string>(), parms.reorder_type );
+        parms.report_epoch	        =vm["report"].as<uint32_t>(); //1000;
+        parms.report_avg_epoch	=vm["reportavg"].as<uint32_t>(); //0; // this is expensive so the default is 0
+        parms.avg_epoch	        =vm["tavg"].as<uint32_t>(); //0;
+        if(parms.avg_epoch == 0U && parms.reorder_type == REORDER_AVG_PROJ_MEANS )
+            parms.reorder_type = REORDER_PROJ_MEANS;
+        parms.reweight_lambda 	= REWEIGHT_LAMBDA;
+        if( vm.count("reweight") ) fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
+        parms.class_samples 	=vm["negclass"].as<uint32_t>(); // 0;
+        parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
+        parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
+        parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
+        parms.remove_class_constraints 	=vm["remove_class"].as<bool>(); // false;
+        parms.num_threads 	                =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
+        parms.seed 	                        =vm["seed"].as<uint32_t>(); // 0;
+        parms.finite_diff_test_epoch	=vm["tgrad"].as<uint32_t>(); //0;
+        parms.no_finite_diff_tests	        =vm["ngrad"].as<uint32_t>(); //1000;
+        parms.finite_diff_test_delta	=vm["grad"].as<double>(); //1e-4;
+        parms.resume 	                =vm["resume"].as<bool>(); // false;
+        parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
+    }
  
     std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
                                      , void(*usageFunc)(std::ostream&)/*=helpUsageDummy*/ )
@@ -101,43 +141,7 @@ namespace opt {
 
             po::notify(vm); // at this point, raise any exceptions for 'required' args
 
-            //if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
-            //if( vm.count("proj") )
-            parms.no_projections        = vm["proj"].as<uint32_t>();
-            parms.C1	                =vm["C1"].as<double>();   //10.0;
-            parms.C2	                =vm["C2"].as<double>();   //1.0;
-            parms.max_iter	        =vm["maxiter"].as<uint32_t>(); //1e6;
-            parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
-            parms.update_type 	        = MINIBATCH_SGD;        //MINIBATCH_SGD;
-            if(vm.count("update")) fromstring( vm["update"].as<string>(), parms.update_type );
-            parms.eps	                =vm["eps"].as<double>(); //1e-4;
-            parms.eta	                =vm["eta"].as<double>(); //0.1;
-            parms.eta_type 	        = ETA_LIN;
-            if(vm.count("etatype")) fromstring( vm["etatype"].as<string>(), parms.eta_type );
-            parms.min_eta	        =vm["etamin"].as<double>(); // 0;
-            parms.optimizeLU_epoch	=vm["optlu"].as<uint32_t>(); //10000; // expensive
-            parms.reorder_epoch	        =vm["torder"].as<uint32_t>(); //1000;
-            parms.reorder_type 	= REORDER_AVG_PROJ_MEANS; // defaults to REORDER_PROJ_MEANS if averaging is off
-            if(vm.count("order")) fromstring( vm["order"].as<string>(), parms.reorder_type );
-            parms.report_epoch	        =vm["report"].as<uint32_t>(); //1000;
-            parms.report_avg_epoch	=vm["reportavg"].as<uint32_t>(); //0; // this is expensive so the default is 0
-            parms.avg_epoch	        =vm["tavg"].as<uint32_t>(); //0;
-            if(parms.avg_epoch == 0U && parms.reorder_type == REORDER_AVG_PROJ_MEANS )
-                parms.reorder_type = REORDER_PROJ_MEANS;
-            parms.reweight_lambda 	= REWEIGHT_LAMBDA;
-            if( vm.count("reweight") ) fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
-            parms.class_samples 	=vm["negclass"].as<uint32_t>(); // 0;
-            parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
-            parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
-            parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
-            parms.remove_class_constraints 	=vm["remove_class"].as<bool>(); // false;
-            parms.num_threads 	                =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
-            parms.seed 	                        =vm["seed"].as<uint32_t>(); // 0;
-            parms.finite_diff_test_epoch	=vm["tgrad"].as<uint32_t>(); //0;
-            parms.no_finite_diff_tests	        =vm["ngrad"].as<uint32_t>(); //1000;
-            parms.finite_diff_test_delta	=vm["grad"].as<double>(); //1e-4;
-            parms.resume 	                =vm["resume"].as<bool>(); // false;
-            parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
+            extract( vm, parms );
 
             if( vm.count("help") ) {
                 exit(0);

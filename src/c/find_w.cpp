@@ -2,6 +2,7 @@
 #include "find_w.hh"            // get template definition of the solve_optimization problem
 #include "mcsolver.hh"          // template impl of MCsolver version
 #include <stdexcept>
+#include <iostream>
 #include <fstream>
 #include <sstream>
 #include <iomanip>

@@ -26,6 +26,7 @@
 #include "KMeans.h"
 #include "LPSR.h"
 #include "normalize.h"
+#include "evaluate.hh"  // template impls
 
 using Eigen::VectorXd;
 using Eigen::VectorXi;

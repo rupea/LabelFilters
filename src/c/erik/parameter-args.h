@@ -13,6 +13,9 @@ namespace opt {
 
     /** retrieve po::options_description for \c param_struct */
     void mcParameterDesc( po::options_description & desc );
+
+    /** vm --> parms */
+    void extract( po::variables_map const& vm, param_struct & parms );
     ///@}
 
     /** translate program arguments --> \c param_struct.

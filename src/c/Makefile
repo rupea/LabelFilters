@@ -47,24 +47,24 @@ PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
-all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1
+all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 mcsolve
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
 
 profile_evaluate: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
-learn_projection: learn_projection.o find_w.o find_w_detail.o mcsolver.o printing.o EigenOctave.o utils.o parameter.o
-	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
+learn_projection: learn_projection.o find_w.o find_w_detail.o mcsolver.o printing.o EigenOctave.o utils.o parameter.o predict.o filter.o
+	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
-evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o evaluate.o
-	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
+evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o evaluate.o predict.o
+	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
 run_kmeans: run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
-	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
+	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
-run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o
-	$(OCTAVE_MEX) -o $@ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE) $*
+run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o predict.o filter.o
+	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
 profile_kmeans: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" run_kmeans
@@ -228,7 +228,7 @@ do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	@echo ""
 	@echo ""
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
-LIB_CPPFILES:= mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp
+LIB_CPPFILES:= mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp normalize.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
@@ -312,6 +312,8 @@ mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_opt
 	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. -Wno-error=maybe-uninitialized $^
+mcsolve: erik/mcsolve.cpp erik/parameter-args.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.

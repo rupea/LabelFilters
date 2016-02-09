@@ -200,7 +200,7 @@ namespace detail {
     }
 
 #define TMATRIX template<typename Derived> inline
-//#define MATRIX  Eigen::PlainObjectBase< Derived >
+    //#define MATRIX  Eigen::PlainObjectBase< Derived >
 #define MATRIX  Eigen::PlainObjectBase< Derived >
     // Ohoh, but compiler needs help to resolve template types...
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws/*="\n"*/ ){
@@ -394,15 +394,11 @@ namespace detail {
         using namespace std;
         int const verbose = 0;
         PRINTING_HH_DBG(" SPARSE-"<<(isBool?"bool":"float")<<"-output rows "<<x.rows()<<" cols "
-            <<x.cols()<<" isCompressed()="<<x.isCompressed()<<endl);
+                        <<x.cols()<<" isCompressed()="<<x.isCompressed()<<endl);
         typedef float Real;     // we will convert to 'real' for binary i/o (maybe save space)
         typedef uint64_t Idx;
-#define IDX_IO(IDX,TYPE) do{ TYPE idx=static_cast<TYPE>(IDX); io_bin(os,idx); \
-    /*cout<<" idx "<<idx<<endl;*/ \
-}while(0)
-#define REAL_IO(REAL) do{ Real r=static_cast<Real>(REAL); io_bin(os,r); \
-    /*cout<<" oval "<<r<<endl;*/ \
-}while(0)
+#define IDX_IO(IDX,TYPE) do{ TYPE idx=static_cast<TYPE>(IDX); io_bin(os,idx); /*cout<<" idx "<<idx<<endl;*/ }while(0)
+#define REAL_IO(REAL) do{ Real r=static_cast<Real>(REAL); io_bin(os,r); /*cout<<" oval "<<r<<endl;*/ }while(0)
         if( x.isCompressed() ){
             if(verbose){cout<<" TEST COMPRESSED SPARSE BINARY OUTPUT"<<endl; cout.flush();}
             //os<<x.outerSize()<<' '<<x.innerSize(); os.flush();
@@ -487,8 +483,8 @@ namespace detail {
             io_bin(os,rows);
             io_bin(os,cols);
             //int const nData = x.nonZeros();           // not required
-            //os<<' '<<nData; os.flush();       // makes input 'reserve' efficient
-            Idx const nData = x.nonZeros();             // ISSUE XXX differs from valuePtr() treatment of compressed!
+            //os<<' '<<nData; os.flush();               // makes input 'reserve' efficient
+            Idx const nData = x.nonZeros();
             if(verbose) cout<<" r x c "<<x.rows()<<" x "<<x.cols()<<" o x i "<<x.outerSize()<<" x "<<x.innerSize()<<" nData="<<nData<<endl;
             //cout<<" nData="<<nData; cout.flush();
             io_bin(os,nData);
@@ -566,19 +562,19 @@ namespace detail {
 #undef IDX_IO
         return os;
     }
-    // default handles arbitrary values as 'float'
+// default handles arbitrary values as 'float'
     TMATRIX std::ostream& eigen_io_bin( std::ostream& os, MATRIX const& x ){
         return eigen_io_bin_impl( os, x, /*isBool=*/false );
     }
     // override for bool
     template<int Options, typename Index> inline
-    std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x ){
-        return eigen_io_bin_impl( os, x, /*isBool=*/true );
-    }
+        std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x ){
+            return eigen_io_bin_impl( os, x, /*isBool=*/true );
+        }
 
     TMATRIX std::istream& eigen_io_bin_impl( std::istream& is, MATRIX      & x, bool const isBool ){
         using namespace std;
-        int const verbose = 0;
+        int const verbose = 1;
         if(verbose){cout<<" TEST COMPRESSED SPARSE BINARY INPUT"<<endl; cout.flush();}
         //io_bin(is,(void*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
         typedef float Real;     // we will convert to 'real' for binary i/o (maybe save space)
@@ -591,10 +587,11 @@ namespace detail {
         io_bin(is,cols);
         io_bin(is,nData);
         if(verbose) cout<<"\trows "<<rows<<" cols "<<cols<<" nData "<<nData<<endl;
+        if(nData > rows*cols) throw std::runtime_error("nData > rows*cols, illegal sparse matrix");
         x.resize(rows,cols);
         //x.setZero();
         //x.makeCompressed();
-        x.resizeNonZeros( nData );      assert( x.data().size() == nData );
+        x.resizeNonZeros( nData );
         if(verbose){
             cout<<" sparse binary input o x i = "<<rows<<" x "<<cols<<" nData="<<nData<<endl;
             cout<<" outer/inner/data Size() = "<<x.outerSize()<<" "<<x.innerSize()<<" "<<x.data().size()
@@ -664,81 +661,76 @@ namespace detail {
     }
     // override for bool
     template<int Options, typename Index> inline
-    std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index>      & x ){
-        return eigen_io_bin_impl( is, x, /*isBool=*/true );
-    }
+        std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index>      & x ){
+            return eigen_io_bin_impl( is, x, /*isBool=*/true );
+        }
 #undef MATRIX
 #undef TMATRIX
-}
 
-template <typename Block, typename Alloc> inline
-  void save_bitvector(std::ostream& out, const boost::dynamic_bitset<Block, Alloc>& bs)
-{
-  using namespace std;
-  size_t num_bits = bs.size();
-  size_t num_blocks = bs.num_blocks();
-  std::vector<Block> blocks(num_blocks);
-  to_block_range(bs, blocks.begin());  
-  out.write((char*)&num_bits, sizeof(size_t));
-  if (out.fail())
-    {
-      cerr << "Error writing file" << endl;
-    }
-  out.write((char*)&num_blocks, sizeof(size_t));
-  if (out.fail())
-    {
-      cerr << "Error writing file" << endl;
-    }
-  out.write((char*)(&(blocks[0])), num_blocks*sizeof(Block));  
-  if (out.fail())
-    {
-      cerr << "Error writing file" << endl;
-    }
-}
+}//detail::
 
-template <typename Block, typename Alloc> inline
-  int load_bitvector(std::istream& in, boost::dynamic_bitset<Block, Alloc>& bs)
-{
-  using namespace std;
-  size_t num_bits,num_blocks;
-  in.read((char*)&num_bits, sizeof(size_t));
-  if (in.fail())
-    {
-      cerr << "Error reading file" << endl;
-      return -1;
-    }
-  in.read((char*)&num_blocks, sizeof(size_t));
-  if (in.fail())
-    {
-      cerr << "Error reading file" << endl;
-      return -1;
-    }
-  std::vector<Block> blocks(num_blocks);
-  in.read((char*)(&(blocks[0])), num_blocks*sizeof(Block));
-  if (in.fail())
-    {
-      cerr << "Error reading file" << endl;
-      return -1;
-    }
-  bs.resize(num_bits);
-  from_block_range(blocks.begin(), blocks.end(), bs);
-  bs.resize(num_bits);
-  return 0;
-}
-
-    template<typename EigenType> inline
-void print_mat_size(const EigenType& mat)
+    template <typename Block, typename Alloc> inline
+void save_bitvector(std::ostream& out, const boost::dynamic_bitset<Block, Alloc>& bs)
 {
     using namespace std;
-    cout << "(" << mat.rows() << ", " << mat.cols() << ")";
+    size_t num_bits = bs.size();
+    size_t num_blocks = bs.num_blocks();
+    std::vector<Block> blocks(num_blocks);
+    to_block_range(bs, blocks.begin());  
+    out.write((char*)&num_bits, sizeof(size_t));
+    if (out.fail())
+    {
+        cerr << "Error writing file" << endl;
+    }
+    out.write((char*)&num_blocks, sizeof(size_t));
+    if (out.fail())
+    {
+        cerr << "Error writing file" << endl;
+    }
+    out.write((char*)(&(blocks[0])), num_blocks*sizeof(Block));  
+    if (out.fail())
+    {
+        cerr << "Error writing file" << endl;
+    }
 }
-    template<> inline
-void print_mat_size(const Eigen::VectorXd& mat)
+
+    template <typename Block, typename Alloc> inline
+int load_bitvector(std::istream& in, boost::dynamic_bitset<Block, Alloc>& bs)
 {
     using namespace std;
-    cout << "(" << mat.size() << ")";
+    size_t num_bits,num_blocks;
+    in.read((char*)&num_bits, sizeof(size_t));
+    if (in.fail())
+    {
+        cerr << "Error reading file" << endl;
+        return -1;
+    }
+    in.read((char*)&num_blocks, sizeof(size_t));
+    if (in.fail())
+    {
+        cerr << "Error reading file" << endl;
+        return -1;
+    }
+    std::vector<Block> blocks(num_blocks);
+    in.read((char*)(&(blocks[0])), num_blocks*sizeof(Block));
+    if (in.fail())
+    {
+        cerr << "Error reading file" << endl;
+        return -1;
+    }
+    bs.resize(num_bits);
+    from_block_range(blocks.begin(), blocks.end(), bs);
+    bs.resize(num_bits);
+    return 0;
 }
-template< typename DERIVED > inline
+
+    template< typename EigenType > inline
+std::string print_report(EigenType const& x)
+{
+    return std::string();
+}
+
+    template< typename DERIVED > inline
 std::string print_report(const Eigen::SparseMatrixBase<DERIVED>& x)
 {
     std::ostringstream oss;
@@ -746,5 +738,12 @@ std::string print_report(const Eigen::SparseMatrixBase<DERIVED>& x)
     oss << "x:non-zeros: " << nnz << ", avg. nnz/row: " << nnz / x.rows();
     return oss.str();
 }
+
+template<typename EigenType> inline
+PrettyDimensions prettyDims( EigenType const& x )
+{
+    return PrettyDimensions{{static_cast<std::size_t>(x.rows()),static_cast<std::size_t>(x.cols()),0U}, 2U};
+}
+
 #undef PRINTING_HH_DBG
 #endif // PRINTING_HH

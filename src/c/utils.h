@@ -9,7 +9,7 @@ using Eigen::VectorXd;
 
 
 // *********************************
-// functions and structures for sorting and keeping indeces
+// functions and structures for sorting and keeping indices
 
 template<typename IntType>
 void sort_index( VectorXd const& m, std::vector<IntType>& cranks)

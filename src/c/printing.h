@@ -103,13 +103,27 @@ namespace detail {
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws="\n" );
     TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x );
     template<int Options, typename Index> // bool override:
-    std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index> const& x );
-    template<int Options, typename Index> // bool override:
     std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x );
+    template<int Options, typename Index> // bool override:
+    std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index>      & x );
 #undef MATRIX
 #undef TMATRIX
+    extern std::array<char,4> magicSparseMbBin; ///< "SMbb"
+    extern std::array<char,4> magicSparseMbTxt; ///< "SMbt"
+    /** Compressed SparseMb output, with magic header bytes and only-true values.
+     * \throw if x has any false values or if x is uncompressed. */
+    std::ostream& eigen_io_txtbool( std::ostream& os, SparseMb const& x );
+    /** read a SparseMb matrix of only-true values into compressed \c x.
+     * \throw if bad magic header bytes. */
+    std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x );
+    /** Compressed SparseMb output, with magic header bytes and only-true values.
+     * \throw if x has any false values or if x is uncompressed. */
+    std::ostream& eigen_io_binbool( std::ostream& os, SparseMb const& x );
+    /** read a SparseMb matrix of only-true values into compressed \c x.
+     * \throw if bad magic header bytes. */
+    std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x );
     //@}
-}
+}//detail::
 
 // from EigenIO.h -- actually this is generic, not related to Eigen
 // TODO portable types
@@ -119,18 +133,32 @@ template <typename Block, typename Alloc>
 template <typename Block, typename Alloc>
   int load_bitvector(std::istream& in, boost::dynamic_bitset<Block, Alloc>& bs);
 
+/// \name misc pretty printing
+//@{
 /** Prints the progress bar */
 void print_progress(std::string s, int t, int max_t);
 
-/** "(rows,cols)" -- ok for Vector or Matrix EigenType */
-template<typename EigenType> inline void print_mat_size(const EigenType& mat);
+/** alt matrix dimension printer with an operator<<, as [MxN] */
+struct PrettyDimensions {
+    friend std::ostream& operator<<(std::ostream& os, PrettyDimensions const& pd);
+    static uint_least8_t const maxDim=3U;
+    size_t dims[maxDim];
+    uint_least8_t dim;
+};
+
+template<typename EigenType> PrettyDimensions prettyDims( EigenType const& x );
+
+std::ostream& operator<<(std::ostream& os, PrettyDimensions const& pd);
 
 template< typename DERIVED >
 std::string print_report(Eigen::SparseMatrixBase<DERIVED> const& x);     ///< nnz for sparse matrix
 
-std::string print_report(const DenseM& x);      ///< empty string
+template< typename EigenType > inline
+std::string print_report(EigenType const& x);      ///< empty string
 
 void print_report(const int projection_dim, const int batch_size,
 		  const int noClasses, const double C1, const double C2, const double lambda, const int w_size,
 		  std::string x_report);
+//@}
+
 #endif
