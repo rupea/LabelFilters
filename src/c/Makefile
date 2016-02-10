@@ -232,6 +232,7 @@ LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
+# XXX predict.cpp and evaluate.cpp MIGHT be removable?
 
 libmcfilter.a: $(patsubst %.cpp,%.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
