@@ -43,10 +43,11 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
  *   projection Filter bitmaps into a returned class bitmap
  *
  * \return vector of possible-class bitmaps, one for each row-wise example in \c x.
- */
-/** transform x={examples} + MCsoln{w,l,u} into an ActiveDataSet.
+ *
+ * transform x={examples} + MCsoln{w,l,u} into an ActiveDataSet.
  * - ActiveDataSet is a vector-of-ptr-to-bitset.
- * - one bitset is produced per projection dimension */
+ * - one bitset is produced per projection dimension
+ */
 template <typename Eigentype>
 ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
                           const DenseColM& wmat, const DenseColM& lmat, const DenseColM& umat,
@@ -68,7 +69,7 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
  */
 template <typename Eigentype>
 void predict( PredictionSet* predictions,
-              Eigentype const& x, DenseColMf const& w, 
+              Eigentype const& x, DenseColMf const& w,
               ActiveDataSet const* active, size_t& nact,
               bool verbose             = false,
               predtype keep_thresh     = boost::numeric::bounds<predtype>::lowest(),

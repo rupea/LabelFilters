@@ -6,7 +6,7 @@
 #include <vector>
 
 /** Filter with fast random-access by individual projection values.
- * - Best used when 
+ * - Best used when
  *   - need to evaluate projections serially in random order, or
  *   - number of calls to \c Filter::filter(double) is >> number of classes.
  */
@@ -23,7 +23,7 @@ public:
      * \return bitset pointer \b unusable after \c Filter destructor runs.
      */
     boost::dynamic_bitset<> const* filter (double xproj) const;
-private:  
+private:
     void init_map(std::vector<int>& ranks); ///< construction helper
 
     Eigen::VectorXd _sortedLU; ///< sort the concatenation of all (lower,upper) values

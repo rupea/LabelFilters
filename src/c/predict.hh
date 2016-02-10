@@ -20,7 +20,7 @@ ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
 {
   #ifdef PROFILE
   ProfilerStart("projected_getactive.profile");
-  #endif  
+  #endif
   DenseM const projections = x*wmat;
   ActiveDataSet* active;
 
@@ -29,7 +29,7 @@ ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
 
   #ifdef PROFILE
   ProfilerStop();
-  #endif  
+  #endif
   return active;
 }
 
@@ -46,27 +46,27 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
   size_t n = x.rows();
   size_t noClasses = w.cols();
   nact = 0;
-  PredictionSet* predictions = new PredictionSet(n); // preallocates n elements 
+  PredictionSet* predictions = new PredictionSet(n); // preallocates n elements
   if (verbose)
     {
       cout << "Predicting " << n << "    " << noClasses << endl;
     }
   bool prune = !(keep_thresh == boost::numeric::bounds<predtype>::lowest() && keep_size == boost::numeric::bounds<size_t>::highest());
-  
+
   size_t i;
   if (active == NULL)
     {
       #ifdef PROFILE
       ProfilerStart("full_predict.profile");
-      #endif  
+      #endif
       VectorXd outs(noClasses);
 #pragma omp parallel for firstprivate(outs) default(shared)
       for (i = 0; i < n; i++)
-	{	  	  
-	  //outs = x.row(i)*(w.cast<double>());	  
+	{	  	
+	  //outs = x.row(i)*(w.cast<double>());	
 	  DotProductInnerVector(outs,w,x,i);
 	  // should preallocate to be more efficient
-	  PredVec* pv = predictions->NewPredVecAt(i,noClasses); 
+	  PredVec* pv = predictions->NewPredVecAt(i,noClasses);
 	  for (size_t c = 0; c < noClasses; c++)
 	    {
 	      pv->add_pred(static_cast<predtype> (outs.coeff(c)),c+start_class);
@@ -79,27 +79,27 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
       nact = n*noClasses;
       #ifdef PROFILE
       ProfilerStop();
-      #endif  
+      #endif
     }
   else
     {
       #ifdef PROFILE
       ProfilerStart("projected_predict.profile");
-      #endif  
+      #endif
       assert(active->size() == n);
       if(n>0)
 	{
 	  assert((*active)[0]->size() == noClasses);
 	}
       size_t totalactive = 0;
-#pragma omp parallel for default(shared) reduction(+:totalactive) 
-      for (i = 0; i < n; i++)      
+#pragma omp parallel for default(shared) reduction(+:totalactive)
+      for (i = 0; i < n; i++)
 	{
           boost::dynamic_bitset<>* act = (*active)[i];
 	  size_t nactive = act->count();
 	  totalactive += nactive;
 	  PredVec* pv = predictions->NewPredVecAt(i,nactive);
-	  size_t c = act->find_first();	  
+	  size_t c = act->find_first();	
 	  while (c < noClasses)
 	    {
 	      // could eliminate the multiplication for only one active class
@@ -110,13 +110,13 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 	  if (prune)
 	    {
 	      pv->prune(keep_size, keep_thresh);
-	    }	  
+	    }	
 	}
       nact = totalactive;
-      
+
       #ifdef PROFILE
       ProfilerStop();
-      #endif  
+      #endif
     }
   return predictions;
 }
@@ -125,7 +125,7 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 /** Beware: \c w here is a linear xform that gets pre-applied to x. */
 template <typename Eigentype> inline
 void predict( PredictionSet* predictions,
-              Eigentype const& x, DenseColMf const& w, 
+              Eigentype const& x, DenseColMf const& w,
               ActiveDataSet const* active, size_t& nact,
               bool verbose             /*= false*/,
               predtype keep_thresh     /*= boost::numeric::bounds<predtype>::lowest()*/,
@@ -141,25 +141,25 @@ void predict( PredictionSet* predictions,
       cout << "Predicting " << n << "    " << noClasses << endl;
     }
   bool prune = !(keep_thresh == boost::numeric::bounds<predtype>::lowest() && keep_size == boost::numeric::bounds<size_t>::highest());
-  
+
   size_t i;
   if (active == NULL)
     {
       #ifdef PROFILE
       ProfilerStart("full_predict.profile");
-      #endif  
+      #endif
 
       Eigen::RowVectorXd outs(noClasses);
 #pragma omp parallel for firstprivate(outs) default(shared)
       for (i = 0; i < n; i++)
-	{	  	  
-	  //outs = x.row(i)*(w.cast<double>());	  
+	{	  	
+	  //outs = x.row(i)*(w.cast<double>());	
 	  DotProductInnerVector(outs,w,x,i);
-	  // should preallocate to be more efficient	  
+	  // should preallocate to be more efficient	
 	  PredVec* pv;
 	  if (start_class == 0) // assumes chunk 0 is always the first
 	    {
-	      pv = predictions->NewPredVecAt(i,noClasses); 
+	      pv = predictions->NewPredVecAt(i,noClasses);
 	    }
 	  else
 	    {
@@ -178,25 +178,25 @@ void predict( PredictionSet* predictions,
       nact = n*noClasses;
       #ifdef PROFILE
       ProfilerStop();
-      #endif  
+      #endif
     }
   else
     {
       #ifdef PROFILE
       ProfilerStart("projected_predict.profile");
-      #endif  
+      #endif
       assert(active->size() == n);
       if(n>0)
 	{
 	  assert((*active)[0]->size() == noClasses);
 	}
       size_t totalactive = 0;
-#pragma omp parallel for default(shared) reduction(+:totalactive) 
-      for (i = 0; i < n; i++)      
+#pragma omp parallel for default(shared) reduction(+:totalactive)
+      for (i = 0; i < n; i++)
 	{
           boost::dynamic_bitset<>* act = (*active)[i];
 	  size_t nactive = act->count();
-	  totalactive += nactive;	  
+	  totalactive += nactive;	
 	  PredVec* pv;
 	  if (start_class == 0) // assumes chunk 0 is always the first
 	    {
@@ -207,7 +207,7 @@ void predict( PredictionSet* predictions,
 	      pv = predictions->GetPredVec(i);
 	      pv->reserve_extra(nactive);
 	    }
-	  size_t c = act->find_first();	  
+	  size_t c = act->find_first();	
 	  while (c < noClasses)
 	    {
 	      // predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
@@ -218,13 +218,13 @@ void predict( PredictionSet* predictions,
 	  if (prune)
 	    {
 	      pv->prune(keep_size, keep_thresh);
-	    }	  
+	    }	
 	}
       nact = totalactive;
-      
+
       #ifdef PROFILE
       ProfilerStop();
-      #endif  
+      #endif
     }
 }
 

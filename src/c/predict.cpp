@@ -25,16 +25,15 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
         VectorXd proj = projections.col(i);
         VectorXd l = lmat.col(i);
         VectorXd u = umat.col(i);
-        if (verbose) 
+        if (verbose)
         {
             cout << "Init filter" << endl;
         }
-        Filter f(l,u);      
+        Filter f(l,u);
         if (verbose)
         {
-            cout << "Update filter, projection " << i << endl; 
+            cout << "Update filter, projection " << i << endl;
         }
-        ActiveDataSet::iterator it;
         size_t count = 0;
 #if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:count)

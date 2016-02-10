@@ -126,7 +126,7 @@ public:
     DenseM weights_avg;                 ///< [ d x nProj ] time-avg'd projection matrix
     DenseM lower_bounds_avg;            ///< [ nClass x nProj ]
     DenseM upper_bounds_avg;            ///< [ nClass x nProj ]
-    DenseM medians;                     ///< [ nClass x nProj ] (set during 'solve' post-processing)
+    DenseM medians;                     ///< [ nClass x nProj ] [opt] set during 'solve' post-processing
 private:
     mutable std::array<char,4> magicEof1;                  ///< MCs{c|z}
 public:

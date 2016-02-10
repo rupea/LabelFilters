@@ -44,7 +44,7 @@ private: // utility / unused
     static bool cmp (Prediction const& a, Prediction const& b) {return a.out > b.out;};
     bool is_sorted() const {return _sorted;};
 private: // data
-    bool _sorted; 
+    bool _sorted;
     size_t _keep_size;
     predtype _keep_thresh;
 private:
@@ -66,7 +66,7 @@ public:
     PredVec* NewPredVec(size_t n = 0);
 
     /** generates a new Prediction vector and puts it at position i */
-    PredVec* NewPredVecAt(size_t i, size_t n=0); 
+    PredVec* NewPredVecAt(size_t i, size_t n=0);
 
     /** generates a new Prediction vector and puts it at position i.
      * does not delete previous vector at position i and does not
@@ -81,23 +81,23 @@ public:
     size_t size() const{return _preddata->size();};
 
     /// prune all the Prediction vectors.
-    /// keep only predictions higher than keep_thresh, but at least k predictions 
+    /// keep only predictions higher than keep_thresh, but at least k predictions
     void prune(size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
     double PrecK(const SparseMb& y, int k);
     double TopK(const SparseMb& y, int k);
     void TopMetrics(double& Prec1, double& Top1,
-                    double& Prec5, double& Top5, 
+                    double& Prec5, double& Top5,
                     double& Prec10, double& Top10,
-                    const SparseMb& y);    
+                    const SparseMb& y);
     double MicroF1(const SparseMb& y, double thresh, size_t k);
     double MacroF1(const SparseMb& y, double thresh, size_t k);
     double MacroF1_2(const SparseMb& y, double thresh, size_t k);
     double MacroRecall(const SparseMb& y, double thresh, size_t k);
-    void ThreshMetrics(double& MicroF1, double& MacroF1, 
-                       double& MacroF1_2, 
+    void ThreshMetrics(double& MicroF1, double& MacroF1,
+                       double& MacroF1_2,
                        double& MicroPrecision, double& MacroPrecision,
-                       double& MicroRecall, double& MacroRecall, 
-                       const SparseMb& y, double thresh, size_t k);    
+                       double& MicroRecall, double& MacroRecall,
+                       const SparseMb& y, double thresh, size_t k);
 
 
     size_t npreds() const;
@@ -126,7 +126,7 @@ inline PredVec::~PredVec()
 {}
 
 // sort predictions in order of the output
-inline void PredVec::sort() 
+inline void PredVec::sort()
 {
     if (!_sorted){
         std::sort( begin(), end(), cmp );
@@ -143,7 +143,7 @@ inline void PredVec::add_pred(predtype out, int cls)
   /*   }     */
   Base::push_back( Prediction{out,cls} );
   _sorted=false;
-}  
+}
 
 inline void PredVec::prune (size_t k, predtype keep_thresh)
 {
@@ -189,7 +189,7 @@ inline PredictionSet::PredictionSet()
 
 inline PredictionSet::PredictionSet(size_t n)
 {
-  _preddata = new std::vector<PredVec*>(n);  
+  _preddata = new std::vector<PredVec*>(n);
 }
 
 template <typename EigenType>
@@ -219,7 +219,7 @@ inline PredictionSet::~PredictionSet()
 
 // appends new Prediction vector
 inline PredVec* PredictionSet::NewPredVec(size_t n)
-{ 
+{
   PredVec* newpredvec = new PredVec(n);
   _preddata->push_back(newpredvec);
   return newpredvec;
@@ -231,7 +231,7 @@ inline PredVec* PredictionSet::NewPredVecAt(size_t i, size_t n)
   if ( _preddata->at(i) != NULL)
     {
       delete (*_preddata)[i];
-    }  
+    }
   PredVec* newpredvec = new PredVec(n);
   (*_preddata)[i]=newpredvec;
   return newpredvec;
@@ -254,7 +254,7 @@ inline PredVec* PredictionSet::GetPredVec(size_t i) const
 }
 
 
-inline void PredictionSet::sort() 
+inline void PredictionSet::sort()
 {
   for (std::vector<PredVec*>::iterator it = _preddata->begin(); it != _preddata->end(); it++)
     {
@@ -262,8 +262,8 @@ inline void PredictionSet::sort()
     }
 }
 
-inline void PredictionSet::prune(size_t k, predtype keep_thresh) 
-{    
+inline void PredictionSet::prune(size_t k, predtype keep_thresh)
+{
   for (std::vector<PredVec*>::iterator it = _preddata->begin(); it != _preddata->end(); it++)
     {
       (*it)->prune(k, keep_thresh);

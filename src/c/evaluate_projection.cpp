@@ -382,7 +382,7 @@ int main(int argc, char * argv[])
 	    }
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_vile"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
 	    }
 	}
     }
