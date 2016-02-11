@@ -25,9 +25,12 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
         VectorXd proj = projections.col(i);
         VectorXd l = lmat.col(i);
         VectorXd u = umat.col(i);
-        if (verbose)
+        if (0 && verbose) // debug only
         {
-            cout << "Init filter" << endl;
+            cout<<"Init filter col i="<<i<<endl;
+            cout<<"lmat: "<<lmat.transpose()<<endl;
+            cout<<"umat: "<<umat.transpose()<<endl;
+            cout<<"proj: "<<proj.transpose()<<endl;
         }
         Filter f(l,u);
         if (verbose)

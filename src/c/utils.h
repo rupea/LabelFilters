@@ -5,6 +5,10 @@
 #include <exception>
 #include <iostream>
 
+//#include <sstream>
+//#include <iomanip>
+#define OUTWIDE( OSTREAM, WIDTH, STUFF ) do{ std::ostringstream oss; oss<<STUFF; OSTREAM<<setw(WIDTH)<<oss.str(); }while(0)
+
 using Eigen::VectorXd;
 
 

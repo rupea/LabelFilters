@@ -317,6 +317,16 @@ mcsolve: erik/mcsolve.cpp erik/parameter-args.cpp libmcfilter-dbg.a $(BOOSTDIR)/
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcproj: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+mcproj.log: mcgenx mcproj
+	./mcgenx
+	{ for cmd in "./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \
+		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
+		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-S.bin" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.

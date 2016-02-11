@@ -76,6 +76,7 @@ public:
 public:
     void read( std::istream& is );
     void write( std::ostream& os, enum Fmt fmt=BINARY, enum Len len=SHORT ) const;
+    void pretty( std::ostream& os ) const; ///< short'n'sweet dump of main content
 
 private: // after the 4-byte magic header we specialize I/O routines
     void read_ascii( std::istream& is );

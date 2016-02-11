@@ -2,6 +2,9 @@
 #define MCPREDICT_HH
 #include "mcpredict.h"
 #include "typedefs.h"
+#include "printing.hh" //prettyDims
+#include <iostream>
+#include <iomanip>
 //#include <boost/dynamic_bitset.hpp>
 
 /** non-templated workhorse.
@@ -25,11 +28,24 @@ void projectionsToBitsets( DenseM const& projections,
 template<typename EigenType> inline
 std::vector<boost::dynamic_bitset<>> project( EigenType const& x, MCsoln const& s )
 {
-    assert( x.cols() == s.weights_avg().rows() );
-    DenseM const projections = (x * s.weights_avg); //.transpose();
+    using namespace std;
+    assert( x.cols() == s.weights_avg.rows() );
+    DenseM const projections = (x * s.weights_avg).transpose();
+    cout<<"project(x,MCsoln): x"<<prettyDims(x)<<", w"<<prettyDims(s.weights_avg)<<", projections"<<prettyDims(projections)<<endl;
+    if(0){
+        for(uint32_t i=0; i<x.rows(); ++i){
+            {
+                ostringstream oss;
+                oss<<"i="<<setw(4)<<i<<" x "<<x.row(i);
+                cout<<setw(40)<<oss.str();
+            }
+            cout<<" proj "<<projections.col(i).transpose()<<endl;
+        }
+    }
     // projections.rows() [ nExamples x nProj ];
     std::vector<boost::dynamic_bitset<>> active;
     projectionsToBitsets( projections, s, active );
+    return active;
 }
 
 /** xform {l,u} of a soln into permutations for fast class [lookup and] \b scoring. */

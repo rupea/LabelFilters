@@ -11,6 +11,7 @@ void projectionsToBitsets( DenseM const& projections,
                            std::vector<boost::dynamic_bitset<>>& active )
 {
     int const verbose=0;
+    if(verbose){ cout<<"projectionsToBitsets... MCsoln is:"<<endl; s.pretty(cout); }
     size_t const nExamples = projections.cols();        // TRANSPOSE of x*w, for efficiency
     size_t const nProj = projections.rows();
     size_t const nClass = s.lower_bounds_avg.rows();
@@ -39,9 +40,10 @@ void projectionsToBitsets( DenseM const& projections,
     }
     assert( active.size() == nExamples );
 #if 1 // slow!
+    assert( active.size() == nExamples );
     for( uint32_t e=0U; e<nExamples; ++e ){
-        assert( active[e].size() == nExamples );
-        assert( active[e].count() == nExamples );
+        assert( active[e].size() == nClass );
+        assert( active[e].count() == nClass );
     }
 #endif
 
@@ -49,20 +51,23 @@ void projectionsToBitsets( DenseM const& projections,
     VectorXd l;
     VectorXd u;
     // TODO if ! nProj >> nExamples, provide a faster impl ???
-    for (int i = 0; i < nProj; i++)
-    {
-        //proj = projections.row(i);
-        l = s.lower_bounds_avg.col(i);
-        u = s.upper_bounds_avg.col(i);
+    for(size_t p=0U; p<nProj; ++p){
+        //proj = projections.row(p);
+        l = s.lower_bounds_avg.col(p);
+        u = s.upper_bounds_avg.col(p);
         if (verbose) cout << "Init filter" << endl;
         Filter f( l, u );
-        if (verbose) cout << "Update filter, projection " << i << endl;
+        if (verbose) cout << "Update filter, projection " << p << endl;
 #if MCTHREADS
-#pragma omp parallel for shared(f,projections,active,i)
+#pragma omp parallel for shared(f,projections,active,p)
 #endif
-        for(size_t j=0; j < nExamples; ++j)
-        {
-            active[j] &= *(f.filter(projections.coeff(i,j)));
+        for(size_t e=0U; e<nExamples; ++e){
+            boost::dynamic_bitset<> const* dbitset = f.filter(projections.coeff(p,e));
+            active[e] &= *dbitset;
+            if(verbose && e==0){
+                cout<<" projection value "<<projections.coeff(p,e)<<" Filter idx "<<f.idx(projections.coeff(p,e))<<endl;
+                cout<<"example 0: proj "<<p<<" dbitset="<<*dbitset<<" active="<<active[e]<<endl;
+            }
         }
     }
 }

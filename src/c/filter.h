@@ -9,12 +9,24 @@
  * - Best used when
  *   - need to evaluate projections serially in random order, or
  *   - number of calls to \c Filter::filter(double) is >> number of classes.
+ * - \b Margin
+ *   - treatment of projection values <em>exactly equal</em> to a boundary
+ *     is not quite right:
+ *     - I believe with operator< for lower_bound it returns the bitmap
+ *       for projection value \em p if it is range (lower,upper].
+ *   - This means that if you \c Filter using a \b zero-margin projection
+ *     of training data (i.e. exact lower and upper bounds over all training
+ *     data), data points that fall \em precisely on an {l,u}
+ *     class boundary may \b incorrectly be rejected.
  */
 class Filter
 {
 public:
+    /** 0=quiet    1=warnings [suggested]    2=debug */
+    static int const verbose;
+
     /** For a specific projection dimension, create lookup table of bitmaps for possible classes.
-     * - \c l and \c u are lower and upper bounds for each class. */
+     * - \c l and \c u are lower and upper bounds for each class [nClass]. */
     Filter(const Eigen::VectorXd& l, const Eigen::VectorXd& u);
     ~Filter();
 
@@ -23,6 +35,17 @@ public:
      * \return bitset pointer \b unusable after \c Filter destructor runs.
      */
     boost::dynamic_bitset<> const* filter (double xproj) const;
+
+    /** debug... */
+    ssize_t idx(double xproj) const{
+        ssize_t ret = std::distance( _sortedLU.data(),
+                                    std::lower_bound(_sortedLU.data(),
+                                                     _sortedLU.data()+_sortedLU.size(),
+                                                     xproj
+                                                     //,[](double const i, double const j){return i<=j;}
+                                                     ));
+        return ret;
+    }
 private:
     void init_map(std::vector<int>& ranks); ///< construction helper
 
@@ -32,6 +55,9 @@ private:
      * - one bit in the class bitmap changes.
      * - So save these easily-constructed bitmaps. */
     std::vector<boost::dynamic_bitset<> > _map;
+#ifndef NDEBUG
+    mutable uint64_t nCalls;
+#endif
 };
 
 /** \detail
@@ -44,6 +70,9 @@ private:
  */
 inline const boost::dynamic_bitset<>* Filter::filter(double xproj) const
 {
+#ifndef NDEBUG
+    ++nCalls;
+#endif
     return &_map[std::distance( _sortedLU.data(),
                                 std::lower_bound(_sortedLU.data(),
                                                  _sortedLU.data()+_sortedLU.size(),

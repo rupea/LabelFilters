@@ -159,6 +159,18 @@ void MCsoln::read( std::istream& is ){
     else if( MAGIC_EQU(magicHdr,magicBin) ) read_binary( is );
     else throw std::runtime_error("ERROR: bad magicHdr reading MCsoln");
 }
+void MCsoln::pretty( std::ostream& os ) const {
+    os<<"--------- d="<<d<<" nProj="<<nProj<<" nClass="<<nClass<<" fname='"<<fname<<"'"<<endl;
+    os<<"--------- MCsolver parameters:\n"<<parms; //<<endl;
+    os<<"--------- last iter t="<<t<<" C1="<<C1<<" C2="<<C2<<" lambda="<<lambda<<" eta_t="<<eta_t<<endl;
+    os<<"--------- weights_avg"<<prettyDims(weights_avg)
+        <<" lower_bounds_avg"<<prettyDims(lower_bounds_avg)
+        <<" upper_bounds"<<prettyDims(upper_bounds_avg)<<endl;
+    os<<"--------- weights_avg:\n"<<weights_avg<<endl;
+    os<<"--------- lower_bounds_avg:\n"<<lower_bounds_avg<<endl;
+    os<<"--------- upper_bounds_avg:\n"<<upper_bounds_avg<<endl;
+    //os<<"--------- medians:\n"<<medians<<endl; // NOT YET THERE
+}
 
 // private post-magicHdr I/O routines ...
 #define CHK_MAT_DIM(MAT,R,C,ERRMSG) do { \

@@ -131,17 +131,7 @@ int main(int argc,char**argv){
         }
     }
     if(pretty){
-        // kinda pretty-print
-        cerr<<"--------- d="<<soln.d<<" nProj="<<soln.nProj<<" nClass="<<soln.nClass<<" fname='"<<soln.fname<<"'"<<endl;
-        cerr<<"--------- MCsolver parameters:\n"<<soln.parms; //<<endl;
-        cerr<<"--------- last iter t="<<soln.t<<" C1="<<soln.C1<<" C2="<<soln.C2<<" lambda="<<soln.lambda<<" eta_t="<<soln.eta_t<<endl;
-        cerr<<"--------- weights_avg"<<prettyDims(soln.weights_avg)
-            <<" lower_bounds_avg"<<prettyDims(soln.lower_bounds_avg)
-            <<" upper_bounds"<<prettyDims(soln.upper_bounds_avg)<<endl;
-        cerr<<"--------- weights_avg:\n"<<soln.weights_avg<<endl;
-        cerr<<"--------- lower_bounds_avg:\n"<<soln.lower_bounds_avg<<endl;
-        cerr<<"--------- upper_bounds_avg:\n"<<soln.upper_bounds_avg<<endl;
-        //cerr<<"--------- medians:\n"<<soln.medians<<endl; // NOT YET THERE
+        soln.pretty(cerr); // kinda pretty-print
     }
     if( ofname.size() ){
         ofstream ofs;

@@ -6,7 +6,8 @@
 #include "find_w.hh"
 //#include "parameter-args.h"
 #include "normalize.h"
-#include "predict.hh"
+#include "predict.hh"           // for testing
+#include "mcpredict.hh"
 
 #include <boost/program_options.hpp>
 
@@ -126,15 +127,22 @@ int main(int argc, char**argv){
         try{
             xfs.open(xFile);
             if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+            // Note: after read rows,cols, COULD have alternate reader that checks for exactly correct file size
             ::detail::eigen_io_bin(xfs, xDense);
-            xfs.close();
             if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
             assert( xDense.cols() > 0U );
+            char c;
+            xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
+            if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
+            xfs.close();
             denseOk=true;
         }catch(po::error& e){
             cerr<<"Invalid argument: "<<e.what()<<endl;
+            xfs.close();
             throw;
-        }catch(std::exception const& what){
+        }catch(std::exception const& e){
+            cerr<<" xFile as DenseM failed: "<<e.what()<<endl;
+            xDense.resize(0,0); //denseOk=false;
             cerr<<"Retrying xFile as SparseM..."<<endl;
             try{
                 xfs.close();
@@ -195,24 +203,60 @@ int main(int argc, char**argv){
             normalize_col(xDense);
 #endif
         }
-        cout<<"xDense:\n"<<xDense<<endl;
-        cout<<"y:\n"<<y<<endl;
+        cout<<"xDense"<<prettyDims(xDense)<<":\n"<<xDense<<endl;
+        cout<<"y"<<prettyDims(y)<<":\n"<<y<<endl;
         assert( !yOk || xDense.rows() == y.rows() );
-        // Basic operation
-        ActiveDataSet* ads = getactive( no_active, xDense,
-                                        soln.weights_avg, soln.lower_bounds_avg, soln.upper_bounds_avg,
-                                        /*verbose=*/true );
-        assert( ads != nullptr );
-        // ? y should be fully optional
-        //PredictionSet* pds = predict( xDense, y, ads, no_active, /*verbose=*/true /*...*/ );
-        //
-        //  evaluate_projections calculates much more...
-        //    it seems to give a float weight to each assignment as well !
-        //
-        //evaluate_projections( xDense,y,soln ); // ???
-        //
+        if(1){ // see that one of the low-level routines runs...
+            // Basic operation
+            ActiveDataSet* ads = getactive( no_active, xDense,
+                                            soln.weights_avg, soln.lower_bounds_avg, soln.upper_bounds_avg,
+                                            /*verbose=*/true );
+            assert( ads != nullptr );
+            // ? y should be fully optional
+            //PredictionSet* pds = predict( xDense, y, ads, no_active, /*verbose=*/true /*...*/ );
+            //
+            //  evaluate_projections calculates much more...
+            //    it seems to give a float weight to each assignment as well !
+            //
+            //evaluate_projections( xDense,y,soln ); // ???
+            //
+            cout<<"Good: got back from original 'getactive' call"<<endl;
+        }
+        if(1){ // new API: mcpredict.h
+            vector<boost::dynamic_bitset<>> filt = project( xDense, soln );
+            if(1) for(uint32_t i=0U; i<filt.size(); ++i){
+                auto const& fi = filt[i];
+                cout<<" x.row("<<setw(4)<<i<<")=";
+                OUTWIDE(cout,40,xDense.row(i));
+                cout<<"   classes: ";
+                for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+                cout<<endl;
+            }
+            if(0) for(uint32_t i=0U; i<filt.size(); ++i){
+                auto const& fi = filt[i];
+                cout<<setw(5)<<i<<" "<<fi<<endl; // ** reverse ** order of classes (msb-first)
+            }
+        }
+                
     }else if( sparseOk ){
 #if 1
+#if 1 // same as dense ???
+        vector<boost::dynamic_bitset<>> filt = project( xSparse, soln );
+        if(1) for(uint32_t i=0U; i<filt.size(); ++i){
+            auto const& fi = filt[i];
+            cout<<" x.row("<<setw(4)<<i<<")=";
+            //OUTWIDE(cout,40,xSparse.row(i)); // Eigen bug: unwanted CR (dense row output OK)
+            {
+                ostringstream oss;
+                oss<<xSparse.row(i);
+                string s = oss.str();
+                cout<<setw(40)<<s.substr(0,s.size()-1);
+            }
+            cout<<"   classes: ";
+            for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+            cout<<endl;
+        }
+#endif
         cerr<<" sparse mcproj TBD"<<endl;
         exit(0);
 #else
