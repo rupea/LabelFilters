@@ -322,6 +322,7 @@ mcproj.log: mcgenx mcproj
 	{ for cmd in "./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \
 		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
 		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-S.bin" \
+		"./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin" \
 		; do \
 		echo ""; \
 		echo "=== run : $$cmd"; \

@@ -1996,6 +1996,14 @@ int main(int argc, char** argv)
     }
     // 10c. generate a usable MCfilter ".soln" file with JUST weights of the 'ideal' solution
     //     --> mcgen-a3-mlc-txt.soln  and mcgen-a3-mlc-bin.soln
+    //
+    //     NOTE: the mlc .soln, for this ymap, is NOT perfectly separable.
+    //     In fact,
+    //          ./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin
+    //     generates 4 possible classes for each example,
+    //     instead of the 2 classes in ymap
+    //
+    //     It may be possible to perfectly separate with 4 projecting lines ??? 
     {
 #if ! USE_LIBMCFILTER
         cout<<" Not linked with libmcfilter, NO .soln file output"<<endl;
