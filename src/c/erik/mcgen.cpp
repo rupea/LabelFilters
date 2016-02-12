@@ -1294,6 +1294,7 @@ int main(int argc, char** argv)
         assert( p.embed <= p.dim );
         assert( p.embed >= p.axes );
         assert( abase[0].size() == p.dim );
+        // NOTE: basic need is random [ axes x embed ] submatrix of abase[axes x dim]
         if( p.embed >= p.dim ){ 
             for(uint32_t u=0U; u<=p.axes; ++u){ // for each unit-vector, replace with random dirn
                 double dotmax=0.0;
