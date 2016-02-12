@@ -18,6 +18,10 @@ string xFile;           ///< x data file name (io via ???)
 string yFile;           ///< y data file name (io via eigen_io_binbool)
 string solnFile;        ///< solution file basename
 string outFile;         ///< solution file basename
+bool outBinary;         ///< outFile format
+bool outText;           ///< outFile format
+bool outShort;          ///< outFile format
+bool outLong;           ///< outFile format
 bool xnorm=false;       ///< normalize x dims across examples to mean and stdev of 1.0
 
 void helpUsage( std::ostream& os ){
@@ -41,6 +45,10 @@ void init( po::options_description & desc ){
         ("yfile,y", value<string>()->required(), "y data (slc/mlc SparseMb)")
         ("solnfile,s", value<string>()->default_value(string("")), "solnfile[.soln] starting solver state")
         ("output,o", value<string>()->default_value(string("mc")), "output[.soln] file base name")
+        (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(true),"B|T output BINARY")
+        (",T", value<bool>(&outText)->implicit_value(true)->default_value(false),"B|T output TEXT")
+        (",S", value<bool>(&outShort)->implicit_value(true)->default_value(true),"S|L output SHORT")
+        (",L", value<bool>(&outLong)->implicit_value(true)->default_value(false),"S|L output LONG")
         ("threads,t", value<uint32_t>()->default_value(1U), "threads")
         ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)")
         ;
@@ -80,7 +88,7 @@ void argsParse( int argc, char**argv ){
         po::options_description descMcsolve("mcsolve options");
         init( descMcsolve );                        // create a description of the options
         po::options_description descParms("solver args");
-        opt::mcParameterDesc( descParms );          // add the param_struct options
+        opt::mcParameterDesc( descParms, parms );   // add the param_struct options
         descAll.add(descMcsolve).add(descParms);
 
         po::variables_map vm;
@@ -120,6 +128,13 @@ void argsParse( int argc, char**argv ){
         if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
         if( outFile .rfind(".soln") != outFile .size() - 5U ) outFile .append(".soln");
 
+        if( outBinary == outText ) throw std::runtime_error(" Only one of B|T, please");
+        if( outShort == outLong ) throw std::runtime_error(" Only one of S|L, please");
+
+        // ISSUE: --solnfile should set INITIAL parms, and commandline
+        //        should OVERRIDE (not overwrite) those.
+        // Currently 'extract' set ALL parameters to "default or commandline"
+        // Need another function to "modify" according to supplied parameters XXX
         cerr<<"opt::extract..."<<endl;
         opt::extract(vm,parms);         // retrieve McSolver parameters
     }
@@ -127,21 +142,37 @@ void argsParse( int argc, char**argv ){
     {
         cerr<<"Invalid argument: "<<e.what()<<endl;
         throw;
-    }
-#if 1
-    catch(...)
-    {
+    }catch(std::exception const& e){
+        cerr<<"Error: "<<e.what()<<endl;
+        throw;
+    }catch(...){
         cerr<<"Command-line parsing exception of unknown type!"<<endl;
         throw;
     }
-#endif
     if( ! keepgoing ) exit(0);
+#if 0 && ARGSDEBUG > 0
+    // Good, boost parsing does not touch argc/argv
+    cout<<" DONE argsParse( argc="<<argc<<", argv, ... )"<<endl;
+    for( int i=0; i<argc; ++i ) {
+        cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
+    }
+#endif
     return;
 }
 
 int main(int argc, char**argv){
+    parms=set_default_params(); // OK if don't have an initial --solnfile config
     argsParse(argc,argv);
+    cout<<"solnFile = "<<solnFile<<endl;
     MCsolver mcsolver( solnFile.size()? solnFile.c_str(): (char const* const)nullptr);
+    if( solnFile.size() ){
+        cout<<" reparse cmdline, this time with "<<solnFile<<" parms as defaults"<<endl;
+        parms = mcsolver.getParms();
+        argsParse(argc,argv);
+    }else{
+        if( parms.resume ) throw std::runtime_error(" --resume requires --solnfile=...");
+        if( parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu requires --solnfile=...");
+    }
     DenseM xDense;
     bool denseOk=false;
     SparseM xSparse;
@@ -231,26 +262,55 @@ int main(int argc, char**argv){
         assert( xSparse.rows() == y.rows() );
         mcsolver.solve( xSparse, y, &parms );
     }
-    if(1){ // output something about the soln
+    { // First, save the solution (retaining projection weights as is)
+        MCsoln & soln = mcsolver.getSoln();
+        if( outFile.size() ){
+            cout<<" Writing MCsoln";
+            if( solnFile.size() ) cout<<" initially from "<<solnFile;
+            cout<<" to "<<outFile<<endl;
+            soln.fname = solnFile;
+            { // should I have an option to print the soln to cout? NAAH
+                ofstream ofs;
+                try{
+                    ofs.open(outFile);
+                    soln.write( ofs, (outBinary? MCsoln::BINARY: MCsoln::TEXT)
+                                ,    (outShort ? MCsoln::SHORT : MCsoln::LONG) );
+                    ofs.close();
+                }catch(std::exception const& e){
+                    cerr<<" trouble writing "<<outFile<<" : "<<e.what()<<endl;
+                    ofs.close();
+                    throw;
+                }catch(...){
+                    cerr<<" trouble writing "<<outFile<<" : unknown exception"<<endl;
+                    ofs.close();
+                    throw;
+                }
+                cout<<"\tmcdumpsoln -p < "<<outFile<<" | less    # to prettyprint the soln"<<endl;
+            }
+        }
+    }
+    if(1){ // display soln: normalize projections for interpretability
         MCsoln & soln = mcsolver.getSoln();
         DenseM      & w = soln.weights_avg;
         DenseM      & ww = soln.weights;
+        cout<<" weights     norms: "; for(uint32_t c=0U; c<ww.rows(); ++c){cout<<" "<<ww.col(c).norm();} cout<<endl;
+        cout<<" weights_avg norms: "; for(uint32_t c=0U; c<w.rows(); ++c){cout<<" "<<w.col(c).norm();} cout<<endl;
         w.colwise().normalize();                     // modify w, ww to unit-vector (? largest coeff +ve ?)
         ww.colwise().normalize();
         DenseM const& l = soln.lower_bounds_avg;
         DenseM const& u = soln.upper_bounds_avg;
         if(1){
-            cout<<"     weights    "<<prettyDims(ww)<<":\n"<<ww<<endl;
-            cout<<"     weights_avg"<<prettyDims(w)<<":\n"<<w<<endl;
-            cout<<"lower_bounds_avg"<<prettyDims(l)<<":\n"<<l<<endl;
-            cout<<"upper_bounds_avg"<<prettyDims(u)<<":\n"<<u<<endl;
+            cout<<"normalized     weights"<<prettyDims(ww)<<":\n"<<ww<<endl;
+            cout<<"normalized weights_avg"<<prettyDims(w)<<":\n"<<w<<endl;
+            cout<<"      lower_bounds_avg"<<prettyDims(l)<<":\n"<<l<<endl;
+            cout<<"      upper_bounds_avg"<<prettyDims(u)<<":\n"<<u<<endl;
         }
         if(1){
             for(int p=0U; p<w.cols(); ++p){   // for each projection
                 cout<<" Projection "<<p<<" weights "<< w.col(1).transpose();
                 uint32_t c=0U;
                 for(uint32_t c=0U; c<l.rows(); ++c){ // for each class
-                    if( c%8U == 0U ) {cout<<"\n {l,u} "<<setw(4)<<c;}
+                    if( c%8U == 0U ) {cout<<"\n {l,u}:"<<setw(4)<<c;}
                     cout<<" { "<<setw(9)<<l.coeff(c,p)<<","<<setw(9)<<u.coeff(c,p)<<"}";
                 }
                 if(c%8U==0U) cout<<endl;

@@ -13,6 +13,7 @@ namespace opt {
         return;
     }
 
+#if 0
     void mcParameterDesc( po::options_description & desc )
     {
         desc.add_options()
@@ -39,23 +40,74 @@ namespace opt {
             ("reportavg", value<uint32_t>()->default_value(0U), "period for reports about avg, expensive")
             ("reweight", value<std::string>()->default_value("LAMBDA")
              , "NONE | LAMBDA | ALL lambda reweighting method")
-            ("wt_by_nclasses", value<bool>()->default_value(false), "?")
-            ("wt_class_by_nclasses", value<bool>()->default_value(false), "?")
+            ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(false), "?")
+            ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(false), "?")
             ("negclass", value<uint32_t>()->default_value(0U)
              , "# of negative classes used at each iter, 0 ~ all classes")
-            ("remove_constraints", value<bool>()->default_value(false)
+            ("remove_constraints", value<bool>()->implicit_value(true)->default_value(false)
              , "after each projection, remove constraints")
-            ("remove_class", value<bool>()->default_value(false)
+            ("remove_class", value<bool>()->implicit_value(true)->default_value(false)
              , "after each projection, remove already-separated classes")
             ("threads", value<uint32_t>()->default_value(0U), "# threads, 0 ~ use OMP_NUM_THREADS")
             ("seed", value<uint32_t>()->default_value(0U), "random number seed")
             ("tgrad", value<uint32_t>()->default_value(0U), "iter period for finite difference gradient test")
             ("ngrad", value<uint32_t>()->default_value(1000U), "directions per gradient test")
             ("grad", value<double>()->default_value(1.e-4), "step size per gradient test")
-            ("resume", value<bool>()->default_value(false), "resume an existing soln?")
-            ("reoptlu", value<bool>()->default_value(false), "reoptimize {l,u} bounds of existing soln?")
+            ("resume", value<bool>()->implicit_value(true)->default_value(false), "resume an existing soln?")
+            ("reoptlu", value<bool>()->implicit_value(true)->default_value(false), "reoptimize {l,u} bounds of existing soln?")
             ;
     }
+#endif
+
+    /** When re-using an old run, initial \c p parms come from the MCsoln (.soln or .mc) file.
+     * In this case, command-line args override the MCsoln values, and not the standard default
+     * values.  Probably this should be the \b only \c mcParameterDesc function, with \c p
+     * using the "official" set_default_params() in case a --solnfile is not supplied !!!
+     */
+    void mcParameterDesc( po::options_description & desc, param_struct const& p )
+    {
+        desc.add_options()
+            ("help,h", "")
+            //("verbose,v", "")
+            ("proj", value<uint32_t>()->default_value(p.no_projections) , "# of projections")
+            ("C1", value<double>()->default_value(p.C1), "~ label in correct [l,u]")
+            ("C2", value<double>()->default_value(p.C2), "~ label outside other [l,u]")
+            ("maxiter", value<uint32_t>()->default_value(p.max_iter), "max iterations per projection")
+            ("batchsize,b", value<uint32_t>()->default_value(p.batch_size), "batch size")
+            ("update,u", value<std::string>()->default_value(tostring(p.update_type)), "BATCH | SAFE : gradient update type")
+            ("eps", value<double>()->default_value(p.eps), "unused cvgce threshold")
+            ("eta", value<double>()->default_value(p.eta), "initial learning rate")
+            ("etatype", value<std::string>()->default_value(tostring(p.eta_type))
+             , "CONST | SQRT | LIN | 3_4 : learning rate schedule")
+            ("etamin", value<double>()->default_value(p.min_eta), "learning rate limit")
+            ("optlu", value<uint32_t>()->default_value(p.optimizeLU_epoch), "expensive exact {l,u} soln period")
+            ("treorder", value<uint32_t>()->default_value(p.reorder_epoch), "reorder iteration period")
+            ("reorder", value<std::string>()->default_value(tostring(p.reorder_type))
+             , "Permutation re-ordering: AVG projected means | PROJ projected means | MID range midpoints."
+             " If --tavg=0, default is PROJ")
+            ("report", value<uint32_t>()->default_value(p.report_epoch), "period for reports about latest iter")
+            ("tavg", value<uint32_t>()->default_value(p.avg_epoch), "averaging start iteration")
+            ("reportavg", value<uint32_t>()->default_value(p.report_avg_epoch), "period for reports about avg, expensive")
+            ("reweight", value<std::string>()->default_value(tostring(p.reweight_lambda))
+             , "NONE | LAMBDA | ALL lambda reweighting method")
+            ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "?")
+            ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "?")
+            ("negclass", value<uint32_t>()->default_value(p.class_samples)
+             , "# of negative classes used at each iter, 0 ~ all classes")
+            ("remove_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_constraints)
+             , "after each projection, remove constraints")
+            ("remove_class", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
+             , "after each projection, remove already-separated classes(?)")
+            ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
+            ("seed", value<uint32_t>()->default_value(p.seed), "random number seed")
+            ("tgrad", value<uint32_t>()->default_value(p.finite_diff_test_epoch), "iter period for finite difference gradient test")
+            ("ngrad", value<uint32_t>()->default_value(p.no_finite_diff_tests), "directions per gradient test")
+            ("grad", value<double>()->default_value(p.finite_diff_test_delta), "step size per gradient test")
+            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "resume an existing soln?")
+            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize {l,u} bounds of existing soln?")
+            ;
+    }
+
 
     void extract( po::variables_map const& vm, param_struct & parms ){
         //if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
@@ -109,7 +161,7 @@ namespace opt {
 #endif
         vector<string> ret;
         po::options_description desc("Options");
-        mcParameterDesc( desc );
+        mcParameterDesc( desc, parms );                 // <-- parms MUST be fully initialized by caller !
 
         po::variables_map vm;
         try {
@@ -140,6 +192,9 @@ namespace opt {
             }
 
             po::notify(vm); // at this point, raise any exceptions for 'required' args
+
+            // In your custom program, you would interrogate vm HERE to get additional
+            // variables particular to your program.
 
             extract( vm, parms );
 

@@ -19,12 +19,21 @@
  * \p projection_dim the column of weights for which we are initializing \c w
  */
     template<typename EigenType>
+    /** \b OHOH: for projection_dim > 0, should probably concentrate on classes that
+     * are \b not yet well-separated. */
 void init_w( WeightVector& w,
              EigenType const& x, SparseMb const& y, VectorXi const& nc,
-             DenseM const& weights, int const projection_dim)
+             DenseM const& weights, int const projection_dim, bool const weightsCopy/*=false*/ )
 {
     using namespace std;
-    cout<<" init_w : weights.cols()="<<weights.cols()<<" projection_dim="<<projection_dim<<" random"; cout.flush();
+    cout<<" init_w : weights.cols()="<<weights.cols()<<" projection_dim="<<projection_dim; cout.flush();
+    if( weightsCopy ){
+        cout<<" reusing existing w_avg.col("<<projection_dim<<") as is"<<endl;
+        assert( weights.cols() >= projection_dim );
+        w.init(weights.col(projection_dim));
+        return;
+    }
+    cout<<" random"; cout.flush();
     int const d = x.cols();
     int const noClasses = y.cols();
     assert( projection_dim < weights.cols() );
@@ -59,7 +68,6 @@ void init_w( WeightVector& w,
             init.array() += difference.array()*(10.0/difference.norm()); // 10 ? perhaps match margins?
         }
     }
-    cout<<endl;
 
     if(1){ // I think starting w should be ~ orthogonal to previous projections.
         //cout<<" + orthogal to prev"; cout.flush();
@@ -71,10 +79,10 @@ void init_w( WeightVector& w,
             cout<<" Continuing anyway (just initializing a fresh \"random\" projection vector)"<<endl;
         }
         double inorm = init.norm();
-        if( init.norm() < 1.e-6 ) {init.setRandom(); init.normalize();}
-        else                      {init *= (1.0 / inorm);}
+        if( init.norm() < 1.e-6 ) {cout<<" randomized"; init.setRandom(); init.normalize();}
+        else                      {cout<<" orthogonalized"; init *= (1.0 / inorm);}
     }
-    //cout<<endl;
+    cout<<endl;
 
     assert( init.size() == d );
     assert( fabs(init.norm() - 1.0) < 1.e-6 );

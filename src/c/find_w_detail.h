@@ -9,10 +9,17 @@
 
 // ------------- templated for input data = SparseM or DenseM -----------------
 
+/** Initialize w either from weights_avg or randomly.
+ * - If weightsCopy == true, just \c w.init(weights.col(projection_dim)) and return
+ * - otherwise:
+ *   - choose a dirn between two perhaps far class centers
+ *   - add a bit of randomness
+ *   - project orthogonal to \c weights columns dim < projection_dim.
+ */
     template<typename EigenType>
 void init_w( WeightVector& w,
              EigenType const& x, SparseMb const& y, VectorXi const& nc,
-             DenseM const& weights, int const projection_dim);
+             DenseM const& weights, int const projection_dim, bool const weightsCopy = false);
 
 #if 0
 /** Initializes the lower and upper bound */

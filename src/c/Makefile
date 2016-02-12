@@ -95,7 +95,7 @@ settings:
 	echo "BOOSTDIR       = $(BOOSTDIR)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
+CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
 check-headers: $(CHECK_HEADERS)
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
@@ -115,7 +115,7 @@ check-oct-headers: EigenOctave.h
 
 
 lib: libs-only demo-proj1 demo-quick
-test: lib demo-printing demo-io do-tests mcgen mcgenx
+test: lib demo-printing demo-io do-tests mcgen mcgenx mcproj.log
 long: clean
 	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
 	&& $(MAKE) -j20 do-tests \
@@ -228,7 +228,7 @@ do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	@echo ""
 	@echo ""
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
-LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp evaluate.cpp predict.cpp normalize.cpp
+LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
@@ -247,9 +247,9 @@ libmcfilter-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIB_CPPFILES))
 libmcfilter-prof.a: $(patsubst %.cpp,%-prof.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter.so: $(patsubst %.cpp,%.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^
+	$(CXX) -o $@ -shared $^ -Wl,-rpath=$(BOOSTDIR)/../lib
 libmcfilter-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^
+	$(CXX) -o $@ -shared $^ -Wl,-rpath=$(BOOSTDIR)/../lib
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 %.2o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -c $<
@@ -299,7 +299,7 @@ demo-mcsolver: erik/demo-mcsolver.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 demo-printing: erik/demo-printing.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
-demo-parms: erik/demo-parms.cpp erik/parameter-args.cpp libmcfilter-dbg.a
+demo-parms: erik/demo-parms.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
@@ -313,7 +313,7 @@ mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_opt
 	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. -Wno-error=maybe-uninitialized $^
-mcsolve: erik/mcsolve.cpp erik/parameter-args.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+mcsolve: erik/mcsolve.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcproj: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
@@ -323,6 +323,8 @@ mcproj.log: mcgenx mcproj
 		"valgrind ./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
 		"valgrind ./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-S.bin" \
 		"valgrind ./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin" \
+		"valgrind ./mcsolve --solnfile mcgen-a3-bin.soln -x mcge-a3-x-D.bin -y mcgen-a3-slc-y.bin -o xx --reoptlu" \
+		"valgrind ./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin" \
 		; do \
 		echo ""; \
 		echo "=== run : $$cmd"; \

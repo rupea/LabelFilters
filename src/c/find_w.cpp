@@ -59,7 +59,10 @@ MCsolver::MCsolver(char const* const solnfile /*= nullptr*/)
     if( solnfile ){
         ifstream ifs(solnfile);
         if( ifs.good() ) try{
+            cout<<" reading "<<solnfile<<endl;
             this->read( ifs );
+            this->pretty( cout );
+            cout<<" reading "<<solnfile<<" DONE"<<endl;
         }catch(std::exception const& e){
             ostringstream err;
             err<<"ERROR: unrecoverable error reading MCsoln from file "<<solnfile;

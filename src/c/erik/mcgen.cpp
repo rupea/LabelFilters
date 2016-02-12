@@ -1898,104 +1898,7 @@ int main(int argc, char** argv)
 #endif
     // 10b. generate a usable MCfilter ".soln" file with JUST weights of the 'ideal' solution
     //     --> mcgen-a3-txt.soln  and mcgen-a3-bin.soln
-    {
-#if ! USE_LIBMCFILTER
-        cout<<" Not linked with libmcfilter, NO .soln file output"<<endl;
-#else
-        assert( soln.size() == p.axes );
-        assert( x[0].size() == p.dim );
-        cout<<" Forming MCsoln (as Eigen column matrices) ..."<<endl;
-        MCsoln mcs;
-        mcs.d           = p.dim;
-        mcs.nProj       = p.axes;
-        mcs.nClass      = p.nClass;     // NO class remap
-        //mcs.fname       =
-        { // copy vector<vector<float>> weights ---> Eigen DenseM MCsoln::weights_avg
-            mcs.parms.no_projections = mcs.nProj;
-            // TODO XXX The following can be played with until something that stays at
-            // the soln gets an appropriate norm for w, and margins respecting C1 and C2
-            mcs.parms.C2 = mcs.parms.C1 / mcs.nClass;
-            mcs.parms.optimizeLU_epoch = 100U;
-            mcs.parms.batch_size = 100U;
-            mcs.parms.max_iter = 200U;
-            mcs.parms.reoptimize_LU = true;
-
-            mcs.weights_avg.conservativeResize( mcs.d, mcs.nProj );   // soln, as col. vectors
-            for(uint32_t d=0U; d<mcs.d; ++d){
-                for(uint32_t s=0U; s<mcs.nProj; ++s){
-                    mcs.weights_avg.coeffRef(d,s) = soln[s][d];
-                }
-            }
-            cout<<"\tw["<<mcs.weights_avg.rows()<<","<<mcs.weights_avg.cols()<<"]\n"
-                <<mcs.weights_avg<<endl;
-            assert( mcs.weights_avg.rows() == mcs.d );
-            assert( mcs.weights_avg.cols() == mcs.nProj );
-        }
-        { // sample code to find {l,u} bounds for fully separable case, and print
-            // to find {l,u} bounds of each soln, using FULL set of margin points, with strict +ve margin
-            DenseM & l = mcs.lower_bounds_avg;
-            DenseM & u = mcs.upper_bounds_avg;
-            l.conservativeResize(mcs.nClass, mcs.nProj);
-            u.conservativeResize(mcs.nClass, mcs.nProj);
-            for(int i=0U; i<mcs.nClass; ++i){
-                for(uint32_t p=0U; p<mcs.nProj; ++p){
-                    l.coeffRef(i,p) = numeric_limits<double>::max();
-                    u.coeffRef(i,p) = numeric_limits<double>::min();
-                }
-            }
-            {// This time form ACTUAL {l,u} bounds of training examples [p.nx x p.dim]
-                // (last time was for trivial soln and idealized margin pushpoint)
-                // TODO XXX Best: project/rot/skew/embed the idealized margin-expansions XXX
-                // (but that is a lot more typing)
-                // soln will still be good if |m|=a in parms, because the idealized margin-expansions
-                // will always be in the training data, 'x'.
-                for(uint32_t i=0U; i<x.size(); ++i){
-                    auto const& v = x[i];
-                    auto cls = y[i];            // NOT the remapped class label
-                    //auto v = m.mid; // OHOH: this ideal split-point has only p.axes dims
-                    assert( v.size() == p.dim );
-                    assert( cls < mcs.nClass );
-                    for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
-                        float const vdots = dot( v, soln[p] );
-                        l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
-                        u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
-                    }
-                }
-                // Now push apart the {l,u} bounds by a slight bit (non-zero margin)
-                //    see comments in Filter.h about bad things with zero-margin {l,u} !
-                l.array() -= 1.1111e-4;
-                u.array() += 1.1111e-4;
-                if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
-                    cout<<" {l,u} solns from Eigen col(p).transpose() ...:";
-                    for(uint32_t p=0U; p<soln.size(); ++p){
-                        cout<<"\n\tl["<<p<<"] = "<<l.col(p).transpose();
-                        cout<<"\n\tu["<<p<<"] = "<<u.col(p).transpose();
-                    }
-                    cout<<endl;
-                }
-                if(1){
-                    cout<<"\n *** Final MCsoln to save ***"<<endl;
-                    mcs.pretty(cout);
-                }
-            }
-        }
-        string fnameSolnBase;
-        {
-            stringstream oss;
-            oss<<"mcgen-"<<p.str();
-            fnameSolnBase = oss.str();
-        }
-        assert( mcs.weights_avg.rows() == mcs.d );
-        assert( mcs.weights_avg.cols() == mcs.nProj );
-        assert( mcs.lower_bounds_avg.rows() == mcs.nClass );
-        assert( mcs.lower_bounds_avg.cols() == mcs.nProj );
-        assert( mcs.upper_bounds_avg.rows() == mcs.nClass );
-        assert( mcs.upper_bounds_avg.cols() == mcs.nProj );
-        mcSave( fnameSolnBase, mcs );
-#endif //USE_LIBMCFILTER
-    }
-    // 10c. generate a usable MCfilter ".soln" file with JUST weights of the 'ideal' solution
-    //     --> mcgen-a3-mlc-txt.soln  and mcgen-a3-mlc-bin.soln
+    // and --> mcgen-a3-mlc-txt.soln  and mcgen-a3-mlc-bin.soln
     //
     //     NOTE: the mlc .soln, for this ymap, is NOT perfectly separable.
     //     In fact,
@@ -2020,16 +1923,20 @@ int main(int argc, char** argv)
             mcs.parms.no_projections = mcs.nProj;
             // TODO XXX The following can be played with until something that stays at
             // the soln gets an appropriate norm for w, and margins respecting C1 and C2
-            mcs.parms.C2 = mcs.parms.C1 / mcs.nClass;
-            mcs.parms.optimizeLU_epoch = 100U;
+            //mcs.parms.C2 = mcs.parms.C1 / mcs.nClass;
+            //  Note: C1 ~ keep
+            mcs.C2 = mcs.parms.C2 = mcs.nClass * p.axes / (p.axes+1U);   // heuristic [omit/modify at will]
+            mcs.C1 = mcs.parms.C1 = mcs.C2 * mcs.nClass;
+            //mcs.parms.optimizeLU_epoch = 100U;
             mcs.parms.batch_size = 100U;
-            mcs.parms.max_iter = 200U;
-            mcs.parms.reoptimize_LU = true;
+            mcs.parms.max_iter = 2000U;
+            //mcs.parms.reoptimize_LU = true;
 
-            mcs.weights_avg.conservativeResize( mcs.d, mcs.nProj );   // soln, as col. vectors
+            mcs.weights_avg.conservativeResize( mcs.d, mcs.nProj );     // soln, as col. vectors
+            double wnorm = 1.0; // (p.axes + 1U);                                 // <-- NEW
             for(uint32_t d=0U; d<mcs.d; ++d){
                 for(uint32_t s=0U; s<mcs.nProj; ++s){
-                    mcs.weights_avg.coeffRef(d,s) = soln[s][d];
+                    mcs.weights_avg.coeffRef(d,s) = soln[s][d] * wnorm;
                 }
             }
             cout<<"\tw["<<mcs.weights_avg.rows()<<","<<mcs.weights_avg.cols()<<"]\n"
@@ -2037,6 +1944,7 @@ int main(int argc, char** argv)
             assert( mcs.weights_avg.rows() == mcs.d );
             assert( mcs.weights_avg.cols() == mcs.nProj );
         }
+        for(uint32_t slc_mlc=0U; slc_mlc<2U; ++slc_mlc)
         { // sample code to find {l,u} bounds for fully separable case, and print
             // to find {l,u} bounds of each soln, using FULL set of margin points, with strict +ve margin
             DenseM & l = mcs.lower_bounds_avg;
@@ -2049,7 +1957,7 @@ int main(int argc, char** argv)
                     u.coeffRef(i,p) = numeric_limits<double>::min();
                 }
             }
-            {// This time form ACTUAL {l,u} bounds of training examples [p.nx x p.dim]
+            {// Form ACTUAL {l,u} bounds of training examples [p.nx x p.dim]
                 // (last time was for trivial soln and idealized margin pushpoint)
                 // TODO XXX Best: project/rot/skew/embed the idealized margin-expansions XXX
                 // (but that is a lot more typing)
@@ -2057,9 +1965,8 @@ int main(int argc, char** argv)
                 // will always be in the training data, 'x'.
                 for(uint32_t i=0U; i<x.size(); ++i){
                     auto const& v = x[i];
-                    //auto cls = y[i];                  // original SINGLE label
-                    for(auto const cls: ymap[ y[i] ] ){ // multi-label
-                        //auto v = m.mid; // OHOH: this ideal split-point has only p.axes dims
+                    if( slc_mlc == 0U ){            // y[i] --> slc {l,u} bounds
+                        auto cls = y[i];
                         assert( v.size() == p.dim );
                         assert( cls < mcs.nClass );
                         for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
@@ -2067,39 +1974,50 @@ int main(int argc, char** argv)
                             l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
                             u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
                         }
+                    }else{                          // ymap[y[i]] --> mlc {l,u} bounds
+                        for(auto const cls: ymap[ y[i] ] ){ // multi-label
+                            //auto v = m.mid; // OHOH: this ideal split-point has only p.axes dims
+                            assert( v.size() == p.dim );
+                            assert( cls < mcs.nClass );
+                            for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
+                                float const vdots = dot( v, soln[p] );
+                                l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
+                                u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
+                            }
+                        }
+                    }
+                    // Now push apart the {l,u} bounds by a slight bit (non-zero margin)
+                    //    see comments in Filter.h about bad things with zero-margin {l,u} !
+                    l.array() -= 1.1111e-4;
+                    u.array() += 1.1111e-4;
+                    if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
+                        cout<<" {l,u} solns from Eigen col(p).transpose() ...:";
+                        for(uint32_t p=0U; p<soln.size(); ++p){
+                            cout<<"\n\tl["<<p<<"] = "<<l.col(p).transpose();
+                            cout<<"\n\tu["<<p<<"] = "<<u.col(p).transpose();
+                        }
+                        cout<<endl;
+                    }
+                    if(1){
+                        cout<<"\n *** Final MCsoln to save ***"<<endl;
+                        mcs.pretty(cout);
                     }
                 }
-                // Now push apart the {l,u} bounds by a slight bit (non-zero margin)
-                //    see comments in Filter.h about bad things with zero-margin {l,u} !
-                l.array() -= 1.1111e-4;
-                u.array() += 1.1111e-4;
-                if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
-                    cout<<" {l,u} solns from Eigen col(p).transpose() ...:";
-                    for(uint32_t p=0U; p<soln.size(); ++p){
-                        cout<<"\n\tl["<<p<<"] = "<<l.col(p).transpose();
-                        cout<<"\n\tu["<<p<<"] = "<<u.col(p).transpose();
-                    }
-                    cout<<endl;
-                }
-                if(1){
-                    cout<<"\n *** Final MCsoln to save ***"<<endl;
-                    mcs.pretty(cout);
-                }
+            }//end forming {l,u} bounds
+            string fnameSolnBase;
+            {
+                stringstream oss;
+                oss<<"mcgen-"<<p.str()<<(slc_mlc?"":"-mlc");
+                fnameSolnBase = oss.str();
             }
-        }
-        string fnameSolnBase;
-        {
-            stringstream oss;
-            oss<<"mcgen-"<<p.str()<<"-mlc";
-            fnameSolnBase = oss.str();
-        }
-        assert( mcs.weights_avg.rows() == mcs.d );
-        assert( mcs.weights_avg.cols() == mcs.nProj );
-        assert( mcs.lower_bounds_avg.rows() == mcs.nClass );
-        assert( mcs.lower_bounds_avg.cols() == mcs.nProj );
-        assert( mcs.upper_bounds_avg.rows() == mcs.nClass );
-        assert( mcs.upper_bounds_avg.cols() == mcs.nProj );
-        mcSave( fnameSolnBase, mcs );
+            assert( mcs.weights_avg.rows() == mcs.d );
+            assert( mcs.weights_avg.cols() == mcs.nProj );
+            assert( mcs.lower_bounds_avg.rows() == mcs.nClass );
+            assert( mcs.lower_bounds_avg.cols() == mcs.nProj );
+            assert( mcs.upper_bounds_avg.rows() == mcs.nClass );
+            assert( mcs.upper_bounds_avg.cols() == mcs.nProj );
+            mcSave( fnameSolnBase, mcs );
+        }// slc_mlc
 #endif //USE_LIBMCFILTER
     }
 

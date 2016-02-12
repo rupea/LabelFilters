@@ -194,7 +194,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
     if (params.resume || params.reoptimize_LU)
     {
-
+        cout<<" Continuing a run ..."<<endl;
         if(params.reoptimize_LU || params.remove_constraints)
         {
             for (projection_dim = 0; projection_dim < weights.cols(); projection_dim++)
@@ -276,6 +276,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
         projection_dim = weights.cols();
         obj_idx = objective_val.size();
         obj_idx_avg = objective_val_avg.size();
+        if(1){
+            cout<<" Continuing a run ... starting with weights"<<prettyDims(weights)<<":\n"<<weights<<endl;
+            cout<<" Continuing a run ... starting with weights_avg"<<prettyDims(weights_avg)<<":\n"<<weights_avg<<endl;
+            cout<<" Continuing a run ... beginning at projection_dim="<<projection_dim<<endl;
+        }
     }
     // XXX make more robust to continued runs?
     weights.conservativeResize(d, no_projections);
