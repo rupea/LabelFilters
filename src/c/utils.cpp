@@ -41,11 +41,11 @@ bool fexists(const char *filename)
 
 void free_ActiveDataSet(ActiveDataSet*& active)
 {
-  if (active)
-    {   
-      for(ActiveDataSet::iterator actit = active->begin(); actit !=active->end();actit++)
-	{
-	  delete (*actit);
-	}
+    if (active){   
+        for(ActiveDataSet::iterator actit = active->begin(); actit !=active->end();actit++){
+            delete (*actit);
+        }
+        delete active;
+        active=nullptr;
     }		
 }

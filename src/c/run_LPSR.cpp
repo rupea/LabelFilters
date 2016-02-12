@@ -407,9 +407,6 @@ int main(int argc, char * argv[])
       outf.close();
     }
   
-  if (active_classes)
-    {
-      free_ActiveDataSet(active_classes); free(active_classes); active_classes=NULL;
-    }
+  free_ActiveDataSet(active_classes);
   clean_up_and_exit(0);  
 }

@@ -119,8 +119,7 @@ SparseMb labelVec2Mat (const VectorXd& yVec);
 
 bool fexists(const char *filename);
 
-// delete and ActiveDataSet to free up memory
-
+/** delete an ActiveDataSet to free up memory. \post \c active==nullptr. */
 void free_ActiveDataSet(ActiveDataSet*& active);
 
 #endif
