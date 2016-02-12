@@ -202,7 +202,7 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 	    time(&stop);	 
 	    predict_time_valid[0] += difftime(start,stop);
 	    nact_valid+=nact_valid_chunk;
-	    free_ActiveDataSet(active_chunk_valid);
+	    free_ActiveDataSet(active_chunk_valid); free(active_chunk_valid); active_chunk_valid=NULL;
 	  }	    
 	// if no vaidation is performed then n is the number of instances
 	for (size_t i = 0;i<n; i++)
@@ -221,7 +221,7 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 	time(&stop);
 	predict_time[0] += difftime(stop,start);
 	nact_final += nact_chunk;
-	free_ActiveDataSet(active_chunk);
+	free_ActiveDataSet(active_chunk); free(active_chunk); active_chunk=NULL;
 	start_class = start_class + chunk_size;
       }
   } // we don't need ovaW any more

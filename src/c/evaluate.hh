@@ -128,7 +128,7 @@ void evaluate_projection(const EigenType& x, const SparseMb& y,
 	  predict_chunk(predictions_valid[nproj-proj_no], nact_valid, x.topRows(n_valid), ovaW, 0, active,
 			thresh, k, verbose);
 	  // delete active to free it up for the next chunk
-	  free_ActiveDataSet(active);
+	  free_ActiveDataSet(active); free(active); active=NULL;
 	  time(&stop);
 	  total_time_valid[nproj-proj_no] += difftime(stop,start);
 	}
@@ -143,7 +143,7 @@ void evaluate_projection(const EigenType& x, const SparseMb& y,
 		    x.bottomRows(n), ovaW, 0, active,
 		    thresh, k, verbose);
       // delete active to free it up for the next chunk
-      free_ActiveDataSet(active);
+      free_ActiveDataSet(active); free(active); active=NULL;
       time(&stop);
       total_time[nproj-proj_no] += difftime(stop,start);
     }

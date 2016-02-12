@@ -319,10 +319,10 @@ mcproj: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_op
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcproj.log: mcgenx mcproj
 	./mcgenx
-	{ for cmd in "./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \
-		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
-		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-S.bin" \
-		"./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin" \
+	{ for cmd in "valgrind --leak-check=full --show-leak-kinds=all ./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \
+		"valgrind ./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
+		"valgrind ./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-S.bin" \
+		"valgrind ./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin" \
 		; do \
 		echo ""; \
 		echo "=== run : $$cmd"; \

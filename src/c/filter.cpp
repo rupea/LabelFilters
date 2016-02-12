@@ -14,6 +14,9 @@ int const Filter::verbose = 1;
     Filter::Filter(const VectorXd& l, const VectorXd& u)
     : _sortedLU( 2*l.size() )
       , _map()
+#ifndef NDEBUG
+      , nCalls(0)
+#endif
 {
     //_sortedLU = new VectorXd(2*l.size());
     for(int i=0; i<l.size(); ++i){

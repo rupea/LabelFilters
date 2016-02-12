@@ -212,6 +212,8 @@ int main(int argc, char**argv){
                                             soln.weights_avg, soln.lower_bounds_avg, soln.upper_bounds_avg,
                                             /*verbose=*/true );
             assert( ads != nullptr );
+            free_ActiveDataSet(ads);
+            free(ads);
             // ? y should be fully optional
             //PredictionSet* pds = predict( xDense, y, ads, no_active, /*verbose=*/true /*...*/ );
             //

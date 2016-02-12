@@ -409,7 +409,7 @@ int main(int argc, char * argv[])
   
   if (active_classes)
     {
-      free_ActiveDataSet(active_classes);
+      free_ActiveDataSet(active_classes); free(active_classes); active_classes=NULL;
     }
   clean_up_and_exit(0);  
 }
