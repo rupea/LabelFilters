@@ -1296,7 +1296,7 @@ int main(int argc, char** argv)
         assert( abase[0].size() == p.dim );
         // NOTE: basic need is random [ axes x embed ] submatrix of abase[axes x dim]
         if( p.embed >= p.dim ){ 
-            for(uint32_t u=0U; u<=p.axes; ++u){ // for each unit-vector, replace with random dirn
+            for(uint32_t u=0U; u<p.axes; ++u){ // for each unit-vector, replace with random dirn
                 double dotmax=0.0;
                 do {
                     ndim::randDirn( gen, abase[u] );
@@ -1310,14 +1310,14 @@ int main(int argc, char** argv)
                 }while( dotmax > 0.999 );  // try again if 2 unit vectors xform to nearly same direction
             }
         }else{ // embed into subset of p.dim dimensions
-            vector<float> emb( p.embed, 0.0f );
+            vector<float> emb( p.embed, 0.0f );                                  // 1st embed into 'emb'
             assert( emb.size() < abase[0].size() );
             cout<<" embed="<<emb.size()<<" p.embed="<<p.embed<<endl;
-            for(uint32_t u=0U; u<p.axes; ++u){ // for each unit-vector, replace with random dirn
+            for(uint32_t u=0U; u<p.axes; ++u){ // each axis unit vector --> 'emb' in higher dim
                 assert( abase[u].size() == p.dim );
                 double dotmax=0.0;
                 do {
-                    ndim::randDirn( gen, emb );
+                    ndim::randDirn( gen, emb );                 // generate rand 'emb'
                     dotmax = 0.0;
                     //cout<<" u="<<u; cout.flush();
                     for(uint32_t j=0U; j<u; ++j){ 
@@ -1328,8 +1328,8 @@ int main(int argc, char** argv)
                         dotmax = std::max( dot, std::fabs(dot) );
                     }
                     //cout<<" dotmax="<<dotmax; cout.flush();
-                }while( dotmax > 0.999 );  // try again if 2 unit vectors xform to nearly same direction
-                for(uint32_t i=0U; i<p.embed; ++i) abase[u][i] = emb[i];
+                }while( dotmax > 0.999 );                       // until 'emb' in new direction
+                for(uint32_t i=0U; i<p.embed; ++i) abase[u][i] = emb[i];        // 2nd emb --> abase[u]
                 //for(uint32_t i=emb.size(); i<p.dim; ++i) abase[u][i] = 0.0f;
                 //cout<<" done"<<endl;
             }
