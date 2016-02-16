@@ -40,6 +40,38 @@ namespace opt {
     std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
                                      , void(*usageFunc)(std::ostream&)=helpUsageDummy );
 
+    /** wrap program options for standalone mcsolve executable */
+    struct MCsolveArgs {
+        MCsolveArgs();
+        /// \name lua api
+        //@{
+        void argsParse( int argc, char**argv );
+        void init( po::options_description & desc );
+        static std::string defaultHelp();
+        //@}
+        /** internal helper for argsParse errors */
+        static void helpUsage( std::ostream& os );
+        /// \name argsParse settings
+        //@{
+        param_struct parms;     ///< solver parameters, \ref parameter.h
+        std::string xFile;      ///< x data file name (io via ???)
+        std::string yFile;      ///< y data file name (io via eigen_io_binbool)
+        std::string solnFile;   ///< solution file basename
+        std::string outFile;    ///< solution file basename
+        bool outBinary;         ///< outFile format
+        bool outText;           ///< outFile format
+        bool outShort;          ///< outFile format
+        bool outLong;           ///< outFile format
+        bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
+        //@}
+    };
+
+    namespace MCproj { // TODO XXX CHECKME 
+        std::string defaultHelp();
+        void init( po::options_description & desc );
+        void argsParse( int argc, char**argv );
+    }//MCproj::
+
 }//opt::
 
 #endif // PARAMETER_ARGS_H

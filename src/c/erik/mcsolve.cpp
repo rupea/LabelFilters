@@ -75,7 +75,7 @@ void column_mean_stdev( Eigen::DenseBase<DERIVED> const& x, VectorXd & mean, Vec
 #endif
 
 void argsParse( int argc, char**argv ){
-#define ARGSDEBUG 1            
+#define ARGSDEBUG 1
 #if ARGSDEBUG > 0
     cout<<" argsParse( argc="<<argc<<", argv, ... )"<<endl;
     for( int i=0; i<argc; ++i ) {

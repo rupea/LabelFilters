@@ -502,6 +502,8 @@ namespace mcgen {
                  , "[*] ... or examples in [deformed? r,s] unit cube")
                 ("dim,d", po::value<uint32_t>()->default_value(0U)
                  , "dimension of training data, d >= a")
+                ("embed,e", po::value<uint32_t>()->default_value(0U)
+                 , "embed a<=e<=d, after noise, default=a=NOOP")
                 ("fmargin,f", po::value<double>()->default_value(0.01)
                  , "push factor related to margin width")
                 ("margin,m", po::value<int32_t>()
@@ -510,19 +512,18 @@ namespace mcgen {
                 ("parts,p", po::value<uint32_t>()->default_value(2U)
                  , "p>=2 parts to divide each -a axis into. # classes = p^a [8]")
                 ("seed", po::value<uint32_t>()->default_value(0U) , "rand seed")
-                ("multi", po::value<uint32_t>()->default_value(2U)
-                 , "besides slc, gen multi-labelling up to m classes per example")
                 ("trivial,t"
                  , "[*] soln: unit vectors in 1st -a dimensions form projection axes")
                 ("skew,s", po::value<uint32_t>()->default_value(0U)
-                 , "after t, rot last 0<s<a-1 dims toward 1st unit vector (1,0,0...) (axes-->non-orthog)")
+                 , "TBD after t, rot last 0<s<a-1 dims toward 1st unit vector (1,0,0...) (axes-->non-orthog)")
                 ("rot,r", po::value<uint32_t>()->default_value(0U)
-                 , "after t+s, rotate first r<=a dims randomly (keep lengths,angles)")
+                 , "TBD after t+s, rotate first r<=a dims randomly (keep lengths,angles)")
                 ("noise,n", po::value<bool>()->implicit_value(true)->default_value(false)
-                 , "fill dim > axes with noise?")
-                ("embed,e", po::value<uint32_t>()->default_value(0U)
-                 , "embed a<=e<=d, after noise, default=a=NOOP")
-                ("examples,x", po::value<uint32_t>(), "[0] extra random examples")
+                 , "after s,r: fill dim > axes with noise?")
+                ("examples,x", po::value<uint32_t>()->default_value(0U), "extra random examples")
+                ("classes,y", po::value<uint32_t>()->default_value(0U), "TBD cap number of single-y labels")
+                ("multi", po::value<uint32_t>()->default_value(2U)
+                 , "besides slc, gen multi-labelling up to m classes per example")
                 ;
         }
         static void helpExamples( std::ostream& os ){
@@ -542,6 +543,7 @@ namespace mcgen {
                 "\n - r rot signal within 1st r<=a dims"
                 "\n - n noise the dimensions from axes to dim (default: zero them)"
                 "\n - e embed if e>a into e<=d dims"
+                "\n - There may be better projections than the proposed .soln, sometimes"
                 ;
         }
         /** \c p might not reflect values it would have after init() */

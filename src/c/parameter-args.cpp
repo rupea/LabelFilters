@@ -3,10 +3,12 @@
 #include <iostream>
 #include <cstdint>
 
+#define ARGSDEBUG 1
+
+using namespace std;
+using namespace boost::program_options;
+
 namespace opt {
-    using namespace std;
-    using namespace boost::program_options;
-    //namespace po = boost::program_options;
 
     void helpUsageDummy( std::ostream& os ){
         os<<" Usage: foo [options]";
@@ -148,11 +150,10 @@ namespace opt {
         parms.resume 	                =vm["resume"].as<bool>(); // false;
         parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
     }
- 
+
     std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
                                      , void(*usageFunc)(std::ostream&)/*=helpUsageDummy*/ )
     {
-#define ARGSDEBUG 1            
 #if ARGSDEBUG > 0
         cout<<" argsParse( argc="<<argc<<", argv, ... )"<<endl;
         for( int i=0; i<argc; ++i ) {
@@ -217,5 +218,177 @@ namespace opt {
         }
         return ret;
     }
-}//opt::
 
+    //
+    // ----------------------- MCsolveArgs --------------------
+    //
+
+    void MCsolveArgs::helpUsage( std::ostream& os ){
+        os  <<" Function:"
+            <<"\n    Determine a number (--proj) of projection lines. Any example whose projection"
+            <<"\n    lies outside bounds for that class is 'filtered'.  With many projecting lines,"
+            <<"\n    potentially many classes can be filtered out, leaving few potential classes"
+            <<"\n    for each example."
+            <<"\n Usage:"
+            <<"\n    mcsolve --xfile=... --yfile=... [--solnfile=...] [--output=...] [solver args...]"
+            <<"\n where solver args guide the optimization procedure"
+            <<"\n Without solnfile[.soln], use random initial conditions."
+            <<"\n xfile is a plain eigen DenseM or SparseM (always stored as float)"
+            <<"\n yfile is an Eigen SparseMb matrix of bool storing only the true values,"
+            <<"\n       read/written via 'eigen_io_binbool'"
+            <<endl;
+    }
+    void MCsolveArgs::init( po::options_description & desc ){
+        desc.add_options()
+            ("xfile,x", value<string>()->required(), "x data (row-wise nExamples x dim)")
+            ("yfile,y", value<string>()->required(), "y data (slc/mlc SparseMb)")
+            ("solnfile,s", value<string>()->default_value(string("")), "solnfile[.soln] starting solver state")
+            ("output,o", value<string>()->default_value(string("mc")), "output[.soln] file base name")
+            (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(true),"B|T output BINARY")
+            (",T", value<bool>(&outText)->implicit_value(true)->default_value(false),"B|T output TEXT")
+            (",S", value<bool>(&outShort)->implicit_value(true)->default_value(true),"S|L output SHORT")
+            (",L", value<bool>(&outLong)->implicit_value(true)->default_value(false),"S|L output LONG")
+            ("threads,t", value<uint32_t>()->default_value(1U), "threads")
+            ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)")
+            ;
+    }
+    MCsolveArgs::MCsolveArgs()
+        : parms(set_default_params())
+    // argsParse output...
+    , xFile()
+        , yFile()
+        , solnFile()
+        , outFile()
+        , outBinary(true)
+        , outText(false)
+        , outShort(true)
+        , outLong(false)
+        , xnorm(false)
+#if 0 // moved to standalone.h class MCsolveProgram
+        , pmcs(nullptr)     // used during argsParse AND trySolve,trySave,tryDisplay
+        // tryRead output...
+        , xDense()
+        , denseOk(false)
+        , xSparse()
+        , sparseOk(false)
+        , y()               // SparseMb
+#endif
+        {}
+
+    void MCsolveArgs::argsParse( int argc, char**argv ){
+#if ARGSDEBUG > 0
+        cout<<" argsParse( argc="<<argc<<", argv, ... )"<<endl;
+        for( int i=0; i<argc; ++i ) {
+            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
+        }
+#endif
+        bool keepgoing = true;
+        try {
+            po::options_description descAll("Allowed options");
+            po::options_description descMcsolve("mcsolve options");
+            init( descMcsolve );                        // create a description of the options
+            po::options_description descParms("solver args");
+            opt::mcParameterDesc( descParms, parms );   // add the param_struct options
+            descAll.add(descMcsolve).add(descParms);
+
+            po::variables_map vm;
+            //po::store( po::parse_command_line(argc,argv,desc), vm );
+            // Need more control, I think...
+            {
+                po::parsed_options parsed
+                    = po::command_line_parser( argc, argv )
+                    .options( descAll )
+                    //.positional( po::positional_options_description() ) // empty, none allowed.
+                    //.allow_unregistered()
+                    .run();
+                po::store( parsed, vm );
+            }
+
+            if( vm.count("help") ) {
+                helpUsage( cout );
+                cout<<descAll<<endl;
+                //helpExamples(cout);
+                keepgoing=false;
+            }
+
+            po::notify(vm); // at this point, raise any exceptions for 'required' args
+
+            cerr<<"msolve args..."<<endl;
+            assert( vm.count("xfile") );
+            assert( vm.count("yfile") );
+            assert( vm.count("solnfile") );
+            assert( vm.count("output") );
+
+            xFile=vm["xfile"].as<string>();
+            yFile=vm["yfile"].as<string>();
+            solnFile=vm["solnfile"].as<string>();
+            outFile=vm["output"].as<string>();
+            xnorm=vm["xnorm"].as<bool>();
+
+            if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
+            if( outFile .rfind(".soln") != outFile .size() - 5U ) outFile .append(".soln");
+
+            if( outBinary == outText ) throw std::runtime_error(" Only one of B|T, please");
+            if( outShort == outLong ) throw std::runtime_error(" Only one of S|L, please");
+
+            // ISSUE: --solnfile should set INITIAL parms, and commandline
+            //        should OVERRIDE (not overwrite) those.
+            // Currently 'extract' set ALL parameters to "default or commandline"
+            // Need another function to "modify" according to supplied parameters XXX
+            cerr<<"opt::extract..."<<endl;
+            opt::extract(vm,parms);         // retrieve McSolver parameters
+        }
+        catch(po::error& e)
+        {
+            cerr<<"Invalid argument: "<<e.what()<<endl;
+            throw;
+        }catch(std::exception const& e){
+            cerr<<"Error: "<<e.what()<<endl;
+            throw;
+        }catch(...){
+            cerr<<"Command-line parsing exception of unknown type!"<<endl;
+            throw;
+        }
+        if( ! keepgoing ) exit(0);
+#if 0 && ARGSDEBUG > 0
+        // Good, boost parsing does not touch argc/argv
+        cout<<" DONE argsParse( argc="<<argc<<", argv, ... )"<<endl;
+        for( int i=0; i<argc; ++i ) {
+            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
+        }
+#endif
+        return;
+    }
+
+    // static fn -- no 'this'
+    std::string MCsolveArgs::defaultHelp(){
+        std::ostringstream oss;
+        try {
+            MCsolveArgs mcsa;                                   // make sure we generate *default* help
+            po::options_description descAll("Allowed options");
+            po::options_description descMcsolve("mcsolve options");
+            mcsa.init( descMcsolve );                           // create a description of the options
+            po::options_description descParms("solver args");
+            opt::mcParameterDesc( descParms, mcsa.parms );      // add the param_struct options
+            descAll.add(descMcsolve).add(descParms);
+
+            helpUsage( oss );
+            oss<<descAll<<endl;
+        }catch(po::error& e){
+            cerr<<"Invalid argument: "<<e.what()<<endl;
+            throw;
+        }catch(std::exception const& e){
+            cerr<<"Error: "<<e.what()<<endl;
+            throw;
+        }catch(...){
+            cerr<<"Command-line parsing exception of unknown type!"<<endl;
+            throw;
+        }
+        return oss.str();
+    }
+
+    //
+    // ----------------------- xxx --------------------
+    //
+
+}//opt::
