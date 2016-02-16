@@ -247,9 +247,9 @@ libmcfilter-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIB_CPPFILES))
 libmcfilter-prof.a: $(patsubst %.cpp,%-prof.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter.so: $(patsubst %.cpp,%.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^ -Wl,-rpath=$(BOOSTDIR)/../lib
+	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
 libmcfilter-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^ -Wl,-rpath=$(BOOSTDIR)/../lib
+	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 %.2o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -c $<

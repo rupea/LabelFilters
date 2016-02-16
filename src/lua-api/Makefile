@@ -1,10 +1,14 @@
 CXX ?= g++
 ifneq ($(wildcard /opt/boost-1.60),)
-BOOSTDIR ?= /opt/boost-1.60/include
+BOOSTROOT?=/opt/boost-1.60
+BOOSTDIR :=$(BOOSTROOT)/include
+BOOSTLIB :=$(BOOSTROOT)/lib
 endif
 ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
+BOOSTLIB :=$(BOOSTDIR)/../lib   # probably wrong !!!
 endif
+BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB)
 
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 CURRENT_DIR := $(notdir $(patsubst %/,%,$(dir $(MKFILE_PATH))))
@@ -23,8 +27,10 @@ MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
 #CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I.
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS)) -ggdb3 -Wall -Werror
 
-LDFLAGS ?= -L$(BOOSTDIR)/lib -lboost_program_options
-LDFLAGS += -L$(MILDE_DIR)/lib -Wl,--no-as-needed -lmilde_core -Wl,--no-as-needed -lmilde_lua
+LDFLAGS?=
+LDFLAGS+=-L$(MILDE_DIR)/lib -Wl,--no-as-needed -lmilde_core -Wl,--no-as-needed -lmilde_lua
+# if shared linkage with libmcfilter, also need...
+LDFLAGS+=-Wl,-no-as-needed $(BOOSTLINK) -lboost_program_options
 # testing
 #LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
 
@@ -52,8 +58,10 @@ profile_evaluate:
 	$(CXX) -o $@ $(CPPFLAGS) -fPIC -c $<
 %-dbg.lo: %.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -fPIC -c $<
-../c/lib%.a:
-	cd ../c && $(MAKE) lib$*.a
+../c/lib%:
+	$(MAKE) -j10 -C../c lib$*
+#../c/libmcfilter%:
+#	$(MAKE) -j10 -C../c libmcfilter$*
 
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
@@ -85,23 +93,29 @@ LIBMCLUA_SRC:=mclua.cpp
 # rpath setting stored within libmclua*.so should be an absolute path
 #  TODO: eventually, perhaps to some milde install directory?
 DEP_LIB_DIR:=-Wl,-rpath,$(MCSRC_DIR)/c -L../c
-
 # Note:
 #       mcparm.so can link to EITHER libmclua.so OR libmclua-dbg.so
+#    BUT then need a luaopen_mcparm function!
 # Then if the lua_CPATH includes ".", you can require 'mcparm', which will:
 # 1) load the lua api from mcparms.so and
 # 2) link to the libmcfilter compiled at corresponding debug level
-libmclua.so: $(patsubst %.cpp,%.lo,$(LIBMCLUA_SRC))
-	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter
+libmclua.so: $(patsubst %.cpp,%.lo,$(LIBMCLUA_SRC)) | ../c/libmcfilter.so
+	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter $(BOOSTLINK) -L$(MILDE_DIR)/lib -Wl,-rpath,$(MILDE_DIR)/lib
 	# rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
-libmclua-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIBMCLUA_SRC))
-	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter-dbg
+libmclua-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIBMCLUA_SRC)) | ../c/libmcfilter-dbg.so
+	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter-dbg $(BOOSTLINK) -L$(MILDE_DIR)/lib -Wl,-rpath,$(MILDE_DIR)/lib
 	rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
 
 # links, but don't know how to "run" lua from inside C++ code yet...
 #   For now, you can test as   make clean && make && lua_cpp parms.lua
-linkme: linkme.cpp
-	$(CXX) -o $@ $(DBGFLAGS) -fPIC -O0 linkme.cpp -L. -Wl,-rpath,. -Wl,-rpath,../c -lmclua-dbg -L../c -lmcfilter $(LDFLAGS)
+linkme-dbg: linkme.cpp | libmclua-dbg.so ../c/libmcfilter-dbg.so
+	$(CXX) -o $@ $(DBGFLAGS) -fPIC -O0 linkme.cpp -L. -Wl,-rpath,. -lmclua-dbg -L../c -Wl,-rpath,../c -lmcfilter-dbg \
+		-L$(MILDE_DIR)/lib -lmilde_core -lmilde_lua \
+		$(BOOSTLINK) -lboost_program_options
+linkme: linkme.cpp | libmclua.so ../c/libmcfilter.so
+	$(CXX) -o $@ $(DBGFLAGS) -fPIC -O0 linkme.cpp -L. -Wl,-rpath,. -lmclua -L ../c -Wl,-rpath,../c -lmcfilter \
+		-L$(MILDE_DIR)/lib -lmilde_core -lmilde_lua \
+		$(BOOSTLINK) -lboost_program_options
 
 clean: 
-	rm -f *.o *.lo *.so linkme libmclua*.a *.i
+	rm -f *.o *.lo *.so linkme libmclua*.a libmclua*.so *.i

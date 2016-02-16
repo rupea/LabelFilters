@@ -158,10 +158,17 @@ namespace MILDE {
     } \
 }while(0)
 #define MCSET_enum(PARM) do{ \
-    string s = argmap.map().get( #PARM ); \
-    cout<<" argmap get("<<#PARM<<") --> string "<<s<<endl; \
-    if( s.size() ) { \
-        fromstring( s, x->d_params->PARM ); \
+    try{ \
+        string s = argmap.map().get( #PARM ); \
+        cout<<" argmap get("<<#PARM<<") --> enum string "<<s<<endl; \
+        if( s.size() ) { \
+            fromstring( s, x->d_params->PARM ); \
+        } \
+    }catch(...){ /* also allow an int value for the enum type */ \
+        int i; \
+        argmap.get_int( string(#PARM), i, false/*err_if_missing*/ ); \
+        cout<<" argmap get_int("<<#PARM<<") --> enum int "<<i<<endl; \
+        x->d_params->PARM = static_cast<decltype(x->d_params->PARM)>(i); \
     } \
 }while(0)
 #define MCSET_bool(PARM)   MCSET(bool,bool,          ,PARM)
@@ -487,5 +494,12 @@ extern "C" DLLEXP int luaopen_libmclua( lua_State * L )
     ADD_ENUM(REWEIGHT_ALL);
     lua_pop(L,1);               // pop the table
     return 1;
+}
+
+// alternate names for luaopen:
+/** you can provide a link mcparm.so --> one of libmclua.so or libmclua-dbg.so */
+extern "C" DLLEXP int luaopen_mcparm( lua_State *L )
+{
+    return luaopen_libmclua(L);
 }
 

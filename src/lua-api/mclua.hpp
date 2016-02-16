@@ -43,9 +43,15 @@ namespace MILDE {
      require('milde')
      mc = require('libmclua')
      * ~~~
+     * - At this point have <TT>libmclua:MINIBATCH_SGD</TT> (etc) enum constants
+     *   - and a \c libmclua.mc (table) containing    'new' --> 'function'
+     *   - and have set \c mc to the result of invoking \c libmclua.mc.new()
+     * - To selectively use the debug libmclua (hopefully with debug libmcfilter)
+     *   - create a link mcparm.so --> libmclua-dbg.so OR libmclua.so
+     *   - and use \c mc=require('mcparm')
      * Construct default parameters (+ print, convert to lua table)
      * ~~~{.lua}
-     p = mc.new()       -- default parms
+     p = mc             -- default parms
      print(p:str())     -- print: empty, because all values at default
      print(p:str(true)) -- print, verbose option
      t=p.get()          -- lua table (empty) of nondefault parms
