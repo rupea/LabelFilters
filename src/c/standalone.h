@@ -1,3 +1,5 @@
+#ifndef STANDALONE_H
+#define STANDALONE_H
 /** \file
  * Encapsulate original standalone mcsolve/mcproj into library.
  */
@@ -7,7 +9,7 @@
 namespace opt {
 
     /** high level MCsolver api, as used in mcsolve executable */
-    class MCsolveProgram : public MCsolver {
+    class MCsolveProgram : public ::MCsolver {
     public:
 #ifdef NDBEUG
         static const int defaultVerbose=0;
@@ -24,9 +26,9 @@ namespace opt {
         DenseM xDense;
         bool denseOk;
         SparseM xSparse;
-        bool SparseOk;
+        bool sparseOk;
         SparseMb y;
     };
 
 }//opt::
-
+#endif // STANDALONE_H

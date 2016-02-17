@@ -4,6 +4,7 @@
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #include <boost/dynamic_bitset.hpp>
+#include <omp.h>                        // omp_get_max_threads
 
 using   Eigen::VectorXd;
 using   Eigen::VectorXi;

@@ -11,6 +11,17 @@ namespace opt {
     ///@{
     void helpUsageDummy( std::ostream& os );
 
+    /** split a std::string \c cmdline into a vector of items,
+     * handling whitespace, backslash-escapes and '" quotes.
+     *
+     * \c haveProgName default [true,1] will SKIP argv[0].
+     *          Use \c cmdSplit(str,0) to avoid missing the first option if you need
+     *          to parse something like str="--opt1=1 --opt2=2" and NOT skip opt1.
+     */
+    std::vector<std::string> cmdSplit( std::string cmdline, bool haveProgName=true );
+
+    std::string helpMcParms();     ///< return the boost::program_options help string
+
 #if 0
     /** retrieve po::options_description for \c param_struct with \em standard default values.
      * \deprecated */

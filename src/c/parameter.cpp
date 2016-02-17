@@ -70,14 +70,14 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     WIDE(os,c3,right<<setw(15)<<"C1 "<<left<<p.C1);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"batchsize "<<left<<p.batch_size);
-    WIDE(os,c2,right<<setw(11)<<"report "<<left<<p.report_epoch);
+    WIDE(os,c2,right<<setw(11)<<"treport "<<left<<p.report_epoch);
     WIDE(os,c3,right<<setw(15)<<"C2 "<<left<<p.C2);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"etatype "<<left<<tostring(p.eta_type));
     WIDE(os,c2,"   "<<tostring(p.reorder_type));
     WIDE(os,c3,"      "<<left<<tostring(p.reweight_lambda));
     os<<endl;
-    WIDE(os,c1,right<<setw(14)<<"eta "<<left<<p.eta);
+    WIDE(os,c1,right<<setw(14)<<"eta0 "<<left<<p.eta);
     WIDE(os,c2,right<<setw(11)<<"treorder "<<left<<p.reorder_epoch);
     WIDE(os,c3,right<<setw(15)<<"negclass "<<left<<p.class_samples);
     os<<endl;
@@ -86,11 +86,11 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     WIDE(os,c3,right<<setw(15)<<"tgrad "<<left<<p.finite_diff_test_epoch);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"threads "<<left<<p.num_threads);
-    WIDE(os,c2,right<<setw(11)<<"reportavg "<<left<<p.report_avg_epoch);
+    WIDE(os,c2,right<<setw(11)<<"tavg "<<left<<p.report_avg_epoch);
     WIDE(os,c3,right<<setw(15)<<"ngrad "<<left<<p.no_finite_diff_tests);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"remove_constraints "<<left<<p.remove_constraints);     // bool
-    WIDE(os,c2,right<<setw(11)<<"avg_epoch (tavg) "<<left<<p.avg_epoch);
+    WIDE(os,c2,right<<setw(11)<<"avg_epoch (avg) "<<left<<p.avg_epoch);
     WIDE(os,c3,right<<setw(15)<<"grad "<<left<<p.finite_diff_test_delta);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"remove_class "<<left<<p.remove_class_constraints);       // bool
