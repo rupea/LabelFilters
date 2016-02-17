@@ -1,19 +1,24 @@
 #ifndef MCLUA_H
 #define MCLUA_H
 
+#include "parameter.h"
+#include "standalone.h"         // MCsolveProgram
+#include <omp.h>                // MUST be included before milde XXX evil!
+
 #include "base/rc_base.hpp"
-#include "base/app_state.hpp"
-#include "lua.h"
+//#include "base/app_state.hpp"
+#include "lua.hpp"                // lua_State, from $(MILDE_DIR)/include/milde_lua
 //#include "script_lua/lua_binding_macros.hpp"
 //#include "script_lua/lua_interpreter.hpp"
 //#include "script_shell/script_stream.hpp"
-#include "parameter.h"
+//#include <omp.h>                // clash for omp_get_num_threads, omp_test_lock, mutexlock stuff, etc.
 
 //struct param_struct;
 extern "C" int luaopen_mcparm( lua_State *);
 
 namespace MILDE {
 
+    /** internal C++ impl for param_struct MCfilter functionality */
     struct scr_MCparm{
         /** a ref-counted wrapper for a libmcfilter param_struct */
         struct cnt_Params :
@@ -29,9 +34,9 @@ namespace MILDE {
         explicit scr_MCparm() : d_params(new cnt_Params()) {}
         virtual ~scr_MCparm() {}
 
-        static scr_MCparm* new_stack(); ///< construct as lua userdata object
-
+        static scr_MCparm* new_stack(); ///< construct 'parms' as lua userdata object
         rc_Ptr<cnt_Params> d_params;
+
     };
 
     /** lua interface functions for scr_MCparm object.
@@ -103,23 +108,111 @@ print(p:str())    -- now have some nondefault parameters
      */
     struct script_MCparm {
         static int f___gc();
-        static int f_type();
+        static int f_type();    ///< mcparm
+        static int f_str();     ///< str([verbose:bool=0]) nondefault (or all) parms, one per line
+        static int f_pretty();  ///< return 'pretty' string of the parameters
+        static int f_help();    ///< return 'help' string for set({argstring}) command-line parameters
         // f_get may be a bit more convenient to use than getargs
         //    E.g., don't need tonumber(string) for assertions.
         static int f_get();     ///< string -> lua builtin type -- copy of MCfilter parms (ArgMap)
         static int f_getargs(); ///< string -> string table -- copy of MCfilter parms (Args)
-        static int f_set();     ///< set(<table>) overwrite parameter entries
+        /** overwrite parameter entries set({table}) or set({argstring}) */
+        static int f_set();
         static int f_setargs(); ///< set(<table>) (string keys) overwrite parms
-        static int f_str();     ///< str([verbose:bool=0]) nondefault (or all) parms
+
         // constructors
-        static int f_new();  // return a default-constructed "param_struct"
+        static int f_new();  ///< returns a [lua] default-constructed "param_struct"
+
+        // utility functions:
+        /** convert a \em lua slc/mlc dense/sparse repo to "plain Eigen" .x and .y files.
+         * - Function:
+         *   - produce Eigen-compatible data files compatible with libmcfilter
+         *     'solve' and 'project' operations
+         * - Lua Usage:
+         *   - <B>repo2xy( repo, basename )</B>
+         *     - output basename.x and basename.y files compatible with reading in
+         *       as Eigen DenseM and SparseMb types
+         *     - basename.x written always as float, with <B>D</B>ense/<B>S</B>parse as per repo
+         *       - readable into one of <B>D</B>enseM or <B>S</B>parseM
+         *       - header magic "MCx<B>D</B>" or "MCx<B>S</B>"
+         *     - basename.y written <em>as 0..nClass numeric labels</em>,
+         *       - readable into a SparseMb (sparse matrix of bool)
+         *       - header magic "MCyN" (perhaps always written as bitmap??)
+         * - except for header magics, \em similar to code written for
+         *   {mcgen|mcsolve|mcproj}.cpp standalone (all-C++) utilities
+         */
+        static int f_toxy();
 
         // MCsolver/MCsoln functions
-        static int f_load();    ///< load(<fname:str>) -> 0/1 ~ bad/good
+        //static int f_load();    ///< load(<fname:str>) -> 0/1 ~ bad/good
+        static int f_xfile();   ///< xfile(<fname:str>) -- fname.x example Eigen data
+        static int f_yfile();   ///< xfile(<fname:str>) -- fname.x example Eigen data
+        static int f_solnfile();   ///< xfile(<fname:str>) -- fname.x example Eigen data
     };
 
-    /** Actually, should create a solver class that, besides \c solve_optimization,
-     * provides write|read_binary|ascii of internal state.
+#if 0
+            // one option is for solve/project to build up program arguments with little lua calls
+            //std::string xfile;
+            //std::string yfile;
+            //std::string solnfile;
+            //std::string solnfmt;    ///< [default "SB"] 2 chars, S|L B|T for Short/Long Binary/Text soln format
+            // threads?
+            // xnorm?       NO!
+            //std::string outputfile; ///< mcsolve operation may write a \em different solnfile as output.
+            // possibly read these now, could also leave for later (during 'solve' or 'project' ops)
+            //DenseM x;
+            //bool isDense;
+            //SparseM y;
+            // simpler option is just to take all args as a string of command line parameters,
+            // and whose boost::program_options mirrors the standalone utilites
+            //    mcsolve,   mcproj,    and [perhaps even] mcgen
+#if 0 // *** NEW ***
+            std::string solveArgs;
+            std::string projArgs;
+#endif
+#if 1 // XXX probably should be in a separate 'solver' object
+        static std::string help_solve();        ///< return mcsolve --help string
+        void solve( std::string solveArgs );    ///< solution "just like" standalone mcsolve
+#endif
+#if 0
+        static std::string help_proj();         ///< return mcproj --help string
+        static void proj( std::string projArgs );
+#endif
+#endif
+    /** internal C++ impl for MCsolveProgram MCfilter function */
+    struct scr_MCsolve{
+        /** a ref-counted wrapper for a libmcfilter param_struct */
+        struct cnt_Solve :
+            //public Base_tag,   // defined in milde lib/os/util_io.hpp
+            public rc_Cnt,
+            public ::opt::MCsolveProgram
+        {
+            typedef ::opt::MCsolveProgram base;
+            cnt_Solve( ::opt::MCsolveArgs const& mcsa )
+                : ::opt::MCsolveProgram( mcsa )
+            {}
+            //cnt_Solve( base const& x ) : ::opt::MCsolveProgram(x) {}
+            //cnt_Solve();
+        };//class cnt_Solve
+
+        virtual ~scr_MCsolve() {}
+
+        /** construct solver as lua userdata object.
+         * Note that \c MCsolveArgs is a super-set of \c param_struct,
+         * also allowing <em>solve</em>-specific settings (xfile,yfile,solnfile,...).
+         */
+        static scr_MCsolve* new_stack( ::opt::MCsolveArgs const& mcsa );
+
+        rc_Ptr<cnt_Solve> d_solve;
+
+    private:
+        explicit scr_MCsolve( ::opt::MCsolveArgs const& mcsa )
+            : d_solve(new cnt_Solve(mcsa))
+        {}
+    };
+    /** lua interface functions for scr_MCsolve object.
+     * - Actually, should create a solver class that, besides \c solve_optimization,
+     *   provides write|read_binary|ascii of internal state.
      * - Internal state should be stored in short|full format
      *   - first store time t and time t state like eta, C1, C2, ...
      *   - then store
@@ -127,7 +220,11 @@ print(p:str())    -- now have some nondefault parameters
      *     - or long restart data that adds {w,l,u,obj} at time "t"
      */
     struct script_MCsolve {
-        static int f___gc();
+        static int s___gc();
+        static int s_type();            ///< mcsolve
+        static int s_help();            ///< return help string for MCsolveProgram cmdline args
+        //static int f_cmdline();         ///< return full constructor string (for later runs)
+#if 0
         /** Run an initialized solver, and then save restart data.
          * - Inputs describe where final data should be saved
          *  - [ rfile_avg               : restart filename for _avg data
@@ -148,6 +245,19 @@ print(p:str())    -- now have some nondefault parameters
          * - and restart dimensions must agree with repo sizing.
          */     
         static int f_solver();
+#endif
+
+        /** constructor.
+         * - 2 lua call types:
+         *   - lua: new("--eta0=0.1 --etamin=1.e-3")
+         *     - override default settings via cmdline args string
+         *   - or   new(<mcparm>, "--etatype=SQRT --optlu=700 --maxiter=500 ...")
+         *     - override user-specified defaults via cmdline args string
+         */
+        static int s_new();
+    private:
+        //struct param_struct pInit;
+        //std::string cmdLine;
     };
 
 }//MILDE::

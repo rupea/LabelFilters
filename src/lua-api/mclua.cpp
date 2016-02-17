@@ -1,5 +1,10 @@
 
 #include "mclua.hpp"
+//#include "parameter-args.h"
+#include "standalone.h"
+
+#include "base/app_state.hpp"
+//#include "lua.h"
 #include "lua.hpp"
 
 #include "base/app_state.hpp"
@@ -7,6 +12,7 @@
 #include "base/argmap.hpp"
 #include "repo/args.hpp"
 
+#include <string.h>     // strtok
 #include <assert.h>
 #include <iostream>
 #include <exception>
@@ -30,16 +36,92 @@ scr_ERR( errmsg )
 /** abbreviated lua stack check */
 #define scr_CHK scr_STK(errmsg) 
 
+// ------------------ helpers --------------------
+/** convert std::string --> argc,argv at plain whitespace sequences */
+struct ArgcArgv {
+    ArgcArgv() : argc(0), argv(nullptr), buffer(nullptr) {}
+    ~ArgcArgv(){
+        delete[] buffer;
+#ifndef NDEBUG
+        for(int a=0; a<argc; ++a){ argv[a]=nullptr; }
+        buffer=nullptr;
+#endif
+    }
+    /** split s at whitepace sequences (plain strtok: no escape seqs, no quote handling).
+     * esc seq could be handled within 's', perhaps.
+     */
+    ArgcArgv( std::string const s )
+    //: argc(0U), argv(nullptr), nchar(s.size()), buffer( new char[nchar+1U] )
+    : argc(0U), argv(nullptr), buffer(nullptr)
+    {
+#if 0 // OLD CODE : plain-old whitespace splitting via strtok
+        // work on a copy of the input
+        strncpy( buffer, s.data(), nchar );
+        buffer[nchar] = '\0';
+        // buffer --> tok[] ptrs
+        char const delim[8] = " \t\n\r";        // did I miss some?
+        char* bufptr = strtok(buffer,&delim[0]);
+        while( bufptr ){
+            tok.push_back(bufptr);
+            bufptr = strtok(nullptr, delim);
+        }
+        // tok[] ptrs --> argc, argv
+        argc = tok.size();
+        tok.push_back(nullptr); // one extra nullptr, for strict argc/argv compat
+        argv = &tok[0];
+#endif
+        std::vector<std::string> split = ::opt::cmdSplit(s,0); // 0 -> NO program-name, just args
+        if( split.size() ){
+            size_t nchar = 0U;
+            for(auto const s: split) nchar += s.size() + 1U;
+            buffer = new char[nchar];
+            if( !buffer ) throw std::runtime_error("ArgcArgv out-of-mem");
+            argv = new char*[split.size()+1U]; // one extra zero-length string
+            if( !argv ) throw std::runtime_error("ArgcArgv out-of-mem");
+            argc=0;
+            size_t o=0U;
+            for(size_t i=0U; i<split.size(); ++argc, ++i){
+                argv[argc] = &buffer[o];
+                memcpy( &buffer[o], split[i].data(), split[i].size() );
+                o += split[i].size();
+                buffer[o++] = '\0';
+            }
+            assert( argc == static_cast<int>(split.size()) );
+            // and one extra nullptr
+            argv[argc] = nullptr;
+        }
+    }
+    int argc;
+    char** argv;
+private:
+    //size_t const nchar;
+    char* buffer;
+    //std::vector<char*> tok;/
+    //std::vector<std::string> split;
+};
+
 // ------------------ lua stack allocation --------------------
 namespace MILDE {
     scr_MCparm::cnt_Params::cnt_Params()
         : param_struct( set_default_params() )
     {}
 
+    // static relay functions to C++ constructor
     scr_MCparm* scr_MCparm::new_stack(){
         return new( GAS.d_si->new_user< scr_MCparm >( OBJNAME(scr_MCparm))) scr_MCparm;
     }
-    //scr_MCparm foo(nullptr);
+
+    scr_MCsolve* scr_MCsolve::new_stack( ::opt::MCsolveArgs const& mcsa ){
+        return new( GAS.d_si->new_user< scr_MCsolve >( OBJNAME(scr_MCsolve))) scr_MCsolve( mcsa );
+    }
+
+#if 0
+    std::string scr_MC::help_solve(){
+        return ::opt::MCsolveArgs::defaultHelp();
+    }
+    std::string scr_MCparm::help_proj(){
+    }
+#endif
 }//MILDE::
 
 // ------------------- lua interface -------------------
@@ -47,15 +129,40 @@ namespace MILDE {
 #define FUN(name) WRAP_FUN(name,script_MCparm::f_)
 FUN(__gc)
 FUN(type)
+FUN(pretty)
+FUN(help)
 FUN(get)        // return all parameters as string->luatype table
 FUN(getargs)    // return all parameters as string->string table
 FUN(set)        // overwrite keys in supplied string->luatype table
 FUN(setargs)    // overwrite keys in supplied string->string table
 FUN(str)
-FUN(load)       // read x,y training data
+//FUN(load)       // read x,y training data
+//FUN(xfile)      // set mcsolve/mcproj --xfile string
+//FUN(yfile)      // set mcsolve/mcproj --yfile string
+//FUN(xyfile)     // set --xfile and --yfile as fname.x and fname.y
+//FUN(solnfile)   // set --solnfile string, and [def. "BS"] Binary|Text, Short|Long format
 
-FUN(new)     // construct a default 'mcparm' parameter set
+FUN(new)        // construct a default 'mcparm' parameter set
+//FUN(toxy)    // toxy(repo,basename [,bool xnorm=false]) writes Eigen-friendly basename.{x|y} files usable for xfile and yfile commands
 ;
+#undef FUN
+
+/** to avoid name clash, modify WRAP_FUN naming convention */
+#define WRAP_MCSOLVE(name,prefix) \
+    static int luaB_solve_##name( lua_State* L ) \
+{ \
+    SWAP_LUA_STATE; \
+    LUA_CHECK_FOR_DUMMY_ARG_HACK(name); \
+    return prefix##name(); \
+}
+#define FUN(name) WRAP_MCSOLVE(name,script_MCsolve::s_)
+FUN(__gc)
+FUN(type)
+FUN(help)
+//FUN(solve)   ... or read, solve, save, display
+FUN(new)
+;
+#undef FUN
 
 // ------------------ scripting impl --------------------
 namespace MILDE {
@@ -71,16 +178,42 @@ namespace MILDE {
 
     int script_MCparm::f_type() ///< return string/name of the <mcparm>
     {
-        scr_TRY( "<mcparm>:type()-><str>" ){
+        scr_TRY( "<mcparm>:type() -> <str>" ){
             scr_USR( scr_MCparm, x, ERR_LBL );
             GAS.d_si->put_ccstr( "mcparm" );
             return 1;
         }scr_CATCH;
     }
 
+    int script_MCparm::f_pretty() ///< return string/name of the <mcparm>
+    {
+        scr_TRY( "<mcparm>:pretty() -> <str>" ){
+            scr_USR( scr_MCparm, x, ERR_LBL );
+            string pretty;
+            {
+                ostringstream oss;
+                oss << *x->d_params;
+                pretty = oss.str();
+            }
+            GAS.d_si->put_ccstr( pretty );
+            return 1;
+        }scr_CATCH;
+    }
+
+    int script_MCparm::f_help() ///< return string/name of the <mcparm>
+    {
+        scr_TRY( "<mcparm>.help() -> <str>" ){
+            string help = ::opt::helpMcParms();
+            GAS.d_si->put_ccstr( help );
+            return 1;
+        }scr_CATCH;
+    }
+
+#if 0
+    // since I have no lua support for any 'raw' Eigen types, easier to supply filenames
     int script_MCparm::f_load() ///< loads an x,y dataset (repo)
     {
-        scr_TRY( "<mc>.load(<fname:str>)-><str>" ){
+        scr_TRY( "<mc>.load(<fname:str>) -> sets x,y filenames to basename.{x|y}" ){
             scr_STR( fname, ERR_LBL );
             if(0){
                 // read stuff HERE ...
@@ -93,6 +226,7 @@ namespace MILDE {
             }
         }scr_CATCH;
     }
+#endif
 
     /** set \c param_struct::PARM to (MILDETYPE) args["PARM"] */
 #define MCSET(MILDETYPE,PARM) do{ \
@@ -157,6 +291,12 @@ namespace MILDE {
         x->d_params->PARM = CONV(p); \
     } \
 }while(0)
+/** This impl is compatibile with ArgMap. But has some deficiencies.
+ * 
+ * - mostly accepts only properly-typed lua objects
+ *   - e.g. bool only accepts true/false lua value (0 or 1 won't work)
+ * - enum as int value has been allowed.
+ */
 #define MCSET_enum(PARM) do{ \
     try{ \
         string s = argmap.map().get( #PARM ); \
@@ -177,38 +317,51 @@ namespace MILDE {
 #define MCSET_double(PARM) MCSET(dbl, double,        ,PARM)
     int script_MCparm::f_set()
     {
-        scr_TRY( "<mcparm>:set({args}) -> <table:string->various>" ){
+        scr_TRY( "<mcparm>:set({args}) -> <ArgMap_table:string->various>" ){
             scr_USR( scr_MCparm, x, ERR_LBL );
-            scr_ARGMAP( argmap, ERR_LBL );
-            MCSET_int(    no_projections );
-            MCSET_double( C1 );
-            MCSET_double( C2 );
-            MCSET_size_t( max_iter );
-            MCSET_size_t( batch_size );
-            MCSET_enum(   update_type ); // tostring(enum Update_Type)
-            MCSET_double( eps );
-            MCSET_enum(   eta_type ); // enum Eta_Type
-            MCSET_double( min_eta );
-            MCSET_size_t( avg_epoch );
-            MCSET_size_t( reorder_epoch );
-            MCSET_size_t( report_epoch );
-            MCSET_size_t( report_avg_epoch );
-            MCSET_size_t( optimizeLU_epoch );
-            MCSET_bool(   remove_constraints );
-            MCSET_bool(   remove_class_constraints );
-            MCSET_enum(   reweight_lambda );
-            MCSET_enum(   reorder_type ); // enum Reorder_Type
-            MCSET_bool(   ml_wt_by_nclasses );
-            MCSET_bool(   ml_wt_class_by_nclasses );
-            MCSET_int(    num_threads );
-            MCSET_int(    seed );
-            MCSET_size_t( finite_diff_test_epoch );
-            MCSET_size_t( no_finite_diff_tests );
-            MCSET_double( finite_diff_test_delta );
-            MCSET_bool(   resume );
-            MCSET_bool(   reoptimize_LU );
-            MCSET_int(    class_samples );
-            return 1;
+            {
+                scr_ARGMAP( argmap, NOT_ARGS );
+                MCSET_int(    no_projections );
+                MCSET_double( C1 );
+                MCSET_double( C2 );
+                MCSET_size_t( max_iter );
+                MCSET_size_t( batch_size );
+                MCSET_enum(   update_type ); // tostring(enum Update_Type)
+                MCSET_double( eps );
+                MCSET_enum(   eta_type ); // enum Eta_Type
+                MCSET_double( min_eta );
+                MCSET_size_t( avg_epoch );
+                MCSET_size_t( reorder_epoch );
+                MCSET_size_t( report_epoch );
+                MCSET_size_t( report_avg_epoch );
+                MCSET_size_t( optimizeLU_epoch );
+                MCSET_bool(   remove_constraints );
+                MCSET_bool(   remove_class_constraints );
+                MCSET_enum(   reweight_lambda );
+                MCSET_enum(   reorder_type ); // enum Reorder_Type
+                MCSET_bool(   ml_wt_by_nclasses );
+                MCSET_bool(   ml_wt_class_by_nclasses );
+                MCSET_int(    num_threads );
+                MCSET_int(    seed );
+                MCSET_size_t( finite_diff_test_epoch );
+                MCSET_size_t( no_finite_diff_tests );
+                MCSET_double( finite_diff_test_delta );
+                MCSET_bool(   resume );
+                MCSET_bool(   reoptimize_LU );
+                MCSET_int(    class_samples );
+                return 1;       // returns some table
+            }
+NOT_ARGS:
+            {
+                scr_STR( cmdline, ERR_LBL );
+                scr_STK("<mcparm>:set(<cmd_line_args: str>) -> <this:mcparm> -- use cmdline to modify existing MCsolver parameters, see also mcparm.help()");
+                ArgcArgv aa(cmdline);                   // tokens separated by [[:white:]]*
+                // GOOD: x fully initialized before this call (by scr_MCparm constructor)
+                auto unparsed = ::opt::mcArgs( aa.argc, aa.argv, *(x->d_params) );
+                if( unparsed.size() ) cerr<<" (ignoring "<<unparsed.size()<<" unparsed args for now)"<<endl;
+                // TODO also return 'unparsed' as a string table [0,1,2,...] --> lua string
+                return 1;
+            }
         }scr_CATCH;
     }
 #undef MCSET_double
@@ -412,6 +565,79 @@ GOT_VERBOSE:
         }scr_CATCH;
     }
 
+    int script_MCparm::f_toxy()
+    {
+        scr_TRY("<mcparm>.toxy( <repo>, <basename:str> ) -- write basename.x basename.y data files"){
+            cerr<<"XXX TBD f_toxy"<<endl;
+            throw std::runtime_error(" script_MCparm::f_toxy NOT IMPLEMENTED");
+            //return 1;
+        }scr_CATCH;
+    }
+
+    int script_MCsolve::s___gc() {
+        scr_TRY("<mcsolve> : __gc()"){
+            scr_USR( scr_MCsolve, f, ERR_LBL );
+            scr_STK( "<mcsolve> : __gc()" );
+            GAS.d_si->del_user( f );
+            return 0;
+        }scr_CATCH;
+    }
+
+    int script_MCsolve::s_type() ///< return string/name of the <mcsolve>
+    {
+        scr_TRY( "<mcsolve>:type() -> <str>" ){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            GAS.d_si->put_ccstr( "mcsolve" );
+            return 1;
+        }scr_CATCH;
+    }
+
+    int script_MCsolve::s_help() ///< return string/name of the <mcparm>
+    {
+        scr_TRY( "<mcsolve>.help() -> <str>" ){
+            string help = ::opt::MCsolveArgs::defaultHelp();
+            GAS.d_si->put_ccstr( help );
+            return 1;
+        }scr_CATCH;
+    }
+
+int script_MCsolve::s_new()
+{
+    scr_TRY("   <mcsolve>.new(<cmdLineArgs:str>) -> <mcsolve>"
+            "\nOR <mcsolve>.new(<mcparm>, <cmdLineArgs:str>) -> <mcsolve>"
+           ){
+        ::opt::MCsolveArgs mcsa;   // temp copy, real one inside MCsolveProgram
+        {
+            scr_USR( scr_MCparm, defaultParms, NO_PARMS );
+            mcsa.parms = *defaultParms->d_params;
+        }
+NO_PARMS:
+        scr_STR( cmdLineArgs, ERR_LBL );
+        ArgcArgv aa(cmdLineArgs);
+        mcsa.argsParse( aa.argc, aa.argv );
+        scr_MCsolve::new_stack( mcsa );
+        return 1;
+    }scr_CATCH;
+}
+
+#if 0
+void MILDE::scr_MCsolve::solve( std::string solveArgs ){ // XXX in WRONG OBJECT XXX
+#if 1 // Eigen CANNOT be stuck inside a namespace easily?  omp_get_max_threads not declared?
+    using ::omp_get_max_threads;
+    int argc = 0;
+    char** argv=nullptr;
+    ::opt::MCsolveArgs mcsa;
+    mcsa.argsParse( argc, argv );
+    cout<<"solnFile = "<<mcsa.solnFile<<endl;
+    static int const verbose=1;
+    ::opt::MCsolveProgram prog( mcsa, verbose );
+    prog.tryRead( verbose );
+    prog.trySolve( verbose );
+    prog.trySave( verbose );
+    prog.tryDisplay( verbose );
+#endif
+}
+#endif
 }//MILDE::
 
 
@@ -420,17 +646,31 @@ GOT_VERBOSE:
 static const struct luaL_Reg lua_mcparm_lib_m [] = {
     LUA_FUN(__gc),
     LUA_FUN(type),
+    LUA_FUN(pretty),
+    LUA_FUN(help),
     LUA_FUN(get),
     LUA_FUN(getargs),
     LUA_FUN(set),
     LUA_FUN(setargs),
     LUA_FUN(str),
-    LUA_FUN(load),
+    //LUA_FUN(load),
     {0,0}
 };
 static const struct luaL_Reg lua_mc_lib_f [] = {
     LUA_FUN(new)
 };
+#undef LUA_FUN
+#define LUA_FUN(name) { #name , luaB_solve_##name }
+static const struct luaL_Reg lua_mcsolve_lib_m [] = {
+    LUA_FUN(__gc),
+    LUA_FUN(type),
+    LUA_FUN(help),
+    {0,0}
+};
+static const struct luaL_Reg lua_mcsolve_lib_f [] = {
+    LUA_FUN(new)
+};
+#undef LUA_FUN
 
 /** needs libraries milde_core and mcfilter.
  * Usage from within milde \em lua_cpp :
@@ -470,8 +710,16 @@ extern "C" DLLEXP int luaopen_libmclua( lua_State * L )
     // constructors
     //   put table 'mc' into table 'libmclua'
     MILDE_li()->register_namespace( "libmclua", "mc", lua_mc_lib_f );
-    // lua stack: table named 'libmclua', with one entry, 'libmclua.mc'
+
+    MILDE_li()->register_class( OBJNAME(scr_MCsolve), "mcsolve", lua_mcsolve_lib_m );
+    MILDE_li()->register_namespace( "libmclua", "mcsolve", lua_mcsolve_lib_f );
+
     script_MCparm::f_new();             // automagically invoke libmclua.mc.new()
+
+    // now you can:
+    //    require("libmclua");
+    //    mcsolv = libmclua.mcsolve.new("--maxiter=5000, --xfile=foo.x --yfile=foo.y --solnfile=foo.soln")
+    //    ...
 
     lua_getglobal(L,"libmclua"); // get the table
     // ... or even lua_getlobal(MILDE_li()->d_lua,"libmclua");
