@@ -2,7 +2,7 @@
 #define MCLUA_H
 
 #include "parameter.h"
-#include "standalone.h"         // MCsolveProgram
+#include "mcsolveProg.hpp"         // MCsolveProgram
 #include <omp.h>                // MUST be included before milde XXX evil!
 
 #include "base/rc_base.hpp"
@@ -181,6 +181,12 @@ print(p:str())    -- now have some nondefault parameters
 #endif
     /** internal C++ impl for MCsolveProgram MCfilter function */
     struct scr_MCsolve{
+        /** construct solver as lua userdata object.
+         * Note that \c MCsolveArgs is a super-set of \c param_struct,
+         * also allowing <em>solve</em>-specific settings (xfile,yfile,solnfile,...).
+         */
+        static scr_MCsolve* new_stack( int argc, char**argv, param_struct const* const defparms=nullptr );
+
         /** a ref-counted wrapper for a libmcfilter param_struct */
         struct cnt_Solve :
             //public Base_tag,   // defined in milde lib/os/util_io.hpp
@@ -188,26 +194,18 @@ print(p:str())    -- now have some nondefault parameters
             public ::opt::MCsolveProgram
         {
             typedef ::opt::MCsolveProgram base;
-            cnt_Solve( ::opt::MCsolveArgs const& mcsa )
-                : ::opt::MCsolveProgram( mcsa )
+            cnt_Solve( int argc, char** argv, param_struct const* const defparms )
+                : ::opt::MCsolveProgram( argc, argv, /*verbose=*/1, defparms )
             {}
-            //cnt_Solve( base const& x ) : ::opt::MCsolveProgram(x) {}
-            //cnt_Solve();
         };//class cnt_Solve
 
         virtual ~scr_MCsolve() {}
 
-        /** construct solver as lua userdata object.
-         * Note that \c MCsolveArgs is a super-set of \c param_struct,
-         * also allowing <em>solve</em>-specific settings (xfile,yfile,solnfile,...).
-         */
-        static scr_MCsolve* new_stack( ::opt::MCsolveArgs const& mcsa );
-
         rc_Ptr<cnt_Solve> d_solve;
 
     private:
-        explicit scr_MCsolve( ::opt::MCsolveArgs const& mcsa )
-            : d_solve(new cnt_Solve(mcsa))
+        explicit scr_MCsolve(int argc, char**argv, param_struct const* const defparms=nullptr)
+            : d_solve(new cnt_Solve(argc,argv,defparms))
         {}
     };
     /** lua interface functions for scr_MCsolve object.
@@ -224,33 +222,20 @@ print(p:str())    -- now have some nondefault parameters
         static int s_type();            ///< mcsolve
         static int s_help();            ///< return help string for MCsolveProgram cmdline args
         //static int f_cmdline();         ///< return full constructor string (for later runs)
-#if 0
-        /** Run an initialized solver, and then save restart data.
-         * - Inputs describe where final data should be saved
-         *  - [ rfile_avg               : restart filename for _avg data
-         *  - [, rfile ]]               : restart filename for time t data
-         */
-        static int f_solve();
-        /** construct a solver, possibly resuming an old calculation.
-         * - Inputs:
-         *      - repo, parms           : start from random conditions
-         *      - [, rfile_avg          : and given restart = restart_avg
-         *      - [, rfile ]]           : and, oh, use time t data instead
-         *   - where rfile* are filenames for binary restart data
-         * - restart data files contain:
-         *   - DenseM weights
-         *   - DenseM lower_bounds
-         *   - DenseM upper_bounds
-         *   - VectorXd objective_val
-         * - and restart dimensions must agree with repo sizing.
-         */     
-        static int f_solver();
-#endif
+        /// \name s_FOO() --> MCsolveProgram::tryFOO()
+        //@{
+        static int s_read();
+        static int s_solve();
+        static int s_save();
+        static int s_display();
+        //@}
 
         /** constructor.
          * - 2 lua call types:
          *   - lua: new("--eta0=0.1 --etamin=1.e-3")
-         *     - override default settings via cmdline args string
+         *     - override <em>default settings</em> via cmdline args string
+         *     - Note: if --solnfile, then <em>default settings</em> come from
+         *             the .soln file (to nicely continue an existing run)
          *   - or   new(<mcparm>, "--etatype=SQRT --optlu=700 --maxiter=500 ...")
          *     - override user-specified defaults via cmdline args string
          */

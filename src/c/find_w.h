@@ -164,7 +164,7 @@ void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsol
  *
  * - \b NOTE: eventually, one might move some of the other utility routines here ?
  */
-class MCsolver : private MCsoln
+class MCsolver : protected MCsoln
       // begin with these "shadowing" the original variables, until exact same function
       // is verified.
       //, private MCpermState      // during iteration, sometimes we work with sortedLU_*, other times need l,u

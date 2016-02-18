@@ -1,3 +1,17 @@
 linkme
 linkme-dbg
 libmclua*
+mc.soln
+mcgen-a3-bin.soln
+mcgen-a3-mlc-bin.soln
+mcgen-a3-mlc-dr4.repo
+mcgen-a3-mlc-sr4.repo
+mcgen-a3-mlc-txt.soln
+mcgen-a3-mlc-y.bin
+mcgen-a3-slc-dr4.repo
+mcgen-a3-slc-sr4.repo
+mcgen-a3-slc-y.bin
+mcgen-a3-txt.soln
+mcgen-a3-x-D.bin
+mcgen-a3-x-S.bin
+

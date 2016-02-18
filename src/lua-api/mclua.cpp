@@ -1,7 +1,7 @@
 
 #include "mclua.hpp"
 //#include "parameter-args.h"
-#include "standalone.h"
+#include "mcsolveProg.hpp"
 
 #include "base/app_state.hpp"
 //#include "lua.h"
@@ -108,20 +108,15 @@ namespace MILDE {
 
     // static relay functions to C++ constructor
     scr_MCparm* scr_MCparm::new_stack(){
-        return new( GAS.d_si->new_user< scr_MCparm >( OBJNAME(scr_MCparm))) scr_MCparm;
+        return new( GAS.d_si->new_user< scr_MCparm >( OBJNAME(scr_MCparm)))
+            scr_MCparm;
     }
 
-    scr_MCsolve* scr_MCsolve::new_stack( ::opt::MCsolveArgs const& mcsa ){
-        return new( GAS.d_si->new_user< scr_MCsolve >( OBJNAME(scr_MCsolve))) scr_MCsolve( mcsa );
+    scr_MCsolve* scr_MCsolve::new_stack( int argc, char**argv, param_struct const* const defparms/*=nullptr*/ ){
+        return new( GAS.d_si->new_user< scr_MCsolve >( OBJNAME(scr_MCsolve)))
+            scr_MCsolve( argc, argv, defparms );
     }
 
-#if 0
-    std::string scr_MC::help_solve(){
-        return ::opt::MCsolveArgs::defaultHelp();
-    }
-    std::string scr_MCparm::help_proj(){
-    }
-#endif
 }//MILDE::
 
 // ------------------- lua interface -------------------
@@ -159,6 +154,10 @@ FUN(new)        // construct a default 'mcparm' parameter set
 FUN(__gc)
 FUN(type)
 FUN(help)
+FUN(read)
+FUN(solve)
+FUN(save)
+FUN(display)
 //FUN(solve)   ... or read, solve, save, display
 FUN(new)
 ;
@@ -596,26 +595,68 @@ GOT_VERBOSE:
     {
         scr_TRY( "<mcsolve>.help() -> <str>" ){
             string help = ::opt::MCsolveArgs::defaultHelp();
+            help.append( "lua constructors:\n"
+                         "    - <mcsolve>.new(\"--xfile=... --yfile=... --solnfile=... etc\")\n"
+                         "    - <mcsolve>.new(<explicit_defaults:xparm>, \"--xfile=... etc\")\n"
+                         " Program default settings can come from:\n"
+                         "   1. lua <explicit_defaults:xparm>\n"
+                         "   2. else parameters from previous --solnfile\n"
+                         "   3. else library default settings\n"
+                       );
             GAS.d_si->put_ccstr( help );
             return 1;
         }scr_CATCH;
     }
+
+    int script_MCsolve::s_read()
+    {
+        scr_TRY( "<mcsolve>:read() -> <err:bool>" ){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            x->d_solve->tryRead(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCsolve::s_solve()
+    {
+        scr_TRY( "<mcsolve>:solve() -> <err:bool>" ){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            x->d_solve->trySolve(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCsolve::s_save()
+    {
+        scr_TRY( "<mcsolve>:save() -> <err:bool>" ){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            x->d_solve->trySave(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCsolve::s_display()
+    {
+        scr_TRY( "<mcsolve>:display() -> <err:bool>" ){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            x->d_solve->tryDisplay(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+
 
 int script_MCsolve::s_new()
 {
     scr_TRY("   <mcsolve>.new(<cmdLineArgs:str>) -> <mcsolve>"
             "\nOR <mcsolve>.new(<mcparm>, <cmdLineArgs:str>) -> <mcsolve>"
            ){
+        param_struct *explicit_defaults = nullptr;
         ::opt::MCsolveArgs mcsa;   // temp copy, real one inside MCsolveProgram
         {
             scr_USR( scr_MCparm, defaultParms, NO_PARMS );
-            mcsa.parms = *defaultParms->d_params;
+            explicit_defaults = defaultParms->d_params;
         }
 NO_PARMS:
         scr_STR( cmdLineArgs, ERR_LBL );
         ArgcArgv aa(cmdLineArgs);
-        mcsa.argsParse( aa.argc, aa.argv );
-        scr_MCsolve::new_stack( mcsa );
+        scr_MCsolve::new_stack( aa.argc, aa.argv, explicit_defaults );
         return 1;
     }scr_CATCH;
 }
@@ -665,6 +706,10 @@ static const struct luaL_Reg lua_mcsolve_lib_m [] = {
     LUA_FUN(__gc),
     LUA_FUN(type),
     LUA_FUN(help),
+    LUA_FUN(read),
+    LUA_FUN(solve),
+    LUA_FUN(save),
+    LUA_FUN(display),
     {0,0}
 };
 static const struct luaL_Reg lua_mcsolve_lib_f [] = {

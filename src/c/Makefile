@@ -47,7 +47,7 @@ PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
-all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 mcsolve
+all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
 
@@ -95,7 +95,7 @@ settings:
 	echo "BOOSTDIR       = $(BOOSTDIR)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h standalone.h predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
+CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
 # faster version (can run in parallel)
 check-headers chk-headers:
 	rm -f /tmp/*.chk
@@ -222,7 +222,7 @@ do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	@echo ""
 	@echo ""
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
-LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp standalone.cpp
+LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
@@ -307,23 +307,30 @@ mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_opt
 	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. -Wno-error=maybe-uninitialized $^
-mcsolve: erik/mcsolve.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+	# mcsolve0 is an initial version, before opt::MCsolveProgram was written
+	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcproj: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
-mcproj.log: mcgenx mcproj
+mcproj.log: mcgenx mcproj mcsolve erik/mcsolve0
 	./mcgenx
 	{ for cmd in "valgrind --leak-check=full --show-leak-kinds=all ./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \
 		"valgrind ./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
 		"valgrind ./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-S.bin" \
 		"valgrind ./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin" \
-		"valgrind ./mcsolve --solnfile mcgen-a3-bin.soln -x mcge-a3-x-D.bin -y mcgen-a3-slc-y.bin -o xx --reoptlu" \
+		"valgrind ./erik/mcsolve0 --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -o xx --reoptlu" \
+		"valgrind ./mcsolve --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -o xx --reoptlu" \
 		"valgrind ./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin" \
 		; do \
 		echo ""; \
 		echo "=== run : $$cmd"; \
 		$$cmd; \
 		done; } 2>&1 | tee $@
+	@echo ""
+	@echo mcproj.log valgrind summary:
+	@grep '\(ERROR SUMMARY\)\|\(== run :\)' mcproj.log
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.

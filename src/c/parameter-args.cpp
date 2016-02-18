@@ -129,7 +129,7 @@ namespace opt {
                                      , void(*usageFunc)(std::ostream&)/*=helpUsageDummy*/ )
     {
 #if ARGSDEBUG > 0
-        cout<<" argsParse( argc="<<argc<<", argv, ... )"<<endl;
+        cout<<" mcArgs( argc="<<argc<<", argv, ... )"<<endl;
         for( int i=0; i<argc; ++i ) {
             cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
         }
@@ -200,18 +200,18 @@ namespace opt {
     //
 
     void MCsolveArgs::helpUsage( std::ostream& os ){
-        os  <<" Function:"
+        os  <<" Function:   Solve for Multi-Class Label Filter projection lines"
             <<"\n    Determine a number (--proj) of projection lines. Any example whose projection"
             <<"\n    lies outside bounds for that class is 'filtered'.  With many projecting lines,"
             <<"\n    potentially many classes can be filtered out, leaving few potential classes"
             <<"\n    for each example."
             <<"\n Usage:"
-            <<"\n    mcsolve --xfile=... --yfile=... [--solnfile=...] [--output=...] [solver args...]"
-            <<"\n where solver args guide the optimization procedure"
-            <<"\n Without solnfile[.soln], use random initial conditions."
-            <<"\n xfile is a plain eigen DenseM or SparseM (always stored as float)"
-            <<"\n yfile is an Eigen SparseMb matrix of bool storing only the true values,"
-            <<"\n       read/written via 'eigen_io_binbool'"
+            <<"\n    <mcsolve> --xfile=... --yfile=... [--solnfile=...] [--output=...] [ARGS...]"
+            <<"\n where ARGS guide the optimization procedure"
+            <<"\n - Without solnfile[.soln], use random initial conditions."
+            <<"\n - xfile is a plain eigen DenseM or SparseM (always stored as float)"
+            <<"\n - yfile is an Eigen SparseMb matrix of bool storing only the true values,"
+            <<"\n         read/written via 'eigen_io_binbool'"
             <<endl;
     }
     void MCsolveArgs::init( po::options_description & desc ){
@@ -229,31 +229,28 @@ namespace opt {
             ;
     }
     MCsolveArgs::MCsolveArgs()
-        : parms(set_default_params())
-    // argsParse output...
-    , xFile()
-        , yFile()
-        , solnFile()
-        , outFile()
-        , outBinary(true)
-        , outText(false)
-        , outShort(true)
-        , outLong(false)
-        , xnorm(false)
-#if 0 // moved to standalone.h class MCsolveProgram
-        , pmcs(nullptr)     // used during argsParse AND trySolve,trySave,tryDisplay
-        // tryRead output...
-        , xDense()
-        , denseOk(false)
-        , xSparse()
-        , sparseOk(false)
-        , y()               // SparseMb
-#endif
+        : parms(set_default_params())   // parameter.h parses these options
+          // MCsolveArgs::parse output...
+          , xFile()
+          , yFile()
+          , solnFile()
+          , outFile()
+          , outBinary(true)
+          , outText(false)
+          , outShort(true)
+          , outLong(false)
+          , xnorm(false)
         {}
 
-    void MCsolveArgs::argsParse( int argc, char**argv ){
+    MCsolveArgs::MCsolveArgs(int argc, char**argv)
+        : MCsolveArgs()
+    {
+        this->parse(argc,argv);
+    }
+
+    void MCsolveArgs::parse( int argc, char**argv ){
 #if ARGSDEBUG > 0
-        cout<<" argsParse( argc="<<argc<<", argv, ... )"<<endl;
+        cout<<" parse( argc="<<argc<<", argv, ... )"<<endl;
         for( int i=0; i<argc; ++i ) {
             cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
         }
@@ -328,7 +325,7 @@ namespace opt {
         if( ! keepgoing ) exit(0);
 #if 0 && ARGSDEBUG > 0
         // Good, boost parsing does not touch argc/argv
-        cout<<" DONE argsParse( argc="<<argc<<", argv, ... )"<<endl;
+        cout<<" DONE parse( argc="<<argc<<", argv, ... )"<<endl;
         for( int i=0; i<argc; ++i ) {
             cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
         }

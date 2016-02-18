@@ -57,7 +57,7 @@ t.update_type = "safe"     -- a substring may also be acceptable (if you choose 
 for k,v in pairs(t) do print(string.format("%30s",k),type(v),v) end
 x:set(t)
 print("\ntest x:set(\"--opt1=foo --opt2=bar ...\") supplying plain cmdline args as per print(x:help())")
-x:set("--eta0=0.555 --etamin=0.222"); assert( 
+x:set("--eta0=0.555 --etamin=0.222");
 -- print("\tAny changes in Args t after setargs? (case conversion)")
 -- for k,v in pairs(t) do print(string.format("%30s",k),type(v),v) end
 print("\tnow x:get()...")
@@ -84,5 +84,5 @@ assert( full.update_type    == "MINIBATCH_SGD" );
 assert( full.eta_type       == "ETA_SQRT" );
 assert( full.C1             == 7.7777 );
 assert( full.resume         == true );
-print("x:get(true)[\"resume\"]) = " .. x:get(true)["resume"])  -- COULD overload x[string] ???
+print("x:get(true)[\"resume\"]) = ", x:get(true)["resume"])  -- COULD overload x[string] ???
 print("\nGOOD -- basic MCFilter parms tests passed")

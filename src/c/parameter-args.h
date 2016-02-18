@@ -53,16 +53,17 @@ namespace opt {
 
     /** wrap program options for standalone mcsolve executable */
     struct MCsolveArgs {
-        MCsolveArgs();
+        MCsolveArgs();                          ///< construct empty w/ default parms
+        MCsolveArgs(int argc, char**argv);      ///< construct and parse in 1 step
         /// \name lua api
         //@{
-        void argsParse( int argc, char**argv );
+        void parse( int argc, char**argv );
         void init( po::options_description & desc );
         static std::string defaultHelp();
         //@}
-        /** internal helper for argsParse errors */
+        /** internal helper for parse errors */
         static void helpUsage( std::ostream& os );
-        /// \name argsParse settings
+        /// \name parse settings
         //@{
         param_struct parms;     ///< solver parameters, \ref parameter.h
         std::string xFile;      ///< x data file name (io via ???)

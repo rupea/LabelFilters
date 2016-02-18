@@ -173,6 +173,7 @@ int main(int argc, char**argv){
         if( parms.resume ) throw std::runtime_error(" --resume requires --solnfile=...");
         if( parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu requires --solnfile=...");
     }
+    cout<<"argc,argv -->\n"<<parms<<endl;          // pretty print final parms
     DenseM xDense;
     bool denseOk=false;
     SparseM xSparse;
