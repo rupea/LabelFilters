@@ -1,13 +1,11 @@
 
 #include "mclua.hpp"
 //#include "parameter-args.h"
-#include "mcsolveProg.hpp"
+//#include "mcsolveProg.hpp"
 
 #include "base/app_state.hpp"
 //#include "lua.h"
 #include "lua.hpp"
-
-#include "base/app_state.hpp"
 #include "script_lua/lua_interpreter.hpp"
 #include "base/argmap.hpp"
 #include "repo/args.hpp"
@@ -117,6 +115,11 @@ namespace MILDE {
             scr_MCsolve( argc, argv, defparms );
     }
 
+    scr_MCproj* scr_MCproj::new_stack( int argc, char**argv ){
+        return new( GAS.d_si->new_user< scr_MCproj >( OBJNAME(scr_MCproj)))
+            scr_MCproj( argc, argv );
+    }
+
 }//MILDE::
 
 // ------------------- lua interface -------------------
@@ -158,6 +161,27 @@ FUN(read)
 FUN(solve)
 FUN(save)
 FUN(display)
+//FUN(solve)   ... or read, solve, save, display
+FUN(new)
+;
+#undef FUN
+
+/** to avoid name clash, modify WRAP_FUN naming convention */
+#define WRAP_MCPROJ(name,prefix) \
+    static int luaB_project_##name( lua_State* L ) \
+{ \
+    SWAP_LUA_STATE; \
+    LUA_CHECK_FOR_DUMMY_ARG_HACK(name); \
+    return prefix##name(); \
+}
+#define FUN(name) WRAP_MCPROJ(name,script_MCproj::p_)
+FUN(__gc)
+FUN(type)
+FUN(help)
+FUN(read)
+FUN(proj)
+FUN(save)
+FUN(validate)
 //FUN(solve)   ... or read, solve, save, display
 FUN(new)
 ;
@@ -641,44 +665,100 @@ GOT_VERBOSE:
         }scr_CATCH;
     }
 
-
-int script_MCsolve::s_new()
-{
-    scr_TRY("   <mcsolve>.new(<cmdLineArgs:str>) -> <mcsolve>"
-            "\nOR <mcsolve>.new(<mcparm>, <cmdLineArgs:str>) -> <mcsolve>"
-           ){
-        param_struct *explicit_defaults = nullptr;
-        ::opt::MCsolveArgs mcsa;   // temp copy, real one inside MCsolveProgram
-        {
-            scr_USR( scr_MCparm, defaultParms, NO_PARMS );
-            explicit_defaults = defaultParms->d_params;
-        }
+    int script_MCsolve::s_new()
+    {
+        scr_TRY("   <mcsolve>.new(<cmdLineArgs:str>) -> <mcsolve>"
+                "\nOR <mcsolve>.new(<mcparm>, <cmdLineArgs:str>) -> <mcsolve>"
+               ){
+            param_struct *explicit_defaults = nullptr;
+            ::opt::MCsolveArgs mcsa;   // temp copy, real one inside MCsolveProgram
+            {
+                scr_USR( scr_MCparm, defaultParms, NO_PARMS );
+                explicit_defaults = defaultParms->d_params;
+            }
 NO_PARMS:
-        scr_STR( cmdLineArgs, ERR_LBL );
-        ArgcArgv aa(cmdLineArgs);
-        scr_MCsolve::new_stack( aa.argc, aa.argv, explicit_defaults );
-        return 1;
-    }scr_CATCH;
-}
+            scr_STR( cmdLineArgs, ERR_LBL );
+            ArgcArgv aa(cmdLineArgs);
+            scr_MCsolve::new_stack( aa.argc, aa.argv, explicit_defaults );
+            return 1;
+        }scr_CATCH;
+    }
 
-#if 0
-void MILDE::scr_MCsolve::solve( std::string solveArgs ){ // XXX in WRONG OBJECT XXX
-#if 1 // Eigen CANNOT be stuck inside a namespace easily?  omp_get_max_threads not declared?
-    using ::omp_get_max_threads;
-    int argc = 0;
-    char** argv=nullptr;
-    ::opt::MCsolveArgs mcsa;
-    mcsa.argsParse( argc, argv );
-    cout<<"solnFile = "<<mcsa.solnFile<<endl;
-    static int const verbose=1;
-    ::opt::MCsolveProgram prog( mcsa, verbose );
-    prog.tryRead( verbose );
-    prog.trySolve( verbose );
-    prog.trySave( verbose );
-    prog.tryDisplay( verbose );
-#endif
-}
-#endif
+    // ------------------ projection code -----------------------
+    int script_MCproj::p___gc() {
+        scr_TRY("<mcproj> : __gc()"){
+            scr_USR( scr_MCproj, f, ERR_LBL );
+            scr_STK( "<mcproj> : __gc()" );
+            GAS.d_si->del_user( f );
+            return 0;
+        }scr_CATCH;
+    }
+
+    int script_MCproj::p_type() ///< return string/name of the <mcproj>
+    {
+        scr_TRY( "<mcproj>:type() -> <str>" ){
+            scr_USR( scr_MCproj, x, ERR_LBL );
+            GAS.d_si->put_ccstr( "mcproj" );
+            return 1;
+        }scr_CATCH;
+    }
+
+    int script_MCproj::p_help() ///< return string/name of the <mcparm>
+    {
+        scr_TRY( "<mcproj>.help() -> <str>" ){
+            string help = ::opt::MCprojArgs::defaultHelp();
+            help.append( "lua constructors:\n"
+                         "    - <mcproj>.new(\"--solnfile=... --xfile=... etc\")\n"
+                       );
+            GAS.d_si->put_ccstr( help );
+            return 1;
+        }scr_CATCH;
+    }
+
+    int script_MCproj::p_read()
+    {
+        scr_TRY( "<mcproj>:read() -> <err:bool>" ){
+            scr_USR( scr_MCproj, x, ERR_LBL );
+            x->d_proj->tryRead(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCproj::p_proj()
+    {
+        scr_TRY( "<mcproj>:proj() -> <err:bool>" ){
+            scr_USR( scr_MCproj, x, ERR_LBL );
+            x->d_proj->tryProj(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCproj::p_save()
+    {
+        scr_TRY( "<mcproj>:save() -> <err:bool>" ){
+            scr_USR( scr_MCproj, x, ERR_LBL );
+            x->d_proj->trySave(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCproj::p_validate()
+    {
+        scr_TRY( "<mcproj>:display() -> <err:bool>" ){
+            scr_USR( scr_MCproj, x, ERR_LBL );
+            x->d_proj->tryValidate(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+
+
+    int script_MCproj::p_new()
+    {
+        scr_TRY("   <mcproj>.new(<cmdLineArgs:str>) -> <mcproj>"
+               ){
+            scr_STR( cmdLineArgs, ERR_LBL );
+            ArgcArgv aa(cmdLineArgs);
+            scr_MCproj::new_stack( aa.argc, aa.argv );
+            return 1;
+        }scr_CATCH;
+    }
 }//MILDE::
 
 
@@ -698,7 +778,8 @@ static const struct luaL_Reg lua_mcparm_lib_m [] = {
     {0,0}
 };
 static const struct luaL_Reg lua_mc_lib_f [] = {
-    LUA_FUN(new)
+    LUA_FUN(new),
+    {0,0}
 };
 #undef LUA_FUN
 #define LUA_FUN(name) { #name , luaB_solve_##name }
@@ -713,7 +794,26 @@ static const struct luaL_Reg lua_mcsolve_lib_m [] = {
     {0,0}
 };
 static const struct luaL_Reg lua_mcsolve_lib_f [] = {
-    LUA_FUN(new)
+    LUA_FUN(new),
+    LUA_FUN(help),
+    {0,0}
+};
+#undef LUA_FUN
+#define LUA_FUN(name) { #name , luaB_project_##name }
+static const struct luaL_Reg lua_mcproj_lib_m [] = {
+    LUA_FUN(__gc),
+    LUA_FUN(type),
+    LUA_FUN(help),
+    LUA_FUN(read),
+    LUA_FUN(proj),
+    LUA_FUN(save),
+    LUA_FUN(validate),
+    {0,0}
+};
+static const struct luaL_Reg lua_mcproj_lib_f [] = {
+    LUA_FUN(new),
+    LUA_FUN(help),
+    {0,0}
 };
 #undef LUA_FUN
 
@@ -758,6 +858,9 @@ extern "C" DLLEXP int luaopen_libmclua( lua_State * L )
 
     MILDE_li()->register_class( OBJNAME(scr_MCsolve), "mcsolve", lua_mcsolve_lib_m );
     MILDE_li()->register_namespace( "libmclua", "mcsolve", lua_mcsolve_lib_f );
+
+    MILDE_li()->register_class( OBJNAME(scr_MCproj), "mcproj", lua_mcproj_lib_m );
+    MILDE_li()->register_namespace( "libmclua", "mcproj", lua_mcproj_lib_f );
 
     script_MCparm::f_new();             // automagically invoke libmclua.mc.new()
 

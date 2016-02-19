@@ -118,4 +118,6 @@ linkme: linkme.cpp | libmclua.so ../c/libmcfilter.so
 		$(BOOSTLINK) -lboost_program_options
 
 clean: 
-	rm -f *.o *.lo *.so linkme libmclua*.a libmclua*.so *.i
+	rm -f *.o *.lo *.so linkme linkme-dbg libmclua*.a libmclua*.so *.i
+realclean: clean
+	rm -f mcgen-* mc.soln

@@ -2,7 +2,8 @@
 #define MCLUA_H
 
 #include "parameter.h"
-#include "mcsolveProg.hpp"         // MCsolveProgram
+#include "mcsolveProg.hpp"      // MCsolveProgram
+#include "mcprojProg.hpp"       // MCprojProgram
 #include <omp.h>                // MUST be included before milde XXX evil!
 
 #include "base/rc_base.hpp"
@@ -209,13 +210,7 @@ print(p:str())    -- now have some nondefault parameters
         {}
     };
     /** lua interface functions for scr_MCsolve object.
-     * - Actually, should create a solver class that, besides \c solve_optimization,
-     *   provides write|read_binary|ascii of internal state.
-     * - Internal state should be stored in short|full format
-     *   - first store time t and time t state like eta, C1, C2, ...
-     *   - then store
-     *     - either short restart data from time-averaged {w,l,u,objective}
-     *     - or long restart data that adds {w,l,u,obj} at time "t"
+     * \sa MCsolveProgram
      */
     struct script_MCsolve {
         static int s___gc();
@@ -240,6 +235,62 @@ print(p:str())    -- now have some nondefault parameters
          *     - override user-specified defaults via cmdline args string
          */
         static int s_new();
+    private:
+        //struct param_struct pInit;
+        //std::string cmdLine;
+    };
+
+    /** internal C++ impl for MCprojProgram MCfilter function */
+    struct scr_MCproj{
+        /** construct MCprojProgram as lua userdata object. */
+        static scr_MCproj* new_stack( int argc, char**argv );
+
+        /** a ref-counted wrapper for a libmcfilter param_struct */
+        struct cnt_Proj :
+            //public Base_tag,   // defined in milde lib/os/util_io.hpp
+            public rc_Cnt,
+            public ::opt::MCprojProgram
+        {
+            typedef ::opt::MCprojProgram base;
+            cnt_Proj( int argc, char** argv )
+                : ::opt::MCprojProgram( argc, argv /*, verbose=*/ )
+            {}
+        };//class cnt_Proj
+
+        virtual ~scr_MCproj() {}
+
+        rc_Ptr<cnt_Proj> d_proj;
+
+    private:
+        explicit scr_MCproj(int argc, char**argv)
+            : d_proj(new cnt_Proj(argc,argv))
+        {}
+    };
+    /** lua interface functions for scr_MCproj object.
+     * \sa MCprojProgram
+     */
+    struct script_MCproj {
+        static int p___gc();
+        static int p_type();    ///< mcproj
+        static int p_help();    ///< return help string for MCprojProgram cmdline args
+        //static int f_cmdline();         ///< return full constructor string (for later runs)
+        /// \name p_FOO() --> MCprojProgram::tryFOO()
+        //@{
+        static int p_read();
+        static int p_proj();
+        static int p_save();
+        static int p_validate();
+        //@}
+
+        /** constructor.
+         * - lua:
+         *   - minimal constructor is
+         *     - \c p=libmclua.mcproj.new("--solnFile=... --xFile=...")
+         *   - for help about further commandline arguments,
+         *     - \c print(p.help())
+         *     - \c print(libmclua.mcproj.help())  -- (maybe)
+         */
+        static int p_new();
     private:
         //struct param_struct pInit;
         //std::string cmdLine;
