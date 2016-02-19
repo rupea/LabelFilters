@@ -154,7 +154,7 @@ public:
 };
 
 
-/** for debug tests: write to sstream, read from sstream, throw if error detected */
+/** For debug tests: write to sstream, read from sstream, throw if error detected */
 void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsoln::Len len);
 
 /** Provide a simpler API for solving.

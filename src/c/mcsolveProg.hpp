@@ -23,13 +23,13 @@ namespace opt {
                         , int const verbose=defaultVerbose
                         , param_struct const* const defparms=nullptr );
 
-        void tryRead( int const verbose=0 );        ///< read x,y data, or throw
-        void trySolve( int const verbose=0 );       ///< solve for projections
-        void trySave( int const verbose=0 );        ///< save projections to sonlFile
+        void tryRead( int const verbose=defaultVerbose );        ///< read x,y data, or throw
+        void trySolve( int const verbose=defaultVerbose );       ///< solve for projections
+        void trySave( int const verbose=defaultVerbose );        ///< save projections to sonlFile
         /** display normalized projections.
          * \c tryDisplay \em normalizes projection directions for display,
          * so be sure to \c trySave \em before you \c tryDisplay. FIXME */
-        void tryDisplay( int const verbose=0 );
+        void tryDisplay( int const verbose=defaultVerbose );
 
         ::opt::MCsolveArgs const& args() const {return *this;}
         //::MCsolver const& solver() const {return *this;}

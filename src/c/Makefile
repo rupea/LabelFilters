@@ -74,7 +74,7 @@ profile_kmeans:
 
 
 ## extra stuff ######################### without octave ###################
-.PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests do-vg tail-vg clean realclean
+.PHONY: settings check-headers chk-headers lib libs-only lib test long long-compare do-tests do-vg tail-vg clean realclean hdr-stamp lib-clean
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-sign-compare -Werror
 # for better tracing...
@@ -95,7 +95,7 @@ settings:
 	echo "BOOSTDIR       = $(BOOSTDIR)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
+CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
 # faster version (can run in parallel)
 check-headers chk-headers:
 	rm -f /tmp/*.chk
@@ -107,8 +107,19 @@ check-oct-headers: EigenOctave.h
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
 
+LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp
+lib: hdr-stamp
+	$(MAKE) -j15 libs-only demo-proj1 demo-quick || { reset; $(MAKE) libs-only demo-proj1 demo-quick; }
+lib-clean:
+	rm -f libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so *.o *.lo
+hdr-stamp: erik/hdr-stamp
+erik/hdr-stamp: $(CHECK_HEADERS)
+	$(MAKE) lib-clean ####### && $(MAKE) -j15 lib || { reset; $(MAKE) lib; }
+	touch $@
+libs-only: | hdr-stamp
+demp-proj1 demo-quick: | libs-only
+libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 
-lib: libs-only demo-proj1 demo-quick
 test: lib demo-printing demo-io do-tests mcgen mcgenx mcproj.log
 long: clean
 	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
@@ -221,14 +232,21 @@ do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
 	else                          echo "                do-tests *** FAILED $$nfails TESTS ***"; false; fi
 	@echo ""
 	@echo ""
-libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
-LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp
+
 # Create a library of octave-free C++ code for the main functionality in MCFilter
 #   (find_w, filter, kmeans, LPSR)
 #   This should aid in producing an interface in lua [I hope]
 # XXX predict.cpp and evaluate.cpp MIGHT be removable?
-
 libmcfilter.a: $(patsubst %.cpp,%.o,$(LIB_CPPFILES))
+	$(AR) -vru $@ $^
+libmcfilter-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIB_CPPFILES))
+	$(AR) -vru $@ $^
+libmcfilter.so: $(patsubst %.cpp,%.lo,$(LIB_CPPFILES))
+	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
+libmcfilter-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIB_CPPFILES))
+	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
+# special library versions
+libmcfilter-prof.a: $(patsubst %.cpp,%-prof.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter2.a: $(patsubst %.cpp,%.2o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
@@ -236,14 +254,7 @@ libmcfilter3.a: $(patsubst %.cpp,%.3o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter4.a: $(patsubst %.cpp,%.4o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
-libmcfilter-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIB_CPPFILES))
-	$(AR) -vru $@ $^
-libmcfilter-prof.a: $(patsubst %.cpp,%-prof.o,$(LIB_CPPFILES))
-	$(AR) -vru $@ $^
-libmcfilter.so: $(patsubst %.cpp,%.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
-libmcfilter-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
+
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 %.2o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -c $<
@@ -312,8 +323,18 @@ erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_p
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
-mcproj: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+mcproj0: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+mcproj: mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+.PHONY: run-mcproj
+run-mcproj:
+	rm -f mcproj mcproj0; $(MAKE) hdr-stamp
+	make -j20 mcproj mcproj0 mcgenx || { make mcproj mcproj0 mcgenx; }
+	./mcgenx > mcgenx.log 2>&1
+	./mcproj0 --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin > s0.log 2>&1 & \
+	./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin > s.log 2>&1 & \
+	wait && echo "gvim s.log s0.log -O # <-- outputs"
 mcproj.log: mcgenx mcproj mcsolve erik/mcsolve0
 	./mcgenx
 	{ for cmd in "valgrind --leak-check=full --show-leak-kinds=all ./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \

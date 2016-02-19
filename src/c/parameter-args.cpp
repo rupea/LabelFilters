@@ -224,8 +224,9 @@ namespace opt {
             (",T", value<bool>(&outText)->implicit_value(true)->default_value(false),"B|T output TEXT")
             (",S", value<bool>(&outShort)->implicit_value(true)->default_value(true),"S|L output SHORT")
             (",L", value<bool>(&outLong)->implicit_value(true)->default_value(false),"S|L output LONG")
-            ("threads,t", value<uint32_t>()->default_value(1U), "threads")
             ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)")
+            ("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
+            ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
             ;
     }
     MCsolveArgs::MCsolveArgs()
@@ -240,6 +241,8 @@ namespace opt {
           , outShort(true)
           , outLong(false)
           , xnorm(false)
+          , threads(0U)           // unused?
+          , verbose(0)            // cmdline value can be -ve to reduce output
         {}
 
     MCsolveArgs::MCsolveArgs(int argc, char**argv)
@@ -297,6 +300,8 @@ namespace opt {
             solnFile=vm["solnfile"].as<string>();
             outFile=vm["output"].as<string>();
             xnorm=vm["xnorm"].as<bool>();
+            threads=vm["threads"].as<uint32_t>();
+            verbose=vm["verbose"].as<int>();
 
             if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
             if( outFile .rfind(".soln") != outFile .size() - 5U ) outFile .append(".soln");
@@ -361,7 +366,168 @@ namespace opt {
     }
 
     //
-    // ----------------------- xxx --------------------
+    // ----------------------- MCprojArgs --------------------
     //
+
+    void MCprojArgs::helpUsage( std::ostream& os ){
+        os  <<" Function:"
+            <<"\n    apply .soln {w,l,u} projections to examples 'x' and print eligible class"
+            <<"\n    assignments of each example (row of 'x')"
+            <<"\n Usage:"
+            <<"\n    <mcproj> --xfile=... --solnfile=... [other args...]"
+            <<"\n- xfile is a plain eigen DenseM or SparseM (always stored as float)"
+            <<"\n- soln is a .soln file, such as output by mcgen or mcsolve"
+            <<"\n- <mcsoln> and <mcproj> must agree on --xnorm option. (TBD: detect & forbid)"
+            <<"\n  - Perhaps this means the training --xnorm transform needs to be stored"
+            <<"\n    as part of the .soln, and applied during <mcproj> on the test/validation set"
+            <<"\n  - OR combine the xnorm and weights_avg transforms, adding a"
+            <<"\n    translation step to the vanilla matrix multiply?"
+            <<"\n  - OR just deprecate '--xnorm' and leave input 'x' xform up to the user?"
+            <<endl;
+    }
+    void MCprojArgs::init( po::options_description & desc ){
+        desc.add_options()
+            ("xfile,x", value<string>()->required(), "x data (row-wise nExamples x dim)")
+            ("solnfile,s", value<string>()->required(), "solnfile[.soln] starting solver state")
+            ("output,o", value<string>()->default_value(string("")), "output[.soln] file base name [def. cout]")
+            (",B", value<bool>(&outBinary)->implicit_value(true),"(T) T|B output BINARY")
+            (",T", value<bool>(&outText)->implicit_value(true),"(T) T|B output TEXT")
+            (",S", value<bool>(&outSparse)->implicit_value(true),"(S) S|D output SPARSE")
+            (",D", value<bool>(&outDense)->implicit_value(true),"(S) S|D output DENSE")
+            ("yfile,y", value<string>()->default_value(string("")), "TBD: optional validation y data (slc/mlc/SparseMb)")
+            ("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
+            ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
+            ("help,h", value<bool>()->implicit_value(true), "this help")
+            ("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
+            ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
+            ;
+    }
+    MCprojArgs::MCprojArgs()
+        : // MCprojArgs::parse output...
+            xFile()
+            , solnFile()
+            , outFile()
+            , outBinary(false)
+            , outText(true)
+            , outSparse(true)
+            , outDense(false)
+            , yFile()
+            , xnorm(false)
+            , threads(0U)
+            , verbose(0)
+        {}
+
+    MCprojArgs::MCprojArgs(int argc, char**argv)
+        : MCprojArgs()
+    {
+        this->parse(argc,argv);
+    }
+
+    void MCprojArgs::parse( int argc, char**argv ){
+#if ARGSDEBUG > 0
+        cout<<" parse( argc="<<argc<<", argv, ... )"<<endl;
+        for( int i=0; i<argc; ++i ) {
+            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
+        }
+#endif
+        bool keepgoing = true;
+        try {
+            po::options_description descMcproj("Allowed projections options");
+            init( descMcproj );                        // create a description of the options
+
+
+            outBinary = outText = outSparse = outDense = false;
+
+            po::variables_map vm;
+            //po::store( po::parse_command_line(argc,argv,desc), vm );
+            // Need more control, I think...
+            {
+                po::parsed_options parsed
+                    = po::command_line_parser( argc, argv )
+                    .options( descMcproj )
+                    //.positional( po::positional_options_description() ) // empty, none allowed.
+                    //.allow_unregistered()
+                    .run();
+                po::store( parsed, vm );
+            }
+
+            if( vm.count("help") ) {
+                helpUsage( cout );
+                cout<<descMcproj<<endl;
+                //helpExamples(cout);
+                keepgoing=false;
+            }
+
+            po::notify(vm); // at this point, raise any exceptions for 'required' args
+
+            cerr<<"mcproj args..."<<endl;
+            assert( vm.count("xfile") );
+            assert( vm.count("solnfile") );
+
+            xFile=vm["xfile"].as<string>();
+            solnFile=vm["solnfile"].as<string>();
+            outFile=vm["output"].as<string>();
+            xnorm=vm["xnorm"].as<bool>();
+            threads=vm["threads"].as<uint32_t>();
+            verbose=vm["verbose"].as<int>();
+
+            if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
+            if( outFile.size() && outFile .rfind(".soln") != outFile .size() - 5U ) outFile.append(".proj");
+
+            //{cout<<" -"; if(outBinary) cout<<"B"; if(outText)   cout<<"T"; if(outSparse) cout<<"S"; if(outDense)  cout<<"D";}
+            //if(vm.count("-B")) outBinary=true;
+            //if(vm.count("-T")) outText=true;
+            //if(vm.count("-S")) outSparse=true;
+            //if(vm.count("-D")) outDense=true;
+            //{cout<<" -"; if(outBinary) cout<<"B"; if(outText)   cout<<"T"; if(outSparse) cout<<"S"; if(outDense)  cout<<"D";}
+            if( !outBinary && !outText ) outText = true; // default
+            if( !outSparse && !outDense ) outDense = true; // default
+            //{cout<<" -"; if(outBinary) cout<<"B"; if(outText)   cout<<"T"; if(outSparse) cout<<"S"; if(outDense)  cout<<"D";}
+            if( outBinary == outText ) throw std::runtime_error(" Only one of B|T, please");
+            if( outSparse == outDense ) throw std::runtime_error(" Only one of S|D, please");
+
+            yFile=vm["yfile"].as<string>();
+            xnorm=vm["xnorm"].as<bool>();
+            threads=vm["threads"].as<uint32_t>();
+            if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
+
+            // projections operation doesn't need solver parms
+            //opt::extract(vm,parms);         // retrieve McSolver parameters
+        }catch(po::error& e){
+            cerr<<"Invalid argument: "<<e.what()<<endl;
+            throw;
+        }catch(std::exception const& e){
+            cerr<<"Error: "<<e.what()<<endl;
+            throw;
+        }catch(...){
+            cerr<<"Command-line parsing exception of unknown type!"<<endl;
+            throw;
+        }
+        if( ! keepgoing ) exit(0);
+        return;
+    }
+
+    // static fn -- no 'this'
+    std::string MCprojArgs::defaultHelp(){
+        std::ostringstream oss;
+        try {
+            MCprojArgs proj;                    // make sure we generate *default* help
+            po::options_description descMcproj("Allowed projection options");
+            proj.init( descMcproj );            // create a description of the options
+
+            helpUsage( oss );
+            oss<<descMcproj<<endl;
+        }catch(po::error& e){
+            cerr<<"Invalid argument: "<<e.what()<<endl;
+            throw;
+        }catch(std::exception const& e){
+            cerr<<"Error: "<<e.what()<<endl;
+            throw;
+        }catch(...){
+            cerr<<"Command-line parsing exception of unknown type!"<<endl;
+            throw;
+        }
+        return oss.str();
+    }
 
 }//opt::

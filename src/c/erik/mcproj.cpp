@@ -158,12 +158,14 @@ int main(int argc, char**argv){
             }
         }
     }
-    if(xnorm && sparseOk){
-        xDense = DenseM( xSparse );     // convert sparse --> dense
-        xSparse.resize(0,0);
-        sparseOk = false;
-        denseOk = true;
-    }
+    if(0){ // -----------------------------    remove to test SparseM projection
+        if(xnorm && sparseOk){
+            xDense = DenseM( xSparse );     // convert sparse --> dense
+            xSparse.resize(0,0);
+            sparseOk = false;
+            denseOk = true;
+        }
+    }     // ------------------------------
     SparseMb y;                         // now this is optional
     bool yOk=false;
     if(yFile.size()){
@@ -240,8 +242,8 @@ int main(int argc, char**argv){
         }
                 
     }else if( sparseOk ){
-#if 1
-#if 1 // same as dense ???
+        if( xnorm ) throw std::runtime_error("\nError: sparse x does not yet support --xnorm");
+        // same as dense ???
         vector<boost::dynamic_bitset<>> filt = project( xSparse, soln );
         if(1) for(uint32_t i=0U; i<filt.size(); ++i){
             auto const& fi = filt[i];
@@ -257,18 +259,6 @@ int main(int argc, char**argv){
             for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
             cout<<endl;
         }
-#endif
-        cerr<<" sparse mcproj TBD"<<endl;
-        exit(0);
-#else
-        assert( ! xnorm );
-        //if( xnorm ){ cout<<" xnorm!"<<endl; column_normalize(xSparse,xmean,xstdev); } // col-norm DISALLOWED
-        cout<<"xSparse:\n"<<xSparse<<endl;
-        cout<<"y:\n"<<y<<endl;
-        cout<<"parms:\n"<<parms<<endl;
-        assert( xSparse.rows() == y.rows() );
-        mcsolver.solve( xSparse, y, &parms );
-#endif
     }
     if(1){ // output something about the soln
         DenseM      & w = soln.weights_avg;
@@ -295,5 +285,6 @@ int main(int argc, char**argv){
             }
         }
     }
+    cout<<"\n SAVE of filtered results not implemented yet"<<endl;
     cout<<"\nGoodbye"<<endl;
 }

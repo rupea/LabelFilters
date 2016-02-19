@@ -2010,7 +2010,7 @@ int main(int argc, char** argv)
             string fnameSolnBase;
             {
                 stringstream oss;
-                oss<<"mcgen-"<<p.str()<<(slc_mlc?"":"-mlc");
+                oss<<"mcgen-"<<p.str()<<(slc_mlc==0U?"":"-mlc");
                 fnameSolnBase = oss.str();
             }
             assert( mcs.weights_avg.rows() == mcs.d );

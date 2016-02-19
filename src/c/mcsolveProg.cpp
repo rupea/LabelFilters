@@ -43,8 +43,9 @@ namespace opt {
             if( A::parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu needs --solnfile=... or explicit default parms");
         }
     }
-    void MCsolveProgram::tryRead( int const verbose/*=0*/ ){
-        if(verbose) cout<<"MCsolveProgram::tryRead()"<<endl;
+    void MCsolveProgram::tryRead( int const verb/*=0*/ ){
+        int const verbose = A::verbose + verb;
+        if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
         // read the following MCsolveProgram data:
         //DenseM xDense;
         //bool denseOk=false;
@@ -57,8 +58,11 @@ namespace opt {
                 xfs.open(xFile);
                 if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
                 ::detail::eigen_io_bin(xfs, xDense);
-                xfs.close();
                 if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
+                char c;
+                xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
+                if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
+                xfs.close();
                 assert( xDense.cols() > 0U );
                 denseOk=true;
             }catch(po::error& e){
@@ -107,7 +111,7 @@ namespace opt {
             }
         }
         assert( denseOk || sparseOk );
-        if(verbose){
+        if(verbose>=1){
             if( denseOk ){
                 cout<<"xDense:\n"<<xDense<<endl;
                 cout<<"y:\n"<<y<<endl;
@@ -125,19 +129,20 @@ namespace opt {
         }
         //throw std::runtime_error("TBD");
     }
-    void MCsolveProgram::trySolve( int const verbose/*=0*/ ){
-        if(verbose) cout<<"MCsolveProgram::trySolve() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;
+    void MCsolveProgram::trySolve( int const verb/*=0*/ ){
+        int const verbose = A::verbose + verb;
+        if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;
         if( denseOk ){
             if( A::xnorm ){
                 VectorXd xmean;
                 VectorXd xstdev;
-                if(verbose){
+                if(verbose>=1){
                     cout<<"xDense ORIG:\n"<<xDense<<endl;
                     cout<<" xnorm!"<<endl;
                 }
 #if 1
                 column_normalize(xDense,xmean,xstdev);
-                if(verbose){
+                if(verbose>=1){
                     cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
                     cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
                 }
@@ -155,11 +160,12 @@ namespace opt {
         // S::solve uses A::parms for the run, and will update S:parms to record
         // how the next outFile (.soln) was obtained.
     }
-    void MCsolveProgram::trySave( int const verbose/*=0*/ ){
-        if(verbose) cout<<"MCsolveProgram::trySave()"<<endl;
+    void MCsolveProgram::trySave( int const verb/*=0*/ ){
+        int const verbose = A::verbose + verb;
+        if(verbose>=1) cout<<"MCsolveProgram::trySave()"<<endl;
         MCsoln & soln = S::getSoln();
         if( A::outFile.size() ){
-            if(verbose){
+            if(verbose>=1){
                 cout<<" Writing MCsoln";
                 if( A::solnFile.size() ) cout<<" initially from "<<A::solnFile;
                 cout<<" to "<<A::outFile<<endl;
@@ -169,8 +175,10 @@ namespace opt {
                 ofstream ofs;
                 try{
                     ofs.open(A::outFile);
+                    if( ! ofs.good() ) throw std::runtime_error("trouble opening outFile");
                     soln.write( ofs, (A::outBinary? MCsoln::BINARY: MCsoln::TEXT)
                                 ,    (A::outShort ? MCsoln::SHORT : MCsoln::LONG) );
+                    if( ! ofs.good() ) throw std::runtime_error("trouble writing outFile");
                     ofs.close();
                 }catch(std::exception const& e){
                     cerr<<" trouble writing "<<A::outFile<<" : "<<e.what()<<endl;
@@ -181,12 +189,13 @@ namespace opt {
                     ofs.close();
                     throw;
                 }
-                if(verbose) cout<<"\tmcdumpsoln -p < "<<A::outFile<<" | less    # to prettyprint the soln"<<endl;
+                if(verbose>=1) cout<<"\tmcdumpsoln -p < "<<A::outFile<<" | less    # to prettyprint the soln"<<endl;
             }
         }
     }
-    void MCsolveProgram::tryDisplay( int const verbose/*=0*/ ){
-        if(verbose) cout<<"MCsolveProgram::tryRead()"<<endl;
+    void MCsolveProgram::tryDisplay( int const verb/*=0*/ ){
+        int const verbose = A::verbose + verb;
+        if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
         MCsoln & soln = S::getSoln();
         DenseM      & w = soln.weights_avg;
         DenseM      & ww = soln.weights;
@@ -196,7 +205,7 @@ namespace opt {
         ww.colwise().normalize();
         DenseM const& l = soln.lower_bounds_avg;
         DenseM const& u = soln.upper_bounds_avg;
-        if(verbose){
+        if(verbose>=1){
             cout<<"normalized     weights"<<prettyDims(ww)<<":\n"<<ww<<endl;
             cout<<"normalized weights_avg"<<prettyDims(w)<<":\n"<<w<<endl;
             cout<<"      lower_bounds_avg"<<prettyDims(l)<<":\n"<<l<<endl;

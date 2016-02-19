@@ -107,6 +107,7 @@ namespace detail {
 #define TBITSET template<typename Block, typename Alloc> inline
 #define BITSET  boost::dynamic_bitset<Block,Alloc>
 #if 0 // Oh, dynamic_bitset << and >> are provided, so default impl is OK
+    // BUT BE AWARE THAT boost outputs in reverse order of what you might expect
     TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws/*="\n"*/ ){
         using namespace std;
         std::cout<<" io_txt(os,BS,ws) "; std::cout.flush();
@@ -144,6 +145,25 @@ namespace detail {
         if(is.fail()) throw std::underflow_error("failed std::istream-->bitset-data");
         return is;
     }
+    TBITSET std::ostream& io_bin( std::ostream& os, std::vector<BITSET> const& x )
+    {
+        uint64_t const rows = x.size();
+        io_bin(os,rows);
+        for(auto const& xi: x) io_bin(os,xi);
+        if(os.fail()) throw std::overflow_error("failed bitset-data-->std::ostream");
+        return os;
+    }
+
+    TBITSET std::istream& io_bin( std::istream& is, std::vector<BITSET> const& x )
+    {
+        uint64_t rows;
+        io_bin(is,rows);
+        x.resize(rows);
+        for(auto & xi: x) io_bin(is,xi);
+        if(is.fail()) throw std::underflow_error("failed bitset-data-->std::ostream");
+        return is;
+    }
+
 #undef BITSET
 #undef TBITSET
 #define TARRAY template<class T, std::size_t N> inline

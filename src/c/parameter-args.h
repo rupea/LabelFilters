@@ -58,31 +58,61 @@ namespace opt {
         /// \name lua api
         //@{
         void parse( int argc, char**argv );
-        void init( po::options_description & desc );
         static std::string defaultHelp();
         //@}
-        /** internal helper for parse errors */
+        /// \name helpers
+        //@{
+        void init( po::options_description & desc ); ///< checks for parse errors
         static void helpUsage( std::ostream& os );
+        //@}
         /// \name parse settings
         //@{
         param_struct parms;     ///< solver parameters, \ref parameter.h
         std::string xFile;      ///< x data file name (io via ???)
         std::string yFile;      ///< y data file name (io via eigen_io_binbool)
+
         std::string solnFile;   ///< solution file basename
-        std::string outFile;    ///< solution file basename
+        std::string outFile;    ///< output[.soln] file basename
         bool outBinary;         ///< outFile format
         bool outText;           ///< outFile format
         bool outShort;          ///< outFile format
         bool outLong;           ///< outFile format
         bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
+        uint32_t threads;       ///< used?
+        int verbose;            ///< verbosity
         //@}
     };
 
-    namespace MCproj { // TODO XXX CHECKME 
-        std::string defaultHelp();
-        void init( po::options_description & desc );
-        void argsParse( int argc, char**argv );
-    }//MCproj::
+    /** wrap program options for standalone mcproj exectuable */
+    struct MCprojArgs {
+        MCprojArgs();
+        MCprojArgs(int argc, char**argv);
+        /// \name lua api
+        //@{
+        void parse( int argc, char**argv );
+        static std::string defaultHelp();
+        //@}
+        /// \name helpers
+        //@{
+        void init( po::options_description & desc ); ///< checks for parse errors
+        static void helpUsage( std::ostream& os );
+        //@}
+        /// \name parse settings
+        //@{
+        std::string xFile;      ///< x data file name (io via ???)
+        std::string solnFile;   ///< solution file basename
+
+        std::string outFile;    ///< output[.proj] file basename (or cout)
+        bool outBinary;         ///< outFile format
+        bool outText;           ///< outFile format
+        bool outSparse;         ///< outFile format
+        bool outDense;          ///< outFile format
+        std::string yFile;      ///< y data file name (for validation: TBD)
+        bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
+        uint32_t threads;       ///< used?
+        int verbose;            ///< verbosity
+        //@}
+    };
 
 }//opt::
 

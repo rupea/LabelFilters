@@ -36,6 +36,8 @@ namespace detail {
     //TBITSET std::istream& io_txt( std::istream& is, BITSET      & x );
     TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& x );
     TBITSET std::istream& io_bin( std::istream& is, BITSET      & x );
+    TBITSET std::ostream& io_bin( std::ostream& os, std::vector<BITSET> const& x );
+    TBITSET std::istream& io_bin( std::istream& os, std::vector<BITSET> const& x );
 #undef BITSET
 #undef TBITSET
     //@}
