@@ -35,7 +35,13 @@ namespace MILDE {
         explicit scr_MCparm() : d_params(new cnt_Params()) {}
         virtual ~scr_MCparm() {}
 
-        static scr_MCparm* new_stack(); ///< construct 'parms' as lua userdata object
+        /// construct 'parms' as lua userdata object, from 'cmdline' options string
+        static scr_MCparm* new_stack();
+
+        /// repo -> x,y data file utility (other options, like --xnorm, TBD)
+        static int/*status*/ toxy( scr_Repo const& r, std::string basename );
+
+        /// lua ref-counted version of \c param_struct
         rc_Ptr<cnt_Params> d_params;
 
     };
@@ -125,12 +131,13 @@ print(p:str())    -- now have some nondefault parameters
         static int f_new();  ///< returns a [lua] default-constructed "param_struct"
 
         // utility functions:
-        /** convert a \em lua slc/mlc dense/sparse repo to "plain Eigen" .x and .y files.
+        /** convert a \em lua slc/mlc dense/sparse repo to "plain Eigen" foo-x.bin and foo-y.bin files.
          * - Function:
          *   - produce Eigen-compatible data files compatible with libmcfilter
          *     'solve' and 'project' operations
          * - Lua Usage:
-         *   - <B>repo2xy( repo, basename )</B>
+         *   - <em>mcparm</em>.<B>toxy( repo, basename:str, [bool xnorm=false? or args:str?] )</B>
+         * (repo,basename [,bool xnorm=false]) writes Eigen-friendly basename.{x|y} files usable for xfile and yfile commands
          *     - output basename.x and basename.y files compatible with reading in
          *       as Eigen DenseM and SparseMb types
          *     - basename.x written always as float, with <B>D</B>ense/<B>S</B>parse as per repo
@@ -144,42 +151,14 @@ print(p:str())    -- now have some nondefault parameters
          */
         static int f_toxy();
 
-        // MCsolver/MCsoln functions
-        //static int f_load();    ///< load(<fname:str>) -> 0/1 ~ bad/good
-        static int f_xfile();   ///< xfile(<fname:str>) -- fname.x example Eigen data
-        static int f_yfile();   ///< xfile(<fname:str>) -- fname.x example Eigen data
-        static int f_solnfile();   ///< xfile(<fname:str>) -- fname.x example Eigen data
+        // file handling -- now done via cmdline --xfile=... --yfile=... --solnfile=...
+        // @{
+        //static int f_xfile();           ///< xfile(<fname:str>) -- fname.x example Eigen data
+        //static int f_yfile();           ///< xfile(<fname:str>) -- fname.x example Eigen data
+        //static int f_solnfile();        ///< xfile(<fname:str>) -- fname.x example Eigen data
+        // @}
     };
 
-#if 0
-            // one option is for solve/project to build up program arguments with little lua calls
-            //std::string xfile;
-            //std::string yfile;
-            //std::string solnfile;
-            //std::string solnfmt;    ///< [default "SB"] 2 chars, S|L B|T for Short/Long Binary/Text soln format
-            // threads?
-            // xnorm?       NO!
-            //std::string outputfile; ///< mcsolve operation may write a \em different solnfile as output.
-            // possibly read these now, could also leave for later (during 'solve' or 'project' ops)
-            //DenseM x;
-            //bool isDense;
-            //SparseM y;
-            // simpler option is just to take all args as a string of command line parameters,
-            // and whose boost::program_options mirrors the standalone utilites
-            //    mcsolve,   mcproj,    and [perhaps even] mcgen
-#if 0 // *** NEW ***
-            std::string solveArgs;
-            std::string projArgs;
-#endif
-#if 1 // XXX probably should be in a separate 'solver' object
-        static std::string help_solve();        ///< return mcsolve --help string
-        void solve( std::string solveArgs );    ///< solution "just like" standalone mcsolve
-#endif
-#if 0
-        static std::string help_proj();         ///< return mcproj --help string
-        static void proj( std::string projArgs );
-#endif
-#endif
     /** internal C++ impl for MCsolveProgram MCfilter function */
     struct scr_MCsolve{
         /** construct solver as lua userdata object.

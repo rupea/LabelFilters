@@ -134,14 +134,9 @@ FUN(getargs)    // return all parameters as string->string table
 FUN(set)        // overwrite keys in supplied string->luatype table
 FUN(setargs)    // overwrite keys in supplied string->string table
 FUN(str)
-//FUN(load)       // read x,y training data
-//FUN(xfile)      // set mcsolve/mcproj --xfile string
-//FUN(yfile)      // set mcsolve/mcproj --yfile string
-//FUN(xyfile)     // set --xfile and --yfile as fname.x and fname.y
-//FUN(solnfile)   // set --solnfile string, and [def. "BS"] Binary|Text, Short|Long format
 
 FUN(new)        // construct a default 'mcparm' parameter set
-//FUN(toxy)    // toxy(repo,basename [,bool xnorm=false]) writes Eigen-friendly basename.{x|y} files usable for xfile and yfile commands
+FUN(toxy)       // toxy(repo,basename [,bool xnorm=false]) writes Eigen-friendly basename.{x|y} files usable for xfile and yfile commands
 ;
 #undef FUN
 
@@ -590,7 +585,12 @@ GOT_VERBOSE:
 
     int script_MCparm::f_toxy()
     {
-        scr_TRY("<mcparm>.toxy( <repo>, <basename:str> ) -- write basename.x basename.y data files"){
+        scr_TRY("<mcparm>.toxy( <repo>, <basename:str> [,<xnorm:bool>?] ) -- write basename.x basename.y data files"){
+            scr_USR( scr_Repo, r, ERR_LBL);
+            {
+                scr_STR( basename, ERR_LBL );
+                scr_MCparm::toxy( r, basename );
+            }
             cerr<<"XXX TBD f_toxy"<<endl;
             throw std::runtime_error(" script_MCparm::f_toxy NOT IMPLEMENTED");
             //return 1;
