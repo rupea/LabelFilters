@@ -457,20 +457,25 @@ namespace detail {
             }
             if(verbose){cout<<" x.outerIndexPtr()[rows] = "<<x.outerIndexPtr()[rows]<<endl;cout.flush();}
             assert( x.outerIndexPtr()[rows] == nData );
-            if(nData < numeric_limits<uint_least8_t>::max()){
+#ifndef NDEBUG
+            for(Idx i=0U; i< nData; ++i){
+                assert( x.innerIndexPtr()[i] < cols );
+            }
+#endif
+            if(cols < numeric_limits<uint_least8_t>::max()){
                 if(verbose){cout<<" iu8⋅"<<nData; cout.flush();}
                 for(Idx i=0U; i< nData; ++i){
                     assert( static_cast<Idx>(x.innerIndexPtr()[i]) < cols );
                     IDX_IO(x.innerIndexPtr()[i], uint_least8_t);
                 }
-            }else if(nData < numeric_limits<uint_least16_t>::max()){
+            }else if(cols < numeric_limits<uint_least16_t>::max()){
                 if(verbose){cout<<" iu16⋅"<<nData; cout.flush();}
                 for(Idx i=0U; i< nData; ++i){
                     assert( static_cast<Idx>(x.innerIndexPtr()[i]) < cols );
                     IDX_IO(x.innerIndexPtr()[i], uint_least16_t);
                     if(verbose>=2){cout<<" iIP["<<i<<"]="<<setw(12)<<x.innerIndexPtr()[i]<<(i%10==9?"\n":""); cout.flush();}
                 }
-            }else if(nData < numeric_limits<uint_least32_t>::max()){
+            }else if(cols < numeric_limits<uint_least32_t>::max()){
                 if(verbose){cout<<" iu32⋅"<<nData; cout.flush();}
                 for(Idx i=0U; i< nData; ++i){
                     assert( static_cast<Idx>(x.innerIndexPtr()[i]) < cols );
@@ -658,16 +663,16 @@ namespace detail {
 
         {
             auto idxp = x.innerIndexPtr();
-            if(nData < numeric_limits<uint_least8_t>::max()){
+            if(cols < numeric_limits<uint_least8_t>::max()){
                 if(verbose){cout<<" iu8⋅"<<nData; cout.flush();}
                 uint_least8_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
-            }else if(nData < numeric_limits<uint_least16_t>::max()){
+            }else if(cols < numeric_limits<uint_least16_t>::max()){
                 if(verbose){cout<<" iu16⋅"<<nData; cout.flush();}
                 uint_least16_t tmp; for(size_t i=0U; i<nData; ++i){
                     *idxp++ = NEXT_IDX(tmp);
                     if(verbose>=2){cout<<" iIP["<<i<<"]="<<setw(12)<<x.innerIndexPtr()[i]<<(i%10==9?"\n":""); cout.flush();}
                 }
-            }else if(nData < numeric_limits<uint_least32_t>::max()){
+            }else if(cols < numeric_limits<uint_least32_t>::max()){
                 if(verbose){cout<<" iu32⋅"<<nData; cout.flush();}
                 uint_least32_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
             }else{

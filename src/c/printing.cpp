@@ -4,6 +4,7 @@
 #include "Eigen/Sparse"
 #include "typedefs.h"
 #include "printing.hh"
+#include <sstream>
 
 using Eigen::VectorXd;
 using namespace std;
@@ -198,6 +199,54 @@ namespace detail {
             }
         }
 #undef NEXT_IDX
+        return is;
+    }
+    std::ostream& eigen_io_txtbool( std::ostream& os, SparseMb const& x ){
+        typedef uint64_t Idx;
+        Idx const rows = x.rows();
+        Idx const cols = x.cols();
+        io_txt(os,rows);
+        io_txt(os,cols);
+        int line=0;                     // one output line per row (example)
+        bool firstitem = true;
+        for(int i=0; i<x.outerSize(); ++i){
+            for(SparseMb::InnerIterator it(x,i); it; ++it){
+                bool const val = it.value();
+                cout<<" line="<<line<<" it.col,row = "<<it.col()<<","<<it.row()
+                    <<" val="<<val<<endl;
+                if( val != false ){
+                    if( it.row() == line && !firstitem ) os<<" ";
+                    else{
+                        while( line != it.row() ) { os<<"\n"; ++line; }
+                        firstitem = true;
+                    }
+                    os<<it.col();       // containing list of 'true' labels
+                    firstitem = false;
+                }
+            }
+        }
+        return os;
+    }
+    std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x ){
+        cout<<"WARNING: eigen_io_txtbool needs to be tested"<<endl;
+        typedef uint64_t Idx;
+        Idx rows;
+        Idx cols;
+        io_txt(is,rows);
+        io_txt(is,cols);
+        is>>ws;         // OK now do linewise parse, 1 line per example
+        std::string line;
+        typedef Eigen::Triplet<bool> T;
+        std::vector<T> tripletList;
+        tripletList.reserve( rows );    // at least!!!
+        for(int row=0; getline(is,line); ++row ){    // one row per line
+            istringstream iss(line);
+            Idx idx;
+            while(iss>>idx){
+                tripletList.push_back( T(row,idx,true) );
+            }
+        }
+        x.setFromTriplets( tripletList.begin(), tripletList.end() );
         return is;
     }
 }//detail::

@@ -627,6 +627,9 @@ namespace mcgen {
                     cout<<" embed step makes rot unnecessary: ignoring --rot="<<parms.rot<<endl;
                     parms.rot = 0U;
                 }
+                uint32_t examples = vm["examples"].as<uint32_t>();
+                if( examples > parms.nx ) parms.nx = examples;
+
                 //if( ! parms.trivial && (parms.skew == 0U && parms.rot == 0U))
                 //    throw runtime_error("-t0 needs either -s or -r");
                 if( parms.skew != 0U || parms.rot != 0U ) // supplying -s or -r implies non-trivial
@@ -1607,11 +1610,13 @@ int main(int argc, char** argv)
                 assert( x[0].size() == p.dim );
                 ex.resize( x.size(), p.dim );
                 for(uint32_t r=0U; r<x.size(); ++r){
+                    assert( x[r].size() == p.dim );
                     for(uint32_t c=0U; c<p.dim; ++c ){
                         ex.coeffRef(r,c) = static_cast<float>(x[r][c]);
                     }
                 }
-                //cout<<"x as SparseMf:\n"<<ex<<endl;
+                cout<<"original example vector x["<<x.size()<<"] -->"
+                    <<"x as SparseMf ex"<<prettyDims(ex)<<endl;
                 ofstream ofs(fname);
                 eigen_io_bin( ofs, ex ); // x is Dense
                 ofs.close();
@@ -1770,6 +1775,15 @@ int main(int argc, char** argv)
                 // --- now get rid of useless '1' if ALL the bits are set (bool optimization)
                 eigen_io_binbool( ofs, sy ); // y is sparse bool, compressed, only-true : 93 bytes
                 ofs.close();
+                // bonus: also output txt bool format
+                {
+                    string fnameTxt;
+                    { ostringstream oss; oss<<"mcgen-"<<p.str()<<"-slc-y.txt"; fnameTxt = oss.str(); }
+                    ofs.open(fnameTxt);
+                    eigen_io_txtbool( ofs, sy );
+                    ofs.close();
+                    cout<<" Wrote 'y' file "<<fnameTxt<<endl;
+                }
             }
             uint64_t fsize_bytes;
             {

@@ -199,8 +199,8 @@ namespace opt {
         MCsoln & soln = S::getSoln();
         DenseM      & w = soln.weights_avg;
         DenseM      & ww = soln.weights;
-        cout<<" weights     norms: "; for(uint32_t c=0U; c<ww.rows(); ++c){cout<<" "<<ww.col(c).norm();} cout<<endl;
-        cout<<" weights_avg norms: "; for(uint32_t c=0U; c<w.rows(); ++c){cout<<" "<<w.col(c).norm();} cout<<endl;
+        cout<<" weights     norms: "; for(uint32_t c=0U; c<ww.cols(); ++c){cout<<" "<<ww.col(c).norm();} cout<<endl;
+        cout<<" weights_avg norms: "; for(uint32_t c=0U; c<w.cols(); ++c){cout<<" "<<w.col(c).norm();} cout<<endl;
         w.colwise().normalize();                     // modify w, ww to unit-vector (? largest coeff +ve ?)
         ww.colwise().normalize();
         DenseM const& l = soln.lower_bounds_avg;
