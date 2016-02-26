@@ -3,6 +3,7 @@
 
 #include "printing.h"
 #include <iostream>
+#include <iomanip>
 #include <sstream>
 #include <stdexcept>
 #include <boost/function_output_iterator.hpp>
@@ -436,6 +437,7 @@ namespace detail {
                     IDX_IO(x.outerIndexPtr()[i], uint_least8_t);
                 }
             }else if(nData < numeric_limits<uint_least16_t>::max()){
+                if(verbose){cout<<" ou16⋅"<<rows+1; cout.flush();}
                 for(Idx i=0U; i<rows  + 1   ; ++i){
                     assert( static_cast<Idx>(x.outerIndexPtr()[i]) <= nData );
                     IDX_IO(x.outerIndexPtr()[i], uint_least16_t);
@@ -453,22 +455,29 @@ namespace detail {
                     IDX_IO(x.outerIndexPtr()[i], Idx);
                 }
             }
-            if(cols < numeric_limits<uint_least8_t>::max()){
+            if(verbose){cout<<" x.outerIndexPtr()[rows] = "<<x.outerIndexPtr()[rows]<<endl;cout.flush();}
+            assert( x.outerIndexPtr()[rows] == nData );
+            if(nData < numeric_limits<uint_least8_t>::max()){
+                if(verbose){cout<<" iu8⋅"<<nData; cout.flush();}
                 for(Idx i=0U; i< nData; ++i){
                     assert( static_cast<Idx>(x.innerIndexPtr()[i]) < cols );
                     IDX_IO(x.innerIndexPtr()[i], uint_least8_t);
                 }
-            }else if(cols < numeric_limits<uint_least16_t>::max()){
+            }else if(nData < numeric_limits<uint_least16_t>::max()){
+                if(verbose){cout<<" iu16⋅"<<nData; cout.flush();}
                 for(Idx i=0U; i< nData; ++i){
                     assert( static_cast<Idx>(x.innerIndexPtr()[i]) < cols );
                     IDX_IO(x.innerIndexPtr()[i], uint_least16_t);
+                    if(verbose>=2){cout<<" iIP["<<i<<"]="<<setw(12)<<x.innerIndexPtr()[i]<<(i%10==9?"\n":""); cout.flush();}
                 }
-            }else if(cols < numeric_limits<uint_least32_t>::max()){
+            }else if(nData < numeric_limits<uint_least32_t>::max()){
+                if(verbose){cout<<" iu32⋅"<<nData; cout.flush();}
                 for(Idx i=0U; i< nData; ++i){
                     assert( static_cast<Idx>(x.innerIndexPtr()[i]) < cols );
                     IDX_IO(x.innerIndexPtr()[i], uint_least32_t);
                 }
             }else{ // original, VERY wide Idx
+                if(verbose){cout<<" iIdx⋅"<<nData; cout.flush();}
                 //os<<"\n\t"; //os<<"innerIndexPtr[] ";
                 //for(int i=0U; i< nData; ++i) os<<" "<<x.innerIndexPtr()[i];
                 // XXX can be a single i/o if no type conversion.
@@ -481,9 +490,14 @@ namespace detail {
             //os<<"\n\t"; //os<<"valuePtr[] ";
             //for(int i=0U; i< nData; ++i) os<<" "<<x.valuePtr()[i];
             if( ! isBool ){
+                if(verbose){cout<<" nonbool⋅"<<nData; cout.flush();}
                 // XXX can be a single i/o if no type conversion.
-                for(Idx i=0U; i< nData; ++i) REAL_IO(x.valuePtr()[i]);
+                for(Idx i=0U; i< nData; ++i){
+                    REAL_IO(x.valuePtr()[i]);
+                    if(verbose>=2){cout<<" val["<<i<<"]="<<setw(12)<<x.valuePtr()[i]<<(i%10==9?"\n":""); cout.flush();}
+                }
             }else{
+                if(verbose){cout<<" bool⋅"<<nData; cout.flush();}
                 boost::dynamic_bitset<uint64_t> dbs(nData,false);
                 for(Idx i=0U; i< nData; ++i)
                     dbs.set(i,x.valuePtr()[i]);         // bool valuePtr[i] --> bitset[i]
@@ -594,7 +608,7 @@ namespace detail {
 
     TMATRIX std::istream& eigen_io_bin_impl( std::istream& is, MATRIX      & x, bool const isBool ){
         using namespace std;
-        int const verbose = 1;
+        int const verbose = 0;
         if(verbose){cout<<" TEST COMPRESSED SPARSE BINARY INPUT"<<endl; cout.flush();}
         //io_bin(is,(void*)x.data(),size_t(rows*cols*sizeof(typename MATRIX::Scalar)));
         typedef float Real;     // we will convert to 'real' for binary i/o (maybe save space)
@@ -627,6 +641,7 @@ namespace detail {
             if(nData < numeric_limits<uint_least8_t>::max()){
                 uint_least8_t tmp; for(size_t i=0U; i<rows + 1U ; ++i) *idxp++ = NEXT_IDX(tmp);
             }else if(nData < numeric_limits<uint_least16_t>::max()){
+                if(verbose){cout<<" u16⋅"<<rows+1; cout.flush();}
                 uint_least16_t tmp; for(size_t i=0U; i<rows + 1U ; ++i) *idxp++ = NEXT_IDX(tmp);
             }else if(nData < numeric_limits<uint_least32_t>::max()){
                 uint_least32_t tmp; for(size_t i=0U; i<rows + 1U ; ++i) *idxp++ = NEXT_IDX(tmp);
@@ -638,18 +653,25 @@ namespace detail {
                 }
             }
         }
-        if(verbose){cout<<"x.outerIndexPtr()[rows] = "<<x.outerIndexPtr()[rows]<<endl;cout.flush();}
+        if(verbose){cout<<" x.outerIndexPtr()[rows] = "<<x.outerIndexPtr()[rows]<<endl;cout.flush();}
         assert( x.outerIndexPtr()[rows] == nData );
 
         {
             auto idxp = x.innerIndexPtr();
             if(nData < numeric_limits<uint_least8_t>::max()){
+                if(verbose){cout<<" iu8⋅"<<nData; cout.flush();}
                 uint_least8_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
             }else if(nData < numeric_limits<uint_least16_t>::max()){
-                uint_least16_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
+                if(verbose){cout<<" iu16⋅"<<nData; cout.flush();}
+                uint_least16_t tmp; for(size_t i=0U; i<nData; ++i){
+                    *idxp++ = NEXT_IDX(tmp);
+                    if(verbose>=2){cout<<" iIP["<<i<<"]="<<setw(12)<<x.innerIndexPtr()[i]<<(i%10==9?"\n":""); cout.flush();}
+                }
             }else if(nData < numeric_limits<uint_least32_t>::max()){
+                if(verbose){cout<<" iu32⋅"<<nData; cout.flush();}
                 uint_least32_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
             }else{
+                if(verbose){cout<<" iIdx⋅"<<nData; cout.flush();}
                 Idx tmp;
                 for(size_t i=0U; i<nData; ++i){
                     *idxp++ = NEXT_IDX(tmp);
@@ -658,12 +680,14 @@ namespace detail {
             }
         }
         if( ! isBool ){
+            if(verbose){cout<<" nonbool⋅"<<nData; cout.flush();}
             auto valp = x.valuePtr();
             for(size_t i=0U; i<nData; ++i){
                 *valp++ = NEXT_VAL;
-                //cout<<" val["<<i<<"]="<<x.valuePtr()[i]<<endl;
+                if(verbose>=2){cout<<" val["<<i<<"]="<<setw(12)<<x.valuePtr()[i]<<(i%10==9?"\n":""); cout.flush();}
             }
         }else{
+            if(verbose){cout<<" bool⋅"<<nData; cout.flush();}
             boost::dynamic_bitset<uint64_t> dbs;
             io_bin(is,dbs);
             auto valp = x.valuePtr();   // now this is bool*

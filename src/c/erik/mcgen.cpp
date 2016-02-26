@@ -1688,9 +1688,11 @@ int main(int argc, char** argv)
                 ex.setFromTriplets( tripletList.begin(), tripletList.end() );
             }
             {
+                cout<<" writing "<<fname<<" ... "; cout.flush();
                 ofstream ofs(fname);
                 eigen_io_bin( ofs, ex ); // x is Dense
                 ofs.close();
+                cout<<" OK"<<endl;
             }
             uint64_t fsize_bytes;
             {
