@@ -589,7 +589,7 @@ GOT_VERBOSE:
             scr_USR( scr_Repo, r, ERR_LBL);
             {
                 scr_STR( basename, ERR_LBL );
-                scr_MCparm::toxy( r, basename );
+                scr_MCparm::toxy( *r, basename );
             }
             cerr<<"XXX TBD f_toxy"<<endl;
             throw std::runtime_error(" script_MCparm::f_toxy NOT IMPLEMENTED");
@@ -774,6 +774,7 @@ static const struct luaL_Reg lua_mcparm_lib_m [] = {
     LUA_FUN(set),
     LUA_FUN(setargs),
     LUA_FUN(str),
+    LUA_FUN(toxy),
     //LUA_FUN(load),
     {0,0}
 };

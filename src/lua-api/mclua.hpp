@@ -12,6 +12,7 @@
 //#include "script_lua/lua_binding_macros.hpp"
 //#include "script_lua/lua_interpreter.hpp"
 //#include "script_shell/script_stream.hpp"
+#include "script_repo/script_repo.hpp"          // scr_Repo
 //#include <omp.h>                // clash for omp_get_num_threads, omp_test_lock, mutexlock stuff, etc.
 
 //struct param_struct;

@@ -85,7 +85,7 @@ lib: libmclua.so libmclua-dbg.so
 #	$(AR) -vru $@ $^
 #libmclua-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIBMCLUA_FILES))
 #	$(AR) -vru $@ $^
-LIBMCLUA_SRC:=mclua.cpp
+LIBMCLUA_SRC:=mclua.cpp toxy.cpp
 
 # To ease linking, wire the mcfilter library & path into the lua library
 # (so that require('libmclua') will auto-load libmcfilter.so without doing
