@@ -48,6 +48,9 @@ PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
 all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve
+# For MiLDe, remove all "octave"-related targets, and ensure 'lib' target[s] are mode
+milde: demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve lib
+
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
 

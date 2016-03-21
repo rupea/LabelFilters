@@ -3,6 +3,9 @@ To compile:
 > cd src
 > make
 
+Eigen WILL NOT compile under modern g++ (g++-5.3, for example)
+Please use g++-4.9.x or so.
+
 Main function: src/octave/run_svm_test.m
 
 - This branch is for milde support.

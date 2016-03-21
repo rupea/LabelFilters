@@ -217,14 +217,14 @@ namespace opt {
     void MCsolveArgs::init( po::options_description & desc ){
         desc.add_options()
             ("xfile,x", value<string>()->required(), "x data (row-wise nExamples x dim)")
-            ("yfile,y", value<string>()->required(), "y data (slc/mlc SparseMb)")
+            ("yfile,y", value<string>()->default_value(string("")), "y data (if absent, try reading as libsvm format)")
             ("solnfile,s", value<string>()->default_value(string("")), "solnfile[.soln] starting solver state")
             ("output,o", value<string>()->default_value(string("mc")), "output[.soln] file base name")
             (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(true),"B|T output BINARY")
             (",T", value<bool>(&outText)->implicit_value(true)->default_value(false),"B|T output TEXT")
             (",S", value<bool>(&outShort)->implicit_value(true)->default_value(true),"S|L output SHORT")
             (",L", value<bool>(&outLong)->implicit_value(true)->default_value(false),"S|L output LONG")
-            ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)")
+            ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
             ("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
             ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
             ;
@@ -291,7 +291,7 @@ namespace opt {
 
             cerr<<"msolve args..."<<endl;
             assert( vm.count("xfile") );
-            assert( vm.count("yfile") );
+            //assert( vm.count("yfile") );
             assert( vm.count("solnfile") );
             assert( vm.count("output") );
 

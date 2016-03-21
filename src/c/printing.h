@@ -125,6 +125,13 @@ namespace detail {
      * \throw if bad magic header bytes. */
     std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x );
     //@}
+
+    /** input only - read text libsvm-format. \throw on error. */
+    template< typename X_REAL >
+    std::istream& eigen_read_libsvm( std::istream& is,
+                                     typename Eigen::SparseMatrix<X_REAL,Eigen::RowMajor> &x,
+                                     Eigen::SparseMatrix<bool,Eigen::RowMajor> &y );
+
 }//detail::
 
 // from EigenIO.h -- actually this is generic, not related to Eigen

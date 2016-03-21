@@ -51,7 +51,21 @@ namespace opt {
         //bool denseOk=false;
         //SparseM xSparse;
         //bool sparseOk=false;
-        {
+        if( yFile.size() == 0 && xFile.size() != 0 ){
+            try{
+                ifstream xfs;
+                // try to read a text libsvm format -- Y labels, then SparseX data
+                xfs.open(xFile);
+                if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+                detail::eigen_read_libsvm( xfs, xSparse, y );
+                sparseOk = true;
+                xfs.close();
+            }catch(std::exception const& e){
+                cerr<<" --xFile="<<xFile<<" and no --yFile: libsvm format input error!"<<endl;
+                throw;
+            }
+        }
+        if(!sparseOk){
             ifstream xfs;
             // TODO XXX try Dense-Text, Sparse-Text too?
             try{
@@ -91,7 +105,7 @@ namespace opt {
             denseOk = true;
         }
         // read SparseMb y;
-        {
+        if(yFile.size()){
             ifstream yfs;
             try{
                 yfs.open(yFile);
@@ -103,12 +117,27 @@ namespace opt {
                 cerr<<"Invalid argument: "<<e.what()<<endl;
                 throw;
             }catch(std::runtime_error const& e){
-                cerr<<e.what()<<endl;
-                throw;
+                cerr<<"ERROR: tryRead(), "<<e.what()<<endl;
+                //throw;
             }catch(std::exception const& e){
                 cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
                 throw;
             }
+            cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
+            try{
+                yfs.close();
+                yfs.open(yFile);
+                if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+                ::detail::eigen_io_txtbool( yfs, y );
+                assert( y.cols() > 0U );
+                // yfs.fail() is expected
+                if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
+            }
+            catch(std::exception const& e){
+                cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
+                throw;
+            }
+            assert( y.size() > 0 );
         }
         assert( denseOk || sparseOk );
         if(verbose>=1){

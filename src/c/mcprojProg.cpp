@@ -127,9 +127,23 @@ namespace opt {
                 throw;
             }catch(std::runtime_error const& e){
                 cerr<<e.what()<<endl;
-                throw;
+                //throw;
             }catch(std::exception const& e){
                 cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
+                throw;
+            }
+            cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
+            try{
+                yfs.close();
+                yfs.open(yFile);
+                if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+                ::detail::eigen_io_txtbool( yfs, y );
+                assert( y.cols() > 0U );
+                // yfs.fail() is expected
+                if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
+            }
+            catch(std::exception const& e){
+                cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
                 throw;
             }
             assert( y.size() > 0 );

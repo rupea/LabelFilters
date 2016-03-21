@@ -227,26 +227,185 @@ namespace detail {
         }
         return os;
     }
+    /** eigen_io_txtbool \em should return with \c is.eof(), and may normally
+     * return with \c is.fail(). */
     std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x ){
-        cout<<"WARNING: eigen_io_txtbool needs to be tested"<<endl;
+        //cout<<"WARNING: eigen_io_txtbool needs to be tested"<<endl;
         typedef uint64_t Idx;
         Idx rows;
         Idx cols;
         io_txt(is,rows);
         io_txt(is,cols);
         is>>ws;         // OK now do linewise parse, 1 line per example
+        //cout<<" eigen_io_txtbool: rows="<<rows<<" cols="<<cols<<endl;
         std::string line;
         typedef Eigen::Triplet<bool> T;
         std::vector<T> tripletList;
         tripletList.reserve( rows );    // at least!!!
         for(int row=0; getline(is,line); ++row ){    // one row per line
+            //cout<<"row="<<row<<" line="<<line<<" parse: "; cout.flush();
             istringstream iss(line);
             Idx idx;
             while(iss>>idx){
+                //cout<<" "<<idx; cout.flush();
                 tripletList.push_back( T(row,idx,true) );
             }
+            //cout<<endl;
         }
+        x.resize(rows,cols);
         x.setFromTriplets( tripletList.begin(), tripletList.end() );
+        //cout<<" eigen_io_txtbool read SUCCESS"<<endl;
         return is;
     }
+
+    template< typename X_REAL >
+    std::istream& eigen_read_libsvm( std::istream& is,
+                                     typename Eigen::SparseMatrix<X_REAL,Eigen::RowMajor> &xSparse,
+                                     Eigen::SparseMatrix<bool,Eigen::RowMajor> &y ){
+        xSparse.resize(0,0);
+        y.resize(0,0);
+
+        int const verbose=2; //
+        typedef size_t Idx;
+        typedef Eigen::Triplet<bool> B;
+        typedef typename Eigen::Triplet<X_REAL> D;
+        std::vector<B> yTriplets;
+        std::vector<D> xTriplets;
+        std::string line;
+        std::vector<Idx> yIdx;
+        std::vector<Idx> xIdx;
+        std::vector<double> xVal;
+        size_t row=0U;
+        bool badline=false;
+        Idx maxClass=0U;
+        Idx maxXidx=0U;
+        Idx minXidx=std::numeric_limits<Idx>::max();
+        for(;getline(is,line);){
+            yIdx.clear();
+            xIdx.clear();
+            xVal.clear();
+            istringstream iss(line);
+            iss>>ws;
+            char const c=iss.peek();
+            if(c == '#') { if(verbose) cout<<" comment-line skipped "<<endl; continue; }
+            try{
+                char sep='x';
+                Idx idx;
+                while(iss>>idx){
+                    yIdx.push_back(idx);
+                    iss>>ws;
+                    if((sep=iss.peek()) == ':') break;
+                }
+                if(verbose>=3){cout<<" yIdx.size()="<<yIdx.size()<<" peek="<<(char)iss.peek()<<" sep="<<sep<<endl;}
+                if(sep==':'){
+                    iss>>sep;
+                    assert(sep==':');
+                    xIdx.push_back( yIdx.back() );
+                    yIdx.pop_back();
+                    if(verbose>=3){cout<<" yIdx.size()="<<yIdx.size()<<" peek="<<iss.peek()
+                        <<" xIdx[0] = "<<xIdx[0]<<" sep="<<sep<<endl;}
+                    double val;
+                    if( !(iss>>val) )
+                        throw std::runtime_error(" bad double input?");
+                    xVal.push_back(val);
+                    for(;iss.good();){
+                        iss>>ws;
+                        if(iss.peek() == '#' )
+                            break;
+                        iss>>idx>>sep>>val;
+                        if( iss.good() ){
+                            xIdx.push_back(idx);
+                            xVal.push_back(val);
+                            if( sep != ':' )
+                                throw std::runtime_error(" bad sep");
+                            iss>>ws;
+                            if(iss.eof()) {/*cout<<" eof";*/ break;}
+                            if(iss.peek() == '#') break; // ignore trailing comment
+                        }else{
+                            throw std::runtime_error(" libsvm-fmt parse error");
+                        }
+                    }
+                    if(verbose>=3){
+                        for(size_t i=0U; i<xIdx.size(); ++i)
+                            cout<<" "<<xIdx[i]<<":"<<xVal[i];
+                        cout<<endl;
+                    }
+                }else{
+                    cerr<<"ERROR: trouble with libsvm format, line : "<<line<<endl;
+                    throw std::runtime_error(" illegal input line");
+                }
+            }catch(std::exception const& e){
+                cerr<<" yIdx read exception : "<<e.what()<<endl;
+                badline=true;
+                break;
+            }
+            assert( yIdx.size() > 0U );
+            assert( xIdx.size() == xVal.size() );
+            // move class and data items onto respective TripletLists
+            for(size_t i=0U; i<yIdx.size(); ++i){
+                if( yIdx[i] > maxClass ) maxClass = yIdx[i];
+                yTriplets.push_back( B(row,yIdx[i],true) );
+            }
+            for(size_t i=0U; i<xIdx.size(); ++i){
+                if( xIdx[i] > maxXidx ) maxXidx = xIdx[i];
+                if( xIdx[i] < minXidx ) minXidx = xIdx[i];
+                xTriplets.push_back( D(row,xIdx[i],xVal[i]) );
+            }
+            ++row;
+            if(verbose>=2){ // echo the parsed line content...
+                cout<<" valid row="<<row<<": ";
+                for(size_t i=0U; i<yIdx.size(); ++i) cout<<" y"<<yIdx[i];
+                for(size_t i=0U; i<xIdx.size(); ++i) cout<<" "<<xIdx[i]<<":"<<xVal[i];
+                cout<<endl;
+            }
+        }
+        if( !badline ){
+            if(verbose>=1){cout<<" GOOD libsvm-like text input, maxClass="<<maxClass
+                <<" minXidx="<<minXidx<<" maxXidx="<<maxXidx<<" row="<<row<<endl;}
+            {
+                if(verbose>=1){cout<<"\t y.setFromTriplets..."<<endl;}
+                y.resize( row, maxClass+1U );
+                y.setFromTriplets( yTriplets.begin(), yTriplets.end() );
+                std::vector<B> empty;
+                yTriplets.swap(empty); // de-allocate some memory
+            }
+
+            // if minXidx > 0, then subtract 1 from all x indices
+            // (libsvm format begins sparse format at index "1")
+            if( minXidx > 0 ){
+                cout<<"Assuming 1-based x indices: minXidx = "<<minXidx<<", not zero"<<endl;
+                --minXidx;
+                --maxXidx;
+                // Triplet is not modifiable, so construct and replace
+                for(size_t i=0U; i<xTriplets.size(); ++i){
+                    auto & xi = xTriplets[i];
+                    D dnew( xi.row(), xi.col()-1U, xi.value() );
+                    xi = dnew;
+                }
+            }
+            {
+                if(verbose>=1){cout<<"\t x.setFromTriplets..."<<endl;}
+                //sparseOk=true;
+                xSparse.resize(row,maxXidx+1U);
+                xSparse.setFromTriplets(xTriplets.begin(), xTriplets.end());
+                std::vector<D> empty;
+                xTriplets.swap(empty); // de-allocate xTriplets memory
+            }
+
+        }
+        return is;
+    }
+
+    template
+    std::istream& eigen_read_libsvm( std::istream& is,
+                                     // aka SparseMf
+                                     //typename Eigen::SparseMatrix<float,Eigen::RowMajor> &x,
+                                     SparseMf &x,
+                                     SparseMb &y );
+    template
+    std::istream& eigen_read_libsvm( std::istream& is,
+                                     // aka SparseM
+                                     //typename Eigen::SparseMatrix<double,Eigen::RowMajor> &x,
+                                     SparseM &x,
+                                     SparseMb &y );
 }//detail::

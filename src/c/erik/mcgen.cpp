@@ -1695,7 +1695,7 @@ int main(int argc, char** argv)
             {
                 cout<<" writing "<<fname<<" ... "; cout.flush();
                 ofstream ofs(fname);
-                eigen_io_bin( ofs, ex ); // x is Dense
+                eigen_io_bin( ofs, ex ); // x is Dense, ex is Sparse
                 ofs.close();
                 cout<<" OK"<<endl;
             }
