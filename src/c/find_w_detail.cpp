@@ -141,8 +141,9 @@ void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
     if(nclassesZero) err<<"\nERROR: it seems "<<nclassesZero<<" examples have been assigned to no class at all";
 
     int ncZero = 0;
-    for (int i=0;i<noClasses;i++) if( nc[i]==0 ) ++ncZero;
-    if(ncZero) err<<"\nERROR: it seems "<<ncZero<<" classes have been assigned to NO training examples (nc[i]==0)";
+    int i0=0;
+    for (int i=0;i<noClasses;i++) if( nc[i]==0 ) {++ncZero; if(i0==0) i0=i;}
+    if(ncZero) err<<"\nERROR: it seems "<<ncZero<<" classes have been assigned to NO training examples (nc["<<i0<<"]==0)";
 
     if(err.str().size()){
         err<<"\n\tPlease check whether code should support this, since"

@@ -493,9 +493,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     if(1) for(; projection_dim < (int)nProj; projection_dim++)
     {
         init_w( w, x,y,nc, weights_avg,projection_dim, (projection_dim<reuse_dim) );
-        w.toVectorXd(tmp); cout<<" start projection "<<projection_dim<<" w.norm="<<w.norm()<<" w: "<<tmp.transpose()<<endl;
-        xwProj.w_changed();                             // invalidate w-dependent stuff (projections)
-        luPerm.init( xwProj.std(), y, nc );             // std because w can't have started averaging yet
+        cout<<" start projection "<<projection_dim<<" w.norm="<<w.norm();
+        if( w.size()<50U ){ w.toVectorXd(tmp); cout<<" w: "<<tmp.transpose(); }
+        cout<<endl;
+        xwProj.w_changed();                     // invalidate w-dependent stuff (projections)
+        luPerm.init( xwProj.std(), y, nc );     // std because w can't have started averaging yet
         luPerm.rank( GetMeans(params.reorder_type) );
         PROFILER_STOP_START("optimizeLU.profile");
         if (params.optimizeLU_epoch > 0) { // questionable.. l,u at this point are random, so why do it this early?

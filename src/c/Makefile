@@ -319,7 +319,7 @@ mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
 # link with libmcfilter allows saving a .soln file ...
 mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
-mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a
+mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a | libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. -Wno-error=maybe-uninitialized $^
 erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	# mcsolve0 is an initial version, before opt::MCsolveProgram was written

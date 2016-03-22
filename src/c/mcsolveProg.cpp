@@ -139,24 +139,28 @@ namespace opt {
             }
             assert( y.size() > 0 );
         }
+#ifndef NDEBUG
         assert( denseOk || sparseOk );
-        if(verbose>=1){
+        if( denseOk ){
+            assert( xDense.rows() == y.rows() );
+        }else{ //sparseOk
+            assert( xSparse.rows() == y.rows() );
+            // col-norm DISALLOWED
+        }
+#endif
+        if( sparseOk && xnorm )
+            throw std::runtime_error("sparse --xfile does not support --xnorm");
+        if(verbose>=1 && y.rows() < 50 ){       // print only for small tests
             if( denseOk ){
                 cout<<"xDense:\n"<<xDense<<endl;
                 cout<<"y:\n"<<y<<endl;
                 cout<<"parms:\n"<<A::parms<<endl;
-                assert( xDense.rows() == y.rows() );
             }else{ //sparseOk
                 cout<<"xSparse:\n"<<xSparse<<endl;
                 cout<<"y:\n"<<y<<endl;
                 cout<<"parms:\n"<<A::parms<<endl;
-                //if( xnorm ){ cout<<" xnorm!"<<endl; column_normalize(xSparse,xmean,xstdev); }
-                // col-norm DISALLOWED
-                if( xnorm ) throw std::runtime_error("sparse --xfile does not support --xnorm");
-                assert( xSparse.rows() == y.rows() );
             }
         }
-        //throw std::runtime_error("TBD");
     }
     void MCsolveProgram::trySolve( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
@@ -235,19 +239,25 @@ namespace opt {
         DenseM const& l = soln.lower_bounds_avg;
         DenseM const& u = soln.upper_bounds_avg;
         if(verbose>=1){
-            cout<<"normalized     weights"<<prettyDims(ww)<<":\n"<<ww<<endl;
-            cout<<"normalized weights_avg"<<prettyDims(w)<<":\n"<<w<<endl;
-            cout<<"      lower_bounds_avg"<<prettyDims(l)<<":\n"<<l<<endl;
-            cout<<"      upper_bounds_avg"<<prettyDims(u)<<":\n"<<u<<endl;
+            cout<<"normalized     weights"<<prettyDims(ww)<<":\n";
+            if( ww.size() < 500U ) cout<<ww<<endl;
+            cout<<"normalized weights_avg"<<prettyDims(w)<<":\n";
+            if( w.size() < 500U ) cout<<w<<endl;
+            cout<<"      lower_bounds_avg"<<prettyDims(l)<<":\n";
+            if( l.size() < 500U ) cout<<l<<endl;
+            cout<<"      upper_bounds_avg"<<prettyDims(u)<<":\n";
+            if( u.size() < 500U ) cout<<u<<endl;
         }
         if(1){
             for(int p=0U; p<w.cols(); ++p){   // for each projection
-                cout<<" Projection "<<p<<" weights "<< w.col(1).transpose();
+                cout<<" Projection "<<p<<" weights[ "<<w.rows()<<"] ";
+                if( w.rows()<20U ) cout<< w.col(1).transpose();
                 uint32_t c=0U;
-                for(uint32_t c=0U; c<l.rows(); ++c){ // for each class
+                for(uint32_t c=0U; c<std::min((uint32_t)l.rows(),uint32_t{64U}); ++c){ // for each class
                     if( c%8U == 0U ) {cout<<"\n {l,u}:"<<setw(4)<<c;}
                     cout<<" { "<<setw(9)<<l.coeff(c,p)<<","<<setw(9)<<u.coeff(c,p)<<"}";
                 }
+                cout<<" ...";
                 if(c%8U==0U) cout<<endl;
             }
         }

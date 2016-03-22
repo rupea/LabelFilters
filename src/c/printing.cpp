@@ -265,7 +265,7 @@ namespace detail {
         xSparse.resize(0,0);
         y.resize(0,0);
 
-        int const verbose=2; //
+        int const verbose=1; //
         typedef size_t Idx;
         typedef Eigen::Triplet<bool> B;
         typedef typename Eigen::Triplet<X_REAL> D;
@@ -278,6 +278,7 @@ namespace detail {
         size_t row=0U;
         bool badline=false;
         Idx maxClass=0U;
+        Idx minClass=std::numeric_limits<Idx>::max();
         Idx maxXidx=0U;
         Idx minXidx=std::numeric_limits<Idx>::max();
         for(;getline(is,line);){
@@ -288,6 +289,7 @@ namespace detail {
             iss>>ws;
             char const c=iss.peek();
             if(c == '#') { if(verbose) cout<<" comment-line skipped "<<endl; continue; }
+            if(verbose>=4){cout<<"\nFULL line = "<<line<<endl;}
             try{
                 char sep='x';
                 Idx idx;
@@ -313,17 +315,15 @@ namespace detail {
                         if(iss.peek() == '#' )
                             break;
                         iss>>idx>>sep>>val;
-                        if( iss.good() ){
-                            xIdx.push_back(idx);
-                            xVal.push_back(val);
-                            if( sep != ':' )
-                                throw std::runtime_error(" bad sep");
-                            iss>>ws;
-                            if(iss.eof()) {/*cout<<" eof";*/ break;}
-                            if(iss.peek() == '#') break; // ignore trailing comment
-                        }else{
+                        if( iss.fail() )
                             throw std::runtime_error(" libsvm-fmt parse error");
-                        }
+                        if( verbose>=3 && iss.eof() ){cout<<" iss.eof() "; cout.flush(); }
+                        xIdx.push_back(idx);
+                        xVal.push_back(val);
+                        if( sep != ':' ) throw std::runtime_error(" bad sep");
+                        iss>>ws;
+                        if(iss.eof()) {/*cout<<" eof";*/ break;}
+                        if(iss.peek() == '#') break; // ignore trailing comment
                     }
                     if(verbose>=3){
                         for(size_t i=0U; i<xIdx.size(); ++i)
@@ -344,6 +344,7 @@ namespace detail {
             // move class and data items onto respective TripletLists
             for(size_t i=0U; i<yIdx.size(); ++i){
                 if( yIdx[i] > maxClass ) maxClass = yIdx[i];
+                if( yIdx[i] < minClass ) minClass = yIdx[i];
                 yTriplets.push_back( B(row,yIdx[i],true) );
             }
             for(size_t i=0U; i<xIdx.size(); ++i){
@@ -360,8 +361,24 @@ namespace detail {
             }
         }
         if( !badline ){
-            if(verbose>=1){cout<<" GOOD libsvm-like text input, maxClass="<<maxClass
+            if(verbose>=1){cout<<" GOOD libsvm-like text input, minClass="<<minClass
+                <<" maxClass="<<maxClass
                 <<" minXidx="<<minXidx<<" maxXidx="<<maxXidx<<" row="<<row<<endl;}
+            // solver complains if have any class {0,1,2,...,nClasses-1} with
+            // no assigned examples.
+            if( minClass > 0 ){
+                if(verbose>=1){cout<<"Assuming 1-based y classes, subtracting minClass="<<minClass<<" from all class labels"<<endl;}
+                for(size_t i=0U; i<yTriplets.size(); ++i){
+                    auto & yi = yTriplets[i];
+                    assert( yi.value() == true );
+                    assert( yi.col() >= minClass && yi.col() <= maxClass );
+                    B bnew( yi.row(), yi.col()-minClass, yi.value() );
+                    yi = bnew;
+                }
+                maxClass -= minClass;
+                minClass = 0U;
+            }
+            // libsvm sparse vector has first dimension as '1', we want '0' (ideally)
             {
                 if(verbose>=1){cout<<"\t y.setFromTriplets..."<<endl;}
                 y.resize( row, maxClass+1U );
