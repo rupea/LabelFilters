@@ -1,4 +1,5 @@
 demo-proj1
+*.hex
 dmc-?.txt
 mcproj0
 mcproj

@@ -14,4 +14,8 @@ mcgen-a3-slc-y.bin
 mcgen-a3-txt.soln
 mcgen-a3-x-D.bin
 mcgen-a3-x-S.bin
-
+big.soln
+*.log
+xxx.bin
+yyy.txt
+*.soln

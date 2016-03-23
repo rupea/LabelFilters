@@ -226,6 +226,80 @@ namespace opt {
             }
         }
     }
+                
+/** print some smaller valid intervals, and return number of classes with vanishing intervals */
+    static size_t printNarrowIntervals( std::ostream&  os, size_t const maxNarrow,
+                                        DenseM const& l, DenseM const& u, size_t const p ){
+        vector<size_t> narrow;
+        size_t wrong=0U;
+        for(size_t c=0U; c<l.rows(); ++c){
+            if( l.coeff(c,p) > u.coeff(c,p) ){
+                ++wrong;
+                continue;
+            }
+            double width = u.coeff(c,p) - l.coeff(c,p);
+            //cout<<"."; cout.flush();
+            if( narrow.size() < maxNarrow
+                || width < u.coeff(narrow.back(),p)-l.coeff(narrow.back(),p))
+            {
+                //cout<<" c="<<c<<" wid:"<<width;
+                if( narrow.size() >= maxNarrow )
+                    narrow.pop_back();
+#if 1 // WORKS
+                size_t big=0U;
+                for( ; big<narrow.size(); ++big ){
+                    if( u.coeff(narrow[big],p)-l.coeff(narrow[big],p) > width )
+                        break;
+                }
+                //cout<<" big="<<big;
+                if( big < narrow.size() ){
+                    narrow.push_back(0); // likely in wrong postion
+                    for(size_t b=narrow.size()-1U; b>big; --b)
+                        narrow[b] = narrow[b-1];
+                    narrow[big] = c;
+                }else{
+                    narrow.push_back(c);
+                }
+#else // problems with STL way ...
+                auto iter = lower_bound(narrow.begin(),narrow.end(), width,
+                                        [narrow,u,l,p](size_t const& a, double w) {
+                                        size_t const na = narrow[a];
+                                        double const wa = u.coeff(na,p) - l.coeff(na,p);
+                                        return wa < w;
+                                        });
+                {
+                    cout<<" narrow: ";
+                    for(size_t i=0U; i<narrow.size(); ++i){
+                        size_t cls=narrow[i];
+                        cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
+                            <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
+                        //cout<<endl;
+                    }
+                    cout<<endl;
+                }
+                narrow.insert(iter,c); // insert before 'iter'
+#endif
+                if(0){
+                    cout<<"--> narrow: ";
+                    for(size_t i=0U; i<narrow.size(); ++i){
+                        size_t cls=narrow[i];
+                        cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
+                            <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
+                        //cout<<endl;
+                    }
+                    cout<<endl;
+                }
+            }
+        }
+        cout<<" Some narrow non-zero intervals were:"<<endl;
+        for(size_t i=0U; i<narrow.size(); ++i){
+            size_t cls=narrow[i];
+            cout<<" class "<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)<<", "
+                <<u.coeff(cls,p)<<" } width "<<u.coeff(cls,p)-l.coeff(cls,p)<<endl;
+        }
+        return wrong;
+    }
+
     void MCsolveProgram::tryDisplay( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
         if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
@@ -259,6 +333,10 @@ namespace opt {
                 }
                 cout<<" ...";
                 if(c%8U==0U) cout<<endl;
+                size_t wrong = printNarrowIntervals( cout, /*maxNarrow=*/10U, l, u, p );
+                cout<<" "<<wrong<<" classes had vanishing intervals, with lower > upper."<<endl;
+                if(wrong) cout<<" To help allow some of these "<<wrong<<" classes to be found,\n"
+                    <<" consider running with higher C1 / lower C2"<<endl;
             }
         }
     }

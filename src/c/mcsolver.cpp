@@ -70,6 +70,11 @@ void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const
             }
         }
     }
+//#ifndef NDEBUG
+//    for(size_t c=0U; c<nClasses; ++c){
+//        assert( l.coeff(c) <= u.coeff(c) );
+//    }
+//#endif
     ok_lu = true;
     ok_sortlu = false;
 
@@ -85,9 +90,21 @@ void MCpermState::optimizeLU( VectorXd const& projection, SparseMb const& y, Vec
                               double const C1, double const C2,
                               param_struct const& params, bool print )
 {
+//#ifndef NDEBUG
+//        assert( l.size() == u.size() );
+//        for(size_t c=0U; c<l.size(); ++c){
+//            assert( l.coeff(c) <= u.coeff(c) );
+//        }
+//#endif
     ::optimizeLU( l, u, // <--- outputs
-                  projection, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
+                  projection, y, rev/*class_order*/, perm/*sorted_class*/, wc,
                   nclasses, filtered, C1, C2, params, print );
+//#ifndef NDEBUG
+//        assert( l.size() == u.size() );
+//        for(size_t c=0U; c<l.size(); ++c){
+//            assert( l.coeff(c) <= u.coeff(c) );
+//        }
+//#endif
     ok_lu = true;
     ok_sortlu = false;
 }

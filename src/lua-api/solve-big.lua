@@ -7,9 +7,14 @@ print(libmclua.mcsolve.help())
 -- -T -L for Text   Long  --output
 --  NEW: if no --yfile, then try libsvm format, sparse x
 solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --maxiter=50000"
+solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C2=0.01 --C1=1 --eta0=1. --etamin=1.e-5 --etatype=3_4 -b 1 --optlu=100 --maxiter=50000 --proj=1"
+solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --maxiter=2 --optlu=99999 --proj=1"
+solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C2=0.01 --C1=1 --eta0=1. --etamin=1.e-5 --etatype=3_4 -b 1 --optlu=100 --maxiter=50000 --proj=1"
+solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=20000 --C2=100 --maxiter=50000 --optlu=99999 --proj=1"
+solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=20000 --C2=1 --maxiter=1000 --optlu=99999 --proj=1"
 s=libmclua.mcsolve.new(solveArgs)
 s:read():solve():save():display()
-print(" Solved xxx.bin and yyy.txt for slc demo")
+print("\n Solved xxx.bin and yyy.txt for slc demo")
 print(" Used s=libmclua.mcsolve.new(\""..solveArgs.."\")")
 print(" And then s:read():solve():save():display()")
-print(" mcdumpsoln < solve3-BS.soln    to dump .soln file as text")
+print(" mcdumpsoln < big.soln    to dump .soln file as text")

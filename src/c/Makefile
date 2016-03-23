@@ -49,7 +49,7 @@ PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler
 
 all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve
 # For MiLDe, remove all "octave"-related targets, and ensure 'lib' target[s] are mode
-milde: demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve lib
+milde: lib demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve | lib
 
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
@@ -110,9 +110,9 @@ check-oct-headers: EigenOctave.h
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
 
-LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp
+LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp
 lib: hdr-stamp
-	$(MAKE) -j15 libs-only demo-proj1 demo-quick || { reset; $(MAKE) libs-only demo-proj1 demo-quick; }
+	$(MAKE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) libs-only demo-proj1 demo-quick; }
 lib-clean:
 	rm -f libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so *.o *.lo
 hdr-stamp: erik/hdr-stamp
@@ -269,7 +269,7 @@ libmcfilter4.a: $(patsubst %.cpp,%.4o,$(LIB_CPPFILES))
 	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -O1 -c $<
 demo-proj1: | libmcfilter.a
 demo-proj1: erik/demo-proj.cpp libmcfilter.a
-	$(CXX) -o $@ $(CPPFLAGS) -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ $(CPPFLAGS) -I. -I.. $^ $(LDFLAGS)
 	@#/usr/bin/time -v ./$@ 2>&1 | tee $@.log
 demo-proj2: erik/demo-proj.cpp libmcfilter2.a
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -I. $^ $(LDFLAGS)
@@ -307,9 +307,11 @@ demo-mcsolver: erik/demo-mcsolver.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 demo-printing: erik/demo-printing.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+demo-parms: | libmcfilter-dbg.a
 demo-parms: erik/demo-parms.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
 
+demo-io: | libmcfilter-dbg.a
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 #static linkage : 2.6M executable
@@ -317,6 +319,7 @@ demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 # link with libmcfilter allows saving a .soln file ...
+mcgenx: | libmcfilter-dbg.a
 mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
 	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a | libmcfilter-dbg.a

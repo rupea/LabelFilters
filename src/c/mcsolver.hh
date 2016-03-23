@@ -40,19 +40,41 @@ inline void MCpermState::toLu( VectorXd & ll, VectorXd & uu, VectorXd const& sor
         size_t const cp = *pPerm;
         ll.coeffRef(cp) = *(plu++);
         uu.coeffRef(cp) = *(plu++);
+        //assert( ll.coeff(cp) <= uu.coeff(cp) );
     }
 }
+#if 0
 inline void MCpermState::toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu ){
     for(size_t i=0; i<perm.size(); ++i){
+#ifndef NDEBUG
+        if( !(ll.coeff(perm[i]) <= uu.coeff(perm[i])) ){
+            std::cerr<<" OHOH. perm["<<i<<"] = class "<<perm[i]<<" with {l,u} = {"
+                <<l.coeff(perm[i])<<", "<<u.coeff(perm[i])<<"}"<<std::endl;
+        }
+#endif
         sorted.coeffRef(2U*i)    = l.coeff(perm[i]);
         sorted.coeffRef(2U*i+1U) = u.coeff(perm[i]);
     }
 }
+#endif
 inline void MCpermState::toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu ) const{
+//#ifndef NDEBUG
+//    int nErr=0U;
+//#endif
     for(size_t i=0; i<perm.size(); ++i){
-        sorted.coeffRef(2U*i)    = l.coeff(perm[i]);
-        sorted.coeffRef(2U*i+1U) = u.coeff(perm[i]);
+//#ifndef NDEBUG
+//        if( !(ll.coeff(perm[i]) <= uu.coeff(perm[i])) ){
+//            std::cerr<<" OHOH. perm["<<i<<"] = class "<<perm[i]<<" with {ll,uu} = {"
+//                <<ll.coeff(perm[i])<<", "<<uu.coeff(perm[i])<<"}"<<std::endl;
+//            ++nErr;
+//        }
+//#endif
+        sorted.coeffRef(2U*i)    = ll.coeff(perm[i]);
+        sorted.coeffRef(2U*i+1U) = uu.coeff(perm[i]);
     }
+//#ifndef NDEBUG
+//    assert( nErr == 0 );
+//#endif
 }
 inline void MCpermState::chg_sortlu(){
     //assert( ok_sortlu ); // oh it is ok to call this multiple times
@@ -88,7 +110,13 @@ inline void MCpermState::mkok_lu_avg(){
 }
 inline VectorXd& MCpermState::mkok_sortlu(){
     if(!ok_sortlu){
-        assert(ok_lu);
+//#ifndef NDEBUG
+//        assert(ok_lu);
+//        assert( l.size() == u.size() );
+//        for(size_t c=0U; c<l.size(); ++c){
+//            assert( l.coeff(c) <= u.coeff(c) );
+//        }
+//#endif
         toSorted( sortlu, l, u );
         ok_sortlu = true;
     }
@@ -97,7 +125,12 @@ inline VectorXd& MCpermState::mkok_sortlu(){
 }
 inline VectorXd& MCpermState::mkok_sortlu_avg(){
     if(!ok_sortlu_avg && ok_lu_avg){
-        assert( ok_lu_avg );
+//#ifndef NDEBUG
+//        assert( ok_lu_avg );
+//        for(size_t c=0U; c<l_avg.size(); ++c){
+//            assert( l_avg.coeff(c) <= u_avg.coeff(c) );
+//        }
+//#endif
         toSorted( sortlu_avg, l_avg, u_avg);
         ok_sortlu_avg = true;
     }
@@ -404,10 +437,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 cout<<"\tp:"<<projection_dim;
                 w.init(weights_avg.col(projection_dim));
                 xwProj.w_changed();  // projections of 'x' onto 'w' no longer valid
-                //luPerm.init( xwProj.std(), y, nc );     // try hardto appease valgrind
+                //luPerm.init( xwProj.std(), y, nc );     // try to appease valgrind?
 
                 if (params.reoptimize_LU) {
-                    luPerm.init( xwProj.std(), y, nc );     // try hardto appease valgrind
+                    luPerm.init( xwProj.std(), y, nc );     // try to appease valgrind?
                     if( params.reorder_type == REORDER_RANGE_MIDPOINTS ){
                         throw std::runtime_error("Error, reordering REORDER_RANGE_MIDPOINTS should "
                                                  "not be used when reoptimizing the LU parameters");
@@ -502,6 +535,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         PROFILER_STOP_START("optimizeLU.profile");
         if (params.optimizeLU_epoch > 0) { // questionable.. l,u at this point are random, so why do it this early?
             OPTIMIZE_LU(" PROJ_INIT");
+            // above call can give mis-ordered {lower,upper}, with lower > upper !!!
         }
         luPerm.mkok_sortlu();
         PROFILER_STOP;

@@ -123,10 +123,11 @@ public:
      * This calculates and returns client-specified sortlu_avg vector.
      * Note this is const (after this, ok_sortlu_avg has NOT changed) */
     void getSortlu_avg( VectorXd& sortlu_test ) const;
+    /** Using \c this->perm, generate \c sorted {l,u} pair-vector from \c ll[],uu[] bounds. */
     void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu ) const;
 private:
     void toLu( VectorXd & ll, VectorXd & uu, VectorXd const& sorted );
-    void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu );
+    //void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu );
 private:
     //MCsoln & const mcs;
     bool ok_lu;                 ///< after init, one or two of ok_lu and ok_sortlu are always true
