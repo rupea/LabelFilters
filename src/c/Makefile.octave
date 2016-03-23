@@ -8,13 +8,20 @@ endif
 
 ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
 endif
 ifneq ($(wildcard /usr/include/octave-3.8.2),)
 OCTAVEDIR ?= /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
 endif
+ifneq ($(wildcard /usr/include/octave-3.8.1),)
+OCTAVEDIR = /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
+endif
+
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -lgomp
 HDF5_INC ?= -I/usr/include/hdf5/serial
-OCTAVE_CFLAGS ?= -O3 -fPIC -fopenmp -std=c++11 -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG  -I$(BOOSTDIR)
+OCTAVE_CFLAGS ?= -O3 -fPIC -fopenmp -std=c++11 $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG  -I$(BOOSTDIR)
 OCTAVE_LDFLAGS ?=
 
 VPATH = ../c

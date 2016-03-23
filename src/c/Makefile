@@ -28,15 +28,21 @@ MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
 
 ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
 endif
 ifneq ($(wildcard /usr/include/octave-3.8.2),)
 OCTAVEDIR ?= /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
+endif
+ifneq ($(wildcard /usr/include/octave-3.8.1),)
+OCTAVEDIR = /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
 endif
 
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 HDF5_INC ?= -I/usr/include/hdf5/serial
-OCTAVE_CFLAGS ?= -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave $(HDF5_INC)
+OCTAVE_CFLAGS ?= -fPIC $(OCT_INC) $(HDF5_INC)
 
 LDFLAGS ?= $(BOOSTLINK) -lboost_program_options
 # testing
@@ -57,7 +63,7 @@ profile_learnproj:
 profile_evaluate: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
-learn_projection: learn_projection.o find_w.o find_w_detail.o mcsolver.o printing.o EigenOctave.o utils.o parameter.o predict.o filter.o
+learn_projection: learn_projection.o find_w.o find_w_detail.o optimizelu.o mcsolver.o printing.o EigenOctave.o utils.o parameter.o predict.o filter.o
 	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
 evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o evaluate.o predict.o
