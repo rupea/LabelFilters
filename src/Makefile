@@ -5,11 +5,27 @@ endif
 ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
 endif
+
 OPENMP ?= -fopenmp
+
+ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
+endif
+ifneq ($(wildcard /usr/include/octave-3.8.2),)
+OCTAVEDIR ?= /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
+endif
+ifneq ($(wildcard /usr/include/octave-3.8.1),)
+OCTAVEDIR = /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
+endif
 OCTAVE_MEX ?= env CXXFLAGS=-fopenmp LDFLAGS=-fopenmp CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
-OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave -DNDEBUG -DEIGEN_NO_DEBUG  -I$(BOOSTDIR)
-LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2/octave -I..
+HDF5_INC ?= -I/usr/include/hdf5/serial
+OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -std=c++11 $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
+OCTAVE_LDFLAGS ?= -L../c
+LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -DNDEBUG -I$(OCT_INC) -I..
+
 NCPUS:=$(shell cat /proc/cpuinfo | grep '^processor' | wc -l)
 JOBS:=-j$(NCPUS)
 
