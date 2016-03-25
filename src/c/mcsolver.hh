@@ -201,14 +201,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         this->parms = *params_arg;      // if present, parms OVERWRITE any old ones
     }
     param_struct const& params = this->parms;
-    // Possibly read in from save file:
-    if( ! params.resume ){      // NEW --- needs checking
-        this->t = 0U;
-        /*double*/this-> lambda = 1.0/params.C2;
-        /*double*/this-> C1 = params.C1/params.C2;
-        /*double*/this-> C2 = 1.0;
-        //this->eta_t = params.eta; // actually, via seteta(params,t,lambda), below
-    }
     PROFILER_START("init.profile");
     this->nProj = params.no_projections;
     this->d = x.cols();
@@ -355,8 +347,30 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     boolmatrix filtered(nTrain,nClass);
     //VectorXd difference(d);
     VectorXd tmp(d);
-    unsigned long total_constraints = nTrain*nClass - (1-params.remove_class_constraints)*nc.sum();
+    unsigned long total_constraints = nTrain*nClass
+        - (1-params.remove_class_constraints) * nc.sum();
     size_t no_filtered=0;
+    // Possibly read in from save file:
+    if( ! params.resume ){      // NEW --- needs checking
+        if(  params.C1 >= 0.0 && params.C2 >= 0.0 ){
+            this->t = 0U;
+            /*double*/this-> lambda = 1.0/params.C2;
+            /*double*/this-> C1 = params.C1/params.C2;
+            /*double*/this-> C2 = 1.0;
+            //this->eta_t = params.eta; // actually, via seteta(params,t,lambda), below
+        }else{
+            //this-> C2 = 1.0; // / sqrt(nClass);
+            //long int no_remaining = total_constraints - no_filtered;
+            //this->lambda = no_remaining*1.0/(total_constraints*this->C2);
+            this->lambda = sqrt(nc.sum());
+            //this-> lambda = nTrain*nClass * 1.0 / (total_constraints*params.C2);
+            //this-> lambda = nTrain*nClass * 1.0 / (total_constraints*params.C2);
+            //this-> C1 = nClass;
+            this-> C1 = sqrt(nc.sum());
+            this-> C2 = 1.0/this->C1;
+        }
+    }
+    cout<<" initial lambda="<<lambda<<" C1="<<C1<<" C2="<<C2<<endl;
 
     Proj xwProj( x, w );
 
@@ -458,10 +472,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                     luPerm.set_lu( lower_bounds_avg.col(projection_dim), upper_bounds_avg.col(projection_dim) );
                 }
                 // should update to use the filter class
-                // things will not work correctly with remove_class_constrains on. We need to update wc, nclass
-                //       and maybe nc
-                // check if nclass and nc are used for anything else than weighting examples belonging
-                //       to multiple classes
+                // things will not work correctly with remove_class_constrains on.
+                // We need to update wc, nclass and maybe nc
+                // Check if nclass and nc are used for anything other than weighting
+                // examples belonging to multiple classes
                 if (params.remove_constraints && projection_dim < (int)nProj-1) {
                     update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
                     no_filtered = filtered.count(); // <--- OUCH

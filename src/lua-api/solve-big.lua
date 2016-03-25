@@ -12,6 +12,9 @@ solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --maxiter=2 
 solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C2=0.01 --C1=1 --eta0=1. --etamin=1.e-5 --etatype=3_4 -b 1 --optlu=100 --maxiter=50000 --proj=1"
 solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=20000 --C2=100 --maxiter=50000 --optlu=99999 --proj=1"
 solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=20000 --C2=1 --maxiter=1000 --optlu=99999 --proj=1"
+
+solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000 --optlu=100 --treport=200 --proj=3"
+solveArgs="--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000000 --optlu=5000 --treport=100000 --proj=5"
 s=libmclua.mcsolve.new(solveArgs)
 s:read():solve():save():display()
 print("\n Solved xxx.bin and yyy.txt for slc demo")

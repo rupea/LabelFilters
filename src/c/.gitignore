@@ -1,4 +1,9 @@
 demo-proj1
+demo-prof
+demo-prof.log
+demo-quad
+proj-BD.proj
+proj-BS.proj
 *.hex
 dmc-?.txt
 mcproj0

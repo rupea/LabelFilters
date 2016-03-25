@@ -272,7 +272,7 @@ libmcfilter4.a: $(patsubst %.cpp,%.4o,$(LIB_CPPFILES))
 %.4o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -c $<
 %-prof.o: %.cpp
-	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -O1 -c $<
+	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -c $<
 demo-proj1: | libmcfilter.a
 demo-proj1: erik/demo-proj.cpp libmcfilter.a
 	$(CXX) -o $@ $(CPPFLAGS) -I. -I.. $^ $(LDFLAGS)
@@ -285,6 +285,8 @@ demo-proj4: erik/demo-proj.cpp libmcfilter4.a
 	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
 demo-prof: erik/demo-proj.cpp libmcfilter-prof.a
 	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -I. $^ $(PROFILE_LDFLAGS)
+demo-quad: erik/demo-quad.cpp
+	$(CXX) -o $@ $(CPPFLAGS) -I. $^
 do-proj: demo-proj1 demo-proj2 demo-proj3 demo-proj4
 	/usr/bin/time -v ./demo-proj1 2>&1 | tee demo-proj1.log
 	/usr/bin/time -v ./demo-proj2 2>&1 | tee demo-proj2.log

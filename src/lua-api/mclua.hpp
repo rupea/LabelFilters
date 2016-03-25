@@ -215,6 +215,9 @@ print(p:str())    -- now have some nondefault parameters
          *     - override user-specified defaults via cmdline args string
          */
         static int s_new();
+        static int s_savex();   ///< save binary fmt xfile
+        static int s_savey();   ///< save binary fmt yfile
+        static int s_quadx();   ///< convert x dimensions to include quadratic terms
     private:
         //struct param_struct pInit;
         //std::string cmdLine;

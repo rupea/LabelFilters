@@ -223,26 +223,21 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
         // the first chunks will have an extra iteration
-        int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
-        int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
-        if (params.class_samples)
-        {
-            multiplier +=
-                compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
+        int const sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+        int const sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+        multiplier +=
+            ( params.class_samples
+              ? compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
                                                       sample,
                                                       proj, i,
                                                       y, nclasses, maxclasses,
                                                       sorted_class, class_order,
                                                       sortedLU, filtered, C1, C2, params);
-        }
-        else
-        {
-            multiplier += compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
-                                                         proj, i,
-                                                         y, nclasses, maxclasses,
-                                                         sorted_class, class_order,
-                                                         sortedLU, filtered, C1, C2, params);
-        }
+              : compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
+                                               proj, i,
+                                               y, nclasses, maxclasses,
+                                               sorted_class, class_order,
+                                               sortedLU, filtered, C1, C2, params);
     }
 
     // make sure we do not overshoot with the update
@@ -260,22 +255,17 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
         for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
         {
             // the first chunks will have an extra iteration
-            int sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
-            int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
-            if (params.class_samples)
-            {
-                new_multiplier +=
-                    compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
+            int const sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+            int const sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+            new_multiplier +=
+                ( params.class_samples
+                  ? compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
                                                           sample,
                                                           new_proj, i,
                                                           y, nclasses, maxclasses,
                                                           sorted_class, class_order,
                                                           sortedLU, filtered, C1, C2, params);
-            }
-            else
-            {
-                new_multiplier +=
-                    compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
+                  : compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
                                                    new_proj, i,
                                                    y, nclasses, maxclasses,
                                                    sorted_class, class_order,
@@ -288,15 +278,11 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     // last eta did not overshooot so restore it
     eta = eta*2;
     //update w
-    if (params.avg_epoch && t >= params.avg_epoch)
-    {
+    if (params.avg_epoch && t >= params.avg_epoch){
         // updates both the curent w and the average w
-        w.batch_gradient_update_avg(x,i,multiplier,lambda,eta);
-    }
-    else
-    {
-        // update only the current w
-        w.batch_gradient_update(x, i, multiplier, lambda, eta);
+        w.batch_gradient_update_avg(x, i, multiplier, lambda, eta);
+    }else{ // update only the current w
+        w.batch_gradient_update    (x, i, multiplier, lambda, eta);
     }
 
     // update L and U with w fixed.
@@ -372,19 +358,12 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
     size_t i,idx;
 
     // first compute all the projections so that we can update w directly
+    assert( batch_size <= n );
     for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
     {
-        if(batch_size < n)
-        {
-            i = ((size_t) rand()) % n;
-        }
-        else
-        {
-            i=idx;
-        }
-
-        proj.coeffRef(idx) = w.project_row(x,i);
-        index.coeffRef(idx)=i;
+        i = (batch_size < n? ((size_t) rand()) % n: idx );
+        proj.coeffRef(idx)  = w.project_row(x,i);
+        index.coeffRef(idx) = i;
     }
     // now we can update w and L,U directly
 

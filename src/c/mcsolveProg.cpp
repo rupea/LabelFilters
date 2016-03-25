@@ -226,8 +226,103 @@ namespace opt {
             }
         }
     }
+    void MCsolveProgram::savex( std::string fname ) const {
+        ofstream ofs;
+        try{
+            if( !sparseOk && !denseOk )
+                throw std::runtime_error("savex no Eigen x data yet");
+            ofs.open(fname);
+            if( ! ofs.good() ) throw std::runtime_error("savex trouble opening fname");
+            if( sparseOk ){
+                detail::eigen_io_bin(ofs, xSparse);
+            }else{ assert(denseOk);
+                detail::eigen_io_bin(ofs, xDense);
+            }
+            if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
+            ofs.close();
+        }catch(std::exception const& e){
+            cerr<<" trouble writing "<<A::outFile<<" : unknown exception"<<endl;
+            ofs.close();
+            throw;
+        }
+    }
+    void MCsolveProgram::savey( std::string fname ) const {
+        ofstream ofs;
+        try{
+            ofs.open(fname);
+            if( ! ofs.good() ) throw std::runtime_error("savex trouble opening fname");
+            detail::eigen_io_binbool(ofs, y);
+            if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
+            ofs.close();
+        }catch(std::exception const& e){
+            cerr<<" trouble writing "<<A::outFile<<" : unknown exception"<<endl;
+            ofs.close();
+            throw;
+        }
+    }
+    
+    /** convert x to new matrix adding quadratic dimensions to each InnerIterator (row).
+     * Optionally scale the quadratic elements to keep them to reasonable range.
+     * For example if original dimension is 0..N, perhaps scale the quadratic
+     * terms by 1.0/N. */
+    static void addQuadratic( SparseM & x, double const qscal=1.0 ){
+        x.makeCompressed();
+        VectorXi xsz(x.outerSize());
+#pragma omp parallel for schedule(static)
+        for(int i=0U; i<x.outerSize(); ++i){
+            xsz[i] = x.outerIndexPtr()[i+1]-x.outerIndexPtr()[i];
+        }
+        // final inner dim increases by square of inner dim
+        SparseM q(x.outerSize(),x.innerSize()+x.innerSize()*x.innerSize());
+        // calc exact nnz elements for each row of q
+        VectorXi qsz(x.outerSize());
+#pragma omp parallel for schedule(static)
+        for(int i=0; i<x.outerSize(); ++i){
+            qsz[i] = xsz[i] + xsz[i]*xsz[i];
+        }
+        q.reserve( qsz );           // reserve exact per-row space needed
+        // fill q
+#pragma omp parallel for schedule(dynamic,128)
+        for(int r=0; r<x.outerSize(); ++r){
+            for(SparseM::InnerIterator i(x,r); i; ++i){
+                q.insert(r,i.col()) = i.value();    // copy the original dimension
+                for(SparseM::InnerIterator j(x,r); j; ++j){
+                    int col = x.innerSize() + i.col()*x.innerSize() + j.col(); // x.innerSize() is 4
+                    q.insert(r,col) = i.value()*j.value()*qscal;  // fill in quad dims
+                }
+            }
+        }
+        q.makeCompressed();
+        x.swap(q);
+    }
+    static void addQuadratic( DenseM & x, double const qscal=1.0 ){
+        DenseM q(x.outerSize(),x.innerSize()+x.innerSize()*x.innerSize());
+#pragma omp parallel for schedule(static,128)
+        for(int r=0; r<x.outerSize(); ++r){
+            for(int i=0; i<x.innerSize(); ++i){
+                q.coeffRef(r,i) = x.coeff(r,i);
+                for(int j=0; j<x.innerSize(); ++j){
+                    int col = x.innerSize() + i*x.innerSize() + j;
+                    q.coeffRef(r,col) = x.coeff(r,i) * x.coeff(r,j) * qscal;
+                }
+            }
+        }
+        x.swap(q);
+    }
+    /** transform EVERY row of x by adding the "quadratic dimensions".
+     * i.e. append the data values of the outer product of the row vectors. */
+    void MCsolveProgram::quadx() {
+        if( sparseOk ){
+            addQuadratic( xSparse );    // transform the original data matrix
+        }else if( denseOk ){
+            addQuadratic( xDense );     // transform the original data matrix
+        }else{
+            throw std::runtime_error(" quadx needs some x data first");
+        }
+    }
                 
-/** print some smaller valid intervals, and return number of classes with vanishing intervals */
+    /** print some smaller valid intervals, and return number of
+     * classes with vanishing intervals. */
     static size_t printNarrowIntervals( std::ostream&  os, size_t const maxNarrow,
                                         DenseM const& l, DenseM const& u, size_t const p ){
         vector<size_t> narrow;
@@ -240,7 +335,7 @@ namespace opt {
             double width = u.coeff(c,p) - l.coeff(c,p);
             //cout<<"."; cout.flush();
             if( narrow.size() < maxNarrow
-                || width < u.coeff(narrow.back(),p)-l.coeff(narrow.back(),p))
+                || width <= u.coeff(narrow.back(),p)-l.coeff(narrow.back(),p))
             {
                 //cout<<" c="<<c<<" wid:"<<width;
                 if( narrow.size() >= maxNarrow )
@@ -300,6 +395,56 @@ namespace opt {
         return wrong;
     }
 
+    static size_t printWideIntervals( std::ostream&  os, size_t const maxWide,
+                                        DenseM const& l, DenseM const& u, size_t const p ){
+        int const verbose=0;
+        vector<size_t> wide;
+        size_t wrong=0U;
+        for(size_t c=0U; c<l.rows(); ++c){
+            if( l.coeff(c,p) > u.coeff(c,p) ){
+                ++wrong;
+                continue;
+            }
+            double width = u.coeff(c,p) - l.coeff(c,p);
+            // put width into ascended sorted list wide[] of largest values
+            size_t big=0U;                      // search for a wide[big]
+            for( ; big<wide.size(); ++big )     // with (u-l) > width
+                if( u.coeff(wide[big],p)-l.coeff(wide[big],p) > width )
+                    break;
+            // shift entries of wide[] to make room for new entry (if nec.)
+            if( wide.size() >= maxWide ){ // insert-before, without growing
+                if( big == 0 ) continue;  // width not big enough to save
+                //if(verbose>=2) cout<<" c="<<c<<" wid:"<<width<<" Xbig="<<big;
+                --big;                    // copy elements towards wide.begin();
+                for(size_t b=0; b<big; ++b) wide[b] = wide[b+1];
+            }else{ // insert-before, with growing
+                //if(verbose>=2) cout<<" c="<<c<<" wid:"<<width<<" big="<<big;
+                wide.push_back(0);       // copy elements towards wide.end()
+                for(size_t b=wide.size()-1U; b>big; --b) wide[b] = wide[b-1];
+            }
+            // OK, shifty business is done. plop index 'c' into final resting place.
+            wide[big] = c;
+
+            if(verbose>=1){
+                cout<<"--> wide: ";
+                for(size_t i=0U; i<wide.size(); ++i){
+                    size_t cls=wide[i];
+                    cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
+                        <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
+                    //cout<<endl;
+                }
+                cout<<endl;
+            }
+        }
+        cout<<" Some wide non-zero intervals were:"<<endl;
+        for(size_t i=0U; i<wide.size(); ++i){
+            size_t cls=wide[i];
+            cout<<" class "<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)<<", "
+                <<u.coeff(cls,p)<<" } width "<<u.coeff(cls,p)-l.coeff(cls,p)<<endl;
+        }
+        return wrong;
+    }
+
     void MCsolveProgram::tryDisplay( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
         if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
@@ -313,6 +458,7 @@ namespace opt {
         DenseM const& l = soln.lower_bounds_avg;
         DenseM const& u = soln.upper_bounds_avg;
         if(verbose>=1){
+            // really want to find a nicer, compact display here XXX
             cout<<"normalized     weights"<<prettyDims(ww)<<":\n";
             if( ww.size() < 500U ) cout<<ww<<endl;
             cout<<"normalized weights_avg"<<prettyDims(w)<<":\n";
@@ -334,6 +480,7 @@ namespace opt {
                 cout<<" ...";
                 if(c%8U==0U) cout<<endl;
                 size_t wrong = printNarrowIntervals( cout, /*maxNarrow=*/10U, l, u, p );
+                /*wrong =*/ printWideIntervals( cout, /*maxWide=*/4U, l, u, p );
                 cout<<" "<<wrong<<" classes had vanishing intervals, with lower > upper."<<endl;
                 if(wrong) cout<<" To help allow some of these "<<wrong<<" classes to be found,\n"
                     <<" consider running with higher C1 / lower C2"<<endl;

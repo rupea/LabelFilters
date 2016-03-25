@@ -39,8 +39,8 @@ PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
-.PHONY: lib
-all: lib linkme
+.PHONY: lib prep FORCE
+all: lib linkme linkme-dbg
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
 
@@ -58,10 +58,12 @@ profile_evaluate:
 	$(CXX) -o $@ $(CPPFLAGS) -fPIC -c $<
 %-dbg.lo: %.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -fPIC -c $<
-../c/lib%:
+../c/lib%: FORCE
 	$(MAKE) -j10 -C../c lib$*
 #../c/libmcfilter%:
 #	$(MAKE) -j10 -C../c libmcfilter$*
+prep:
+	$(MAKE) -j10 -C../c libmcfilter.so libmcfilter-dbg.so
 
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"

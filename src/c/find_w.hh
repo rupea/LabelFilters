@@ -52,9 +52,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     //    cout<<"WARNING: will add no random projections";
     //}
 
-    double lambda = 1.0/params.C2;
-    double C1 = params.C1/params.C2;
-    double C2 = 1.0;
     size_t const batch_size = (params.batch_size < 1 || params.batch_size > n) ? (size_t) n : params.batch_size;
     if (params.update_type == SAFE_SGD)
     {
@@ -141,6 +138,21 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     size_t no_filtered=0;
     int projection_dim = 0;
     VectorXd vect;
+
+    double lambda, C1, C2;
+    if(params.C1>=0.0 && params.C2>=0.0){
+        lambda = 1.0/params.C2;
+        C1 = params.C1/params.C2;
+        C2 = 1.0;
+    }else{ // try to provide a reasonble 'auto' mode
+        // untested [ejk]
+        //double x = n * noClasses;
+        //double y = total_constraints * params.C2;
+        lambda = n*noClasses * 1.0 / (total_constraints*params.C2);
+        C1 = lambda;
+        C2 = 1.0;
+    }
+    cout<<" begin solve_optimization, lambda="<<lambda<<" C1="<<C1<<" C2="<<C2<<endl;
 
     if(1) { // throw if input dims inconsistent or conflicting with params
         ostringstream err;
@@ -268,7 +280,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                     lambda = no_remaining*1.0/(total_constraints*params.C2);
                     if (params.reweight_lambda == REWEIGHT_ALL)
                     {
-                        C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
+                        //C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
+                        C1 = params.C1*lambda;
                     }
                 }
             }

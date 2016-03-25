@@ -156,6 +156,9 @@ FUN(read)
 FUN(solve)
 FUN(save)
 FUN(display)
+FUN(savex)
+FUN(savey)
+FUN(quadx)
 //FUN(solve)   ... or read, solve, save, display
 FUN(new)
 ;
@@ -650,9 +653,35 @@ GOT_VERBOSE:
     }
     int script_MCsolve::s_save()
     {
-        scr_TRY( "<mcsolve>:save() -> <err:bool>" ){
+        scr_TRY( "<mcsolve>:save() -> <err:bool> -- save to --output .soln file" ){
             scr_USR( scr_MCsolve, x, ERR_LBL );
             x->d_solve->trySave(/*verbose*/);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCsolve::s_quadx()
+    {
+        scr_TRY( "<mcsolve>:quadx( <fname:str> ) -> <err:bool> -- append quadratic kernel dims to x"){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            x->d_solve->quadx();
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCsolve::s_savex()
+    {
+        scr_TRY( "<mcsolve>:savex( <fname:str> ) -> <err:bool> -- save Eigen x data in binary format" ){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            scr_STR( fname, ERR_LBL );
+            x->d_solve->savex(fname);
+            return 1;
+        }scr_CATCH;
+    }
+    int script_MCsolve::s_savey()
+    {
+        scr_TRY( "<mcsolve>:savey( <fname:str> ) -> <err:bool> -- save Eigen y data in binary format" ){
+            scr_USR( scr_MCsolve, x, ERR_LBL );
+            scr_STR( fname, ERR_LBL );
+            x->d_solve->savey(fname);
             return 1;
         }scr_CATCH;
     }
@@ -792,6 +821,9 @@ static const struct luaL_Reg lua_mcsolve_lib_m [] = {
     LUA_FUN(solve),
     LUA_FUN(save),
     LUA_FUN(display),
+    LUA_FUN(quadx),
+    LUA_FUN(savex),
+    LUA_FUN(savey),
     {0,0}
 };
 static const struct luaL_Reg lua_mcsolve_lib_f [] = {
