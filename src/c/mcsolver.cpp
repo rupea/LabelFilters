@@ -132,7 +132,7 @@ int MCsolver::getNthreads( param_struct const& params ) const
     else
         nThreads = params.num_threads;
     omp_set_num_threads( nThreads );
-    /* ?? */ //Eigen::initParallel();
+    Eigen::initParallel();
     cout<<" solve_ with _OPENMP and params.num_threads set to "<<params.num_threads
         <<", nThreads is "<<nThreads<<", and omp_max_threads is now "<<omp_get_max_threads()<<endl;
     // NOTE: omp_get_num_threads==1 because we are not in an omp section

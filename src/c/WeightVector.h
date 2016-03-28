@@ -335,10 +335,30 @@ class WeightVector
       return my_scale*((x.row(row)*my_weights)(0,0));
     }
 
-  template<typename EigenType> inline void project(VectorXd& proj, EigenType const& x) const
-    {
+  //
+  // ------------------- project( VectorXd& proj, EigenType const& x ) ------------
+  //
+  template<typename EigenType> inline void project(VectorXd& proj, EigenType const& x) const {
       proj = (x*my_weights)*my_scale;
-    }
+  }
+  template<typename _Scalar, int _Options, typename _Index> inline // Eigen does NOT ||ize, so...
+      void project(VectorXd& proj,
+                   Eigen::SparseMatrix<_Scalar,_Options,_Index> const& x) const {
+#pragma omp parallel for schedule(static,256)
+          for(size_t i=0U; i<x.rows(); ++i){
+              proj.coeffRef(i) = project_row( x, i );
+              //proj.coeffRef(i) = x.row(i) .dot(my_weights) * my_scale;
+          }
+      }
+  template<typename Scalar, int _Flags, typename _Index> inline // Eigen does NOT ||ize, so...
+      void project(VectorXd& proj,
+                   Eigen::MappedSparseMatrix<Scalar,_Flags,_Index> const& x) const {
+#pragma omp parallel for schedule(static,256)
+          for(size_t i=0U; i<x.rows(); ++i){
+              proj.coeffRef(i) = project_row( x, i );
+          }
+      }
+  // -------------------------------------------------------------------------------
 
   template<typename EigenType> inline double project_row_avg(const EigenType& x, const int row) const
     {

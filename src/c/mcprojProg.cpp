@@ -42,7 +42,7 @@ namespace opt {
             if(A::outSparse) cout<<" -S";
             if(A::outDense)  cout<<" -D";
             if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
-            if(A::threads)   cout<<" --threads="<<A::threads;
+            //if(A::threads)   cout<<" --threads="<<A::threads;
             if(A::xnorm)     cout<<" --xnorm";
             cout<<endl;
         }

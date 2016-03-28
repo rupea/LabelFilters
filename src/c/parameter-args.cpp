@@ -83,34 +83,34 @@ namespace opt {
     void extract( po::variables_map const& vm, param_struct & parms ){
         //if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
         //if( vm.count("proj") )
-        parms.no_projections        = vm["proj"].as<uint32_t>();
+        parms.no_projections            =vm["proj"].as<uint32_t>();
         parms.C1	                =vm["C1"].as<double>();   //10.0;
         parms.C2	                =vm["C2"].as<double>();   //1.0;
-        parms.max_iter	        =vm["maxiter"].as<uint32_t>(); //1e6;
+        parms.max_iter	                =vm["maxiter"].as<uint32_t>(); //1e6;
         parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
         fromstring( vm["update"].as<string>(), parms.update_type );
         parms.eps	                =vm["eps"].as<double>(); //1e-4;
         parms.eta	                =vm["eta0"].as<double>(); //0.1;
         fromstring( vm["etatype"].as<string>(), parms.eta_type );
-        parms.min_eta	        =vm["etamin"].as<double>(); // 0;
-        parms.optimizeLU_epoch	=vm["optlu"].as<uint32_t>(); //10000; // expensive
+        parms.min_eta	                =vm["etamin"].as<double>(); // 0;
+        parms.optimizeLU_epoch	        =vm["optlu"].as<uint32_t>(); //10000; // expensive
         parms.reorder_epoch	        =vm["treorder"].as<uint32_t>(); //1000;
         fromstring( vm["reorder"].as<string>(), parms.reorder_type );
         parms.report_epoch	        =vm["treport"].as<uint32_t>(); //1000;
-        parms.report_avg_epoch	=vm["tavg"].as<uint32_t>(); //0; // this is expensive so the default is 0
-        parms.avg_epoch	        =vm["avg"].as<uint32_t>(); //0;
+        parms.report_avg_epoch	        =vm["tavg"].as<uint32_t>(); //0; // this is expensive so the default is 0
+        parms.avg_epoch	                =vm["avg"].as<uint32_t>(); //0;
         if(parms.avg_epoch == 0U && parms.reorder_type == REORDER_AVG_PROJ_MEANS )
             parms.reorder_type = REORDER_PROJ_MEANS;
         fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
-        parms.class_samples 	=vm["negclass"].as<uint32_t>(); // 0;
+        parms.class_samples 	        =vm["negclass"].as<uint32_t>(); // 0;
         parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
         parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
         parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
         parms.remove_class_constraints 	=vm["remove_class"].as<bool>(); // false;
-        parms.num_threads 	                =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
-        parms.seed 	                        =vm["seed"].as<uint32_t>(); // 0;
+        parms.num_threads 	        =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
+        parms.seed 	                =vm["seed"].as<uint32_t>(); // 0;
         parms.finite_diff_test_epoch	=vm["tgrad"].as<uint32_t>(); //0;
-        parms.no_finite_diff_tests	        =vm["ngrad"].as<uint32_t>(); //1000;
+        parms.no_finite_diff_tests	=vm["ngrad"].as<uint32_t>(); //1000;
         parms.finite_diff_test_delta	=vm["grad"].as<double>(); //1e-4;
         parms.resume 	                =vm["resume"].as<bool>(); // false;
         parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
@@ -225,7 +225,7 @@ namespace opt {
             (",S", value<bool>(&outShort)->implicit_value(true)->default_value(true),"S|L output SHORT")
             (",L", value<bool>(&outLong)->implicit_value(true)->default_value(false),"S|L output LONG")
             ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
-            ("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
+            //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
             ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
             ;
     }
@@ -241,7 +241,7 @@ namespace opt {
           , outShort(true)
           , outLong(false)
           , xnorm(false)
-          , threads(0U)           // unused?
+          //, threads(0U)           // unused?
           , verbose(0)            // cmdline value can be -ve to reduce output
         {}
 
@@ -300,7 +300,7 @@ namespace opt {
             solnFile=vm["solnfile"].as<string>();
             outFile=vm["output"].as<string>();
             xnorm=vm["xnorm"].as<bool>();
-            threads=vm["threads"].as<uint32_t>();
+            //threads=vm["threads"].as<uint32_t>();
             verbose=vm["verbose"].as<int>();
 
             if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
@@ -395,10 +395,9 @@ namespace opt {
             (",S", value<bool>(&outSparse)->implicit_value(true),"(S) S|D output SPARSE")
             (",D", value<bool>(&outDense)->implicit_value(true),"(S) S|D output DENSE")
             ("yfile,y", value<string>()->default_value(string("")), "TBD: optional validation y data (slc/mlc/SparseMb)")
-            ("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
             ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
             ("help,h", value<bool>()->implicit_value(true), "this help")
-            ("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
+            //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
             ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
             ;
     }
@@ -413,7 +412,7 @@ namespace opt {
             , outDense(false)
             , yFile()
             , xnorm(false)
-            , threads(0U)
+            //, threads(0U)
             , verbose(0)
         {}
 
@@ -468,7 +467,7 @@ namespace opt {
             solnFile=vm["solnfile"].as<string>();
             outFile=vm["output"].as<string>();
             xnorm=vm["xnorm"].as<bool>();
-            threads=vm["threads"].as<uint32_t>();
+            //threads=vm["threads"].as<uint32_t>();
             verbose=vm["verbose"].as<int>();
 
             if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
@@ -488,7 +487,7 @@ namespace opt {
 
             yFile=vm["yfile"].as<string>();
             xnorm=vm["xnorm"].as<bool>();
-            threads=vm["threads"].as<uint32_t>();
+            //threads=vm["threads"].as<uint32_t>();
             if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
 
             // projections operation doesn't need solver parms

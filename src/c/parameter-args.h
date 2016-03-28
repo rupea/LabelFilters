@@ -78,7 +78,7 @@ namespace opt {
         bool outShort;          ///< outFile format
         bool outLong;           ///< outFile format
         bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
-        uint32_t threads;       ///< used?
+        //uint32_t threads;       ///< used?
         int verbose;            ///< verbosity
         //@}
     };
@@ -109,7 +109,7 @@ namespace opt {
         bool outDense;          ///< outFile format
         std::string yFile;      ///< y data file name (for validation: TBD)
         bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
-        uint32_t threads;       ///< used?
+        //uint32_t threads;       ///< used?
         int verbose;            ///< verbosity
         //@}
     };

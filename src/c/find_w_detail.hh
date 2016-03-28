@@ -232,12 +232,12 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
                                                       proj, i,
                                                       y, nclasses, maxclasses,
                                                       sorted_class, class_order,
-                                                      sortedLU, filtered, C1, C2, params);
+                                                      sortedLU, filtered, C1, C2, params)
               : compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
                                                proj, i,
                                                y, nclasses, maxclasses,
                                                sorted_class, class_order,
-                                               sortedLU, filtered, C1, C2, params);
+                                               sortedLU, filtered, C1, C2, params) );
     }
 
     // make sure we do not overshoot with the update
@@ -264,13 +264,12 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
                                                           new_proj, i,
                                                           y, nclasses, maxclasses,
                                                           sorted_class, class_order,
-                                                          sortedLU, filtered, C1, C2, params);
+                                                          sortedLU, filtered, C1, C2, params)
                   : compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
                                                    new_proj, i,
                                                    y, nclasses, maxclasses,
                                                    sorted_class, class_order,
-                                                   sortedLU, filtered, C1, C2, params);
-            }
+                                                   sortedLU, filtered, C1, C2, params) );
         }
         eta = eta/2;
     } while (multiplier*new_multiplier < -1e-5);

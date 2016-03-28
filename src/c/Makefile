@@ -22,6 +22,7 @@ CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEB
 CPPFLAGS += -I$(BOOSTDIR) -std=c++11
 #CPPFLAGS += -fopenmp
 CPPFLAGS += -pipe
+CPPFLAGS += -ggdb3
 # testing...
 MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
 #CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I.
@@ -50,7 +51,8 @@ LDFLAGS ?= $(BOOSTLINK) -lboost_program_options
 
 PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -DMCTHREADS=1 -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+#PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
 all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve
@@ -126,8 +128,8 @@ erik/hdr-stamp: $(CHECK_HEADERS)
 	$(MAKE) lib-clean ####### && $(MAKE) -j15 lib || { reset; $(MAKE) lib; }
 	touch $@
 libs-only: | hdr-stamp
-demp-proj1 demo-quick: | libs-only
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
+#demp-proj1 demo-quick demo-proj2 demo-proj3 demo-proj4 mcdumpsoln demo-prof: | libs-only
 
 test: lib demo-printing demo-io do-tests mcgen mcgenx mcproj.log
 long: clean
@@ -293,7 +295,8 @@ do-proj: demo-proj1 demo-proj2 demo-proj3 demo-proj4
 	/usr/bin/time -v ./demo-proj3 2>&1 | tee demo-proj3.log
 	OMP_NUM_THREADS=4 /usr/bin/time -v ./demo-proj3 2>&1 | tee demo-proj3-omp8.log # twice as slow
 	/usr/bin/time -v ./demo-proj4 2>&1 | tee demo-proj4.log
-	echo "\t\t\t make do-proj COMPLETE"
+	@echo "\t\t\t make do-proj COMPLETE"
+	@echo "\t\t\t see demo-proj1.log demo-proj2.log demo-proj3.log demo-proj3-omp8.log demo-proj4.log"
 
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj-dbg: | libmcfilter-dbg.a
@@ -369,6 +372,36 @@ mcproj.log: mcgenx mcproj mcsolve erik/mcsolve0
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.
+
+mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_program_options.a -lprofiler
+	$(CXX) -o $@ $(CPPFLAGS) -Wno-error=maybe-uninitialized -I. -DPROFILE $^
+
+#TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=100 --optlu=10 --treport=10 --proj=1 --threads=0
+TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000000 --optlu=10000 --treport=50000 --proj=1 --threads=0
+t%.log:
+	export OMP_DISPLAY_ENV=VERBOSE; \
+		export OMP_NUM_THREADS=$*; export OMP_THREAD_LIMIT=16; export OMP_DYNAMIC=FALSE\
+		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
+		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS); } 2>&1 | tee $@; \
+		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > t$*.callgrind 2>t$**.err; \
+		echo ......... kcachegrind t$*.callgrind
+u%.log:
+	export OMP_DISPLAY_ENV=VERBOSE; \
+		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=16; \
+		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
+		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
+		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > u$*.callgrind 2> u$*.err; \
+		echo ......... kcachegrind u$*.callgrind
+v%.log:
+	export OMP_DISPLAY_ENV=VERBOSE; \
+		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=FALSE; export OMP_THREAD_LIMIT=$*; \
+		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
+		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
+		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > v$*.callgrind 2> v$*.err; \
+		echo ......... kcachegrind v$*.callgrind
 
 clean: 
 	rm -f *.o *.lo *-dbg.o *-dbg.lo *.2o *.3o *.4o *-prof.o libmcfilter*.a libmcfilter*.so \
