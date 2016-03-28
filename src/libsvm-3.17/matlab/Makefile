@@ -14,11 +14,23 @@ MEX_OPTION = CC\#$(CXX) CXX\#$(CXX) CFLAGS\#"$(CFLAGS)" CXXFLAGS\#"$(CFLAGS)"
 MEX_OPTION += -largeArrayDims
 #MEX_EXT = $(shell $(MATLABDIR)/bin/mexext)
 
+ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
 OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
+endif
+ifneq ($(wildcard /usr/include/octave-3.8.2),)
+OCTAVEDIR ?= /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
+endif
+ifneq ($(wildcard /usr/include/octave-3.8.1),)
+OCTAVEDIR = /usr
+OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
+endif
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile
 OCTAVE_MEX_OPTION = --mex
 OCTAVE_MEX_EXT = mex
-OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2/octave/ -I..
+#OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2/octave/ -I..
+OCTAVE_CFLAGS ?= -Wall -O3 -fPIC $(OPENMP) -std=c++11 $(OCT_INC) -DNDEBUG -I..
 
 all:	matlab
 
