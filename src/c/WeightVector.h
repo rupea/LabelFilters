@@ -348,20 +348,23 @@ class WeightVector
           typedef typename Eigen::SparseMatrix<_Scalar,_Options,_Index> SMat;
           //typename SMat::Scalar ret(0);   // XXX <--- remove Complex support
           double ret(0.0);
-          typename SMat::Index const nSparseRow = ( x.isCompressed()
-                                                    ? x.outerIndexPtr()[row+1] - x.outerIndexPtr()[row]
-                                                    : x.innerNonZeroPtr()[row] );
           typename SMat::Index const outer = x.outerIndexPtr()[row];
+          //typename SMat::Index const nSparseRow =
+          //    ( x.isCompressed()
+          //      ? x.outerIndexPtr()[row+1] - x.outerIndexPtr()[row]
+          //      : x.innerNonZeroPtr()[row] );
+          //typename SMat::Index const outerMax = outer + nSparseRow;
+          assert( x.isCompressed() );
+          typename SMat::Index const outerEnd = x.outerIndexPtr()[row+1];
           typename SMat::Scalar const * const __restrict__ vals = x.valuePtr();
           typename SMat::Index  const * const __restrict__ idxs = x.innerIndexPtr();
 #pragma omp simd
-//#pragma omp parallel for simd // XXX WRONG but great convergence, and slow
-//#pragma omp parallel for simd schedule(static,1024) reduction(+:ret)
-          for(typename SMat::Index i = outer; i<outer+nSparseRow; ++i){
-              //ret += Eigen::numext::conj( x.valuePtr()[i] ) * my_weights.coeff( x.innerIndexPtr()[i] );
+//#pragma omp parallel for simd schedule(static,8192) reduction(+:ret)
+          for(typename SMat::Index i = outer; i < outerEnd; ++i){
               ret += vals[i] * my_weights.coeff( idxs[i] );
+              // strictly speaking, _Scalar=complex might want complex conjugate:
+              //ret += Eigen::numext::conj( x.valuePtr()[i] ) * my_weights.coeff( x.innerIndexPtr()[i] );
           }
-          //assert( ret*my_scale == project_row(x,row) );
           return ret;
 #endif
       }
@@ -375,7 +378,8 @@ class WeightVector
   template<typename _Scalar, int _Options, typename _Index> inline // Eigen does NOT ||ize, so...
       void project(VectorXd& proj,
                    Eigen::SparseMatrix<_Scalar,_Options,_Index> const& x) const {
-#pragma omp parallel for simd schedule(static,4096)
+//#pragma omp parallel for simd schedule(static,4096)
+#pragma omp parallel for simd schedule(guided,256)
           for(size_t i=0U; i<x.rows(); ++i){
               //proj.coeffRef(i) = project_row( x, i );
               //proj.coeffRef(i) = x.row(i) .dot(my_weights) * my_scale;

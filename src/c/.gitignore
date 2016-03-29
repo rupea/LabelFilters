@@ -1,4 +1,6 @@
 demo-proj1
+big.soln
+mcsolve-opt-prof
 demo-prof
 demo-prof.log
 demo-quad
@@ -12,6 +14,9 @@ mcproj.log
 xx.soln
 yy.soln
 x.log
+[tuvwx][0-9]*.log
+[tuvwx][0-9]*.err
+[tuvwx][0-9]*.callgrind
 mcsolve
 mc*.vg
 mc.log

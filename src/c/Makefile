@@ -52,7 +52,7 @@ LDFLAGS ?= $(BOOSTLINK) -lboost_program_options
 PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
-PROFILE_CPPFLAGS+=-DMCTHREADS=0
+PROFILE_CPPFLAGS+=-DMCTHREADS=1
 #PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
@@ -379,13 +379,14 @@ mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_pro
 
 #TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=100 --optlu=10 --treport=10 --proj=1 --threads=0
 TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000000 --optlu=10000 --treport=50000 --proj=1 --threads=0
+#TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000 --optlu=1 --treport=100 --proj=1 --threads=0	 # bang on --optlu
 t%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
-		export OMP_NUM_THREADS=$*; export OMP_THREAD_LIMIT=16; export OMP_DYNAMIC=FALSE\
+		export OMP_NUM_THREADS=$*; export OMP_THREAD_LIMIT=16; export OMP_DYNAMIC=FALSE; \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS); } 2>&1 | tee $@; \
-		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > t$*.callgrind 2>t$**.err; \
+		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > t$*.callgrind 2> t$*.err; \
 		echo ......... kcachegrind t$*.callgrind
 u%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
@@ -409,8 +410,16 @@ w%.log:
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
-		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > v$*.callgrind 2> v$*.err; \
-		echo ......... kcachegrind v$*.callgrind
+		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > w$*.callgrind 2> w$*.err; \
+		echo ......... kcachegrind w$*.callgrind
+x%.log:
+	export OMP_DISPLAY_ENV=VERBOSE; \
+		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=$$(($**4)); \
+		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
+		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
+		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > x$*.callgrind 2> x$*.err; \
+		echo ......... kcachegrind x$*.callgrind
 
 clean: 
 	rm -f *.o *.lo *-dbg.o *-dbg.lo *.2o *.3o *.4o *-prof.o libmcfilter*.a libmcfilter*.so \
