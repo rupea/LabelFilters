@@ -51,7 +51,7 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx,
  * - may require x input data to have unit norms (?) */
 template<typename EigenType>
 void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
-                      const EigenType& x, const SparseMb& y,
+                      const EigenType& x, const SparseMb& y, const VectorXd& sqNormsX,
                       const double C1, const double C2, const double lambda,
                       const unsigned long t, const double eta_t,
                       const size_t n, const VectorXi& nclasses, const int maxclasses,
@@ -107,31 +107,36 @@ void update_filtered(boolmatrix& filtered, const VectorXd& projection,
 		     const bool filter_class);
 
 /** calculate the multipliers (for the w gradient update)
- * and the gradients for l and u updates
- * on a subset of classes and instances */
+ * and the gradients for l and u updates on a subset of classes and instances.
+ *
+ * - computes
+ *   - \c multipliers[]       length \c idx_end-idx_start
+ *   - \c sortedLU_gradient[] length \c 2*(sc_end-sc_start)
+ */
 void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
+                        // const inputs...
 			const size_t idx_start, const size_t idx_end,
 			const int sc_start, const int sc_end,
 			const VectorXd& proj, const VectorXsz& index,
 			const SparseMb& y, const VectorXi& nclasses,
-			int maxclasses,
+			const int maxclasses,
 			const std::vector<int>& sorted_class,
 			const std::vector<int>& class_order,
 			const VectorXd& sortedLU,
 			const boolmatrix& filtered,
-			double C1, double C2,
+			const double C1, const double C2,
 			const param_struct& params );
 
 // function to compute the gradient size for w for a single example
-double compute_single_w_gradient_size ( int sc_start, int sc_end,
+double compute_single_w_gradient_size ( const int sc_start, const int sc_end,
 					const double proj, const size_t i,
 					const SparseMb& y, const VectorXi& nclasses,
-					int maxclasses,
+					const int maxclasses,
 					const std::vector<int>& sorted_class,
 					const std::vector<int>& class_order,
 					const VectorXd& sortedLU,
 					const boolmatrix& filtered,
-					double C1, double C2,
+					const double C1, const double C2,
 					const param_struct& params );
 
 

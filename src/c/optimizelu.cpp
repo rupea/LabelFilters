@@ -6,7 +6,7 @@
 
 /** 0 --> Alex's original dev-branch version
  * 1 --> my version */
-#define OPTIMIZE_LU_VERSION 0
+#define OPTIMIZE_LU_VERSION 1
 
 using namespace std;
 
@@ -15,7 +15,7 @@ using namespace std;
 // grad are stored in order of the ranked classes
 // to minimize cash misses and false sharing
 
-static void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bound,
+static inline void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bound,
                           const size_t idx, const size_t allproj_idx,
                           const std::vector<int>& __restricted sorted_class,
                           const int sc_start, const int sc_end,
@@ -24,65 +24,95 @@ static void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bo
                           const VectorXd& __restricted allproj,
                           const bool none_filtered, const boolmatrix& __restricted filtered)
 {
-  std::vector<int>::const_iterator class_iter = std::lower_bound(classes.begin(), classes.end(), sc_start);
-  double update = start_update + (class_iter - classes.begin())*other_weight;
-// #pragma omp critical
-//   {
-//     cout << "1  " << idx << "   " << allproj_idx << "   " << sc_start << "   " << sc_end << "    " << class_iter - classes.begin() << "  " << update << "   " << other_weight << endl;
-//   }
-  for (int sc = sc_start; sc < sc_end; sc++)
-    {
-      if (class_iter != classes.end() && sc == *class_iter)
-	{
-	  // example is of this class
-	  update += other_weight;
-	  class_iter++;
-	  continue;
-	}
-      //const double gsc = grad.coeff(sc);
-      // if (gsc >= 0 )
-      // 	{
-      // 	  const int cp = sorted_class[sc];
-      // 	  if (none_filtered || !(filtered.get(idx,cp)))
-      const int cp = sorted_class[sc];
-      if (grad.coeff(sc) >= 0 && (none_filtered || !(filtered.get(idx,cp))))
-	{
-	  // const double ngsc = gsc - update;
-	  // grad.coeffRef(sc) = ngsc;
-	  grad.coeffRef(sc) -= update;
-	  //	      if (ngsc < 0)
-	  if (grad.coeff(sc) < 0)
-	    {
-	      bound.coeffRef(cp) = allproj.coeff(allproj_idx);
-	    }
-	}
-      //}
+    std::vector<int>::const_iterator class_iter = std::lower_bound(classes.begin(), classes.end(), sc_start);
+    double update = start_update + (class_iter - classes.begin())*other_weight;
+    // #pragma omp critical
+    //   {
+    //     cout << "1  " << idx << "   " << allproj_idx << "   " << sc_start << "   " << sc_end << "    " << class_iter - classes.begin() << "  " << update << "   " << other_weight << endl;
+    //   }
+//#pragma omp parallel for schedule(static,classes.size()/4)
+    double const boundVal = allproj.coeff(allproj_idx);
+    int sc = sc_start;
+    //if( class_iter == classes.end() )
+    //    throw std::runtime_error(" CHECKME -- this iter CAN reach END");
+#if 1
+    if( class_iter != classes.end() ){
+        for( ; sc < sc_end; ++sc) {
+            if ( class_iter != classes.end() && sc == *class_iter) { // example is of this class
+                update += other_weight;
+                if( ++class_iter == classes.end() )
+                    break;
+                continue;
+            }
+            const int cp = sorted_class[sc];
+            if (grad.coeff(sc) >= 0 && (none_filtered || !(filtered.get(idx,cp)))) {
+                if( (grad.coeffRef(sc) -= update) < 0 ) {
+                    bound.coeffRef(cp) = boundVal;
+                }
+            }
+        }
     }
-// #pragma omp critical
-//   {
-//     cout << "2  " << idx << "   " << allproj_idx << "   "<< sc_start << "   " << sc_end << "    " << classes.end() - class_iter << "  " << update << "   " << endl;
-//   }
-
-
-  // for (std::vector<int>::const_iterator sc = sorted_class.begin() + sc_start; sc != sorted_class.begin() + sc_end; sc++)
-  //   {
-  //     if (class_iter != classes.end() && *sc == sorted_class[*class_iter])
-  // 	{
-  // 	  // example is of this class
-  // 	  update += other_weight;
-  // 	  class_iter++;
-  // 	  continue;
-  // 	}
-  //     if (grad.coeff(*sc) >= 0 && (none_filtered || !(filtered.get(idx,*sc))))
-  // 	{
-  // 	  grad.coeffRef(*sc) -= update;
-  // 	  if (grad.coeff(*sc) < 0)
-  // 	    {
-  // 	      bound.coeffRef(*sc) = allproj.coeff(allproj_idx);
-  // 	    }
-  // 	}
-  //   }
-
+    for( ; sc < sc_end; ++sc) {
+        const int cp = sorted_class[sc];
+        if (grad.coeff(sc) >= 0 && (none_filtered || !(filtered.get(idx,cp)))) {
+            if( (grad.coeffRef(sc) -= update) < 0 ) {
+                bound.coeffRef(cp) = boundVal;
+            }
+        }
+    }
+#else
+    if(none_filtered){
+        if( class_iter != classes.end() ){
+            for( ; sc < sc_end; ++sc) {
+                if ( class_iter != classes.end() && sc == *class_iter) { // example is of this class
+                    update += other_weight;
+                    if( ++class_iter == classes.end() )
+                        break;
+                    continue;
+                }
+                const int cp = sorted_class[sc];
+                if( grad.coeff(sc) >= 0 ){
+                    if( (grad.coeffRef(sc) -= update) < 0 ) {
+                        bound.coeffRef(cp) = boundVal;
+                    }
+                }
+            }
+        }
+        for( ; sc < sc_end; ++sc) {
+            const int cp = sorted_class[sc];
+            if( grad.coeff(sc) >= 0 ){
+                if( (grad.coeffRef(sc) -= update) < 0 ) {
+                    bound.coeffRef(cp) = boundVal;
+                }
+            }
+        }
+    }else{
+        if( class_iter != classes.end() ){
+            for( ; sc < sc_end; ++sc) {
+                if ( class_iter != classes.end() && sc == *class_iter) { // example is of this class
+                    update += other_weight;
+                    if( ++class_iter == classes.end() )
+                        break;
+                    continue;
+                }
+                const int cp = sorted_class[sc];
+                if (grad.coeff(sc) >= 0 && !(filtered.get(idx,cp))) {
+                    if( (grad.coeffRef(sc) -= update) < 0 ) {
+                        bound.coeffRef(cp) = boundVal;
+                    }
+                }
+            }
+        }
+        for( ; sc < sc_end; ++sc) {
+            const int cp = sorted_class[sc];
+            if (grad.coeff(sc) >= 0 && !(filtered.get(idx,cp))) {
+                if( (grad.coeffRef(sc) -= update) < 0 ) {
+                    bound.coeffRef(cp) = boundVal;
+                }
+            }
+        }
+    }
+#endif
 }
 
 #if OPTIMIZE_LU_VERSION == 0 // Alex's original version
@@ -110,9 +140,9 @@ void optimizeLU(VectorXd&l, VectorXd&u,
   sort_index(allproj, indices);
   int min_chunk_size = 10000;
 #ifdef _OPENMP
-  int max_n_chunks = omp_get_max_threads();
+  int const max_n_chunks = omp_get_max_threads();
 #else
-  int max_n_chunks = 1;
+  int const max_n_chunks = 1;
 #endif 
 
 #pragma omp parallel default(shared) shared(l, u, allproj, indices,none_filtered, filtered, n, noClasses, y, class_order, sorted_class, wc, nclasses, params, min_chunk_size, max_n_chunks)
@@ -216,16 +246,16 @@ void optimizeLU(VectorXd&l, VectorXd&u,
 		      classes.push_back(class_order[it.col()]);
 		    }
 		}
+              if (classes.size() == 0)
+                  continue;
 	      std::sort(classes.begin(),classes.end()); 
+	      if (classes.back() == 0)
+		  continue;
 	      // we  update the upper bounds. 
 	      // if a class has higher rank than the highest rank class of this example
 	      // it's upper bound will not be influenced by this example 
 	      //	      int class_end = sorted_class[classes.back()]; // make sure classes is not empty	  
 
-	      if (classes.back() == 0)
-		{
-		  continue;
-		}
 #ifdef _OPENMP
 	      // make sure there is enough work to do to paralelize this
 	      int n_chunks = classes.back()/min_chunk_size + 1;
@@ -807,7 +837,7 @@ void optimizeLU(VectorXd& l, VectorXd& u,
   std::vector<size_t> indices(allproj.size());
   if(1){
       sort_index(allproj, indices);  // valgrind complaints ??? XXX
-  }else{ // incorrect?
+  }else{ // BUGGY --- ?? "<=" in sort call...
       std::vector<size_t> indices( boost::counting_iterator<size_t>(0),
                                    boost::counting_iterator<size_t>(n+n));
       std::sort(indices.begin(), indices.end(),
@@ -815,19 +845,24 @@ void optimizeLU(VectorXd& l, VectorXd& u,
                 { return allproj[i] < allproj[j]; });
   }
 
-#ifdef _OPENMP
-  int min_chunk_size = 10000;
-  int max_n_chunks = omp_get_max_threads();
-#else
-  //int max_n_chunks = 1;
+#define BOUNDGRAD_THREAD 1
+#if BOUNDGRAD_THREAD && defined(_OPENMP)
+  int const max_n_chunks = omp_get_max_threads();
+
+  int const min_chunk_size = 10000;
+  //int min_chunk_size = 100;
+  //if( noClasses/max_n_chunks > min_chunk_size ) min_chunk_size = noClasses/max_n_chunks;
+  //if( min_chunk_size > 10000 ) min_chunk_size = 10000;
 #endif
 
-#if MCTHREADS
+#if 0 && MCTHREADS
 #pragma omp parallel default(shared) shared(l, u, allproj, indices,none_filtered, filtered, n, noClasses, y, class_order, sorted_class, wc, nclasses, params, min_chunk_size, max_n_chunks)
+//#pragma omp parallel sections default(none) shared(l, u, allproj, indices,none_filtered, filtered, n, noClasses, y, class_order, sorted_class, wc, nclasses, params, min_chunk_size, max_n_chunks)
 #endif
   {
-#if MCTHREADS
+#if 0 && MCTHREADS
 #pragma omp single
+//#pragma omp section
 #endif
     {
       double class_weight, other_weight;
@@ -840,7 +875,8 @@ void optimizeLU(VectorXd& l, VectorXd& u,
       // to minimize cache misses and false sharing
       VectorXd grad(noClasses);
       double classweight;
-      for (size_t sc = 0; sc <noClasses; sc++) {
+#pragma omp parallel for
+      for (size_t sc = 0; sc <noClasses; ++sc) {
           // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
           classweight = wc.coeff(sorted_class[sc]);
           if (classweight == 0) { // there are no examples of this class
@@ -853,34 +889,24 @@ void optimizeLU(VectorXd& l, VectorXd& u,
       }
       //      VectorXd grad = C1*wc;
 
-      for (std::vector<size_t>::const_iterator i = indices.begin(); i != indices.end(); i++) {
+      for (std::vector<size_t>::const_iterator i = indices.begin(); i != indices.end(); ++i) {
           bool plus = false;
           size_t idx = *i;
           if (idx >= n) { plus = true; idx -= n; }
 
-          if (plus) {
-              // only the upper bounds of the classes of this example are affected
+          if (plus) { // only the upper bounds of the classes of this example are affected
               class_weight = C1;
               if (params.ml_wt_class_by_nclasses) {
                   class_weight /= nclasses.coeff(idx);
               }
               for (SparseMb::InnerIterator it(y,idx); it; ++it) {
                   if (it.value()) {
-                      int cs = it.col();                // raw [unsorted] class
-                      int sc = class_order[cs];         // sorted class number
-                      // should check for filtered (in case classes were filtered)
-                      // but things break above if remove_class_constraints is true
+                      int const cs = it.col();                // raw [unsorted] class
+                      int const sc = class_order[cs];         // sorted class number
                       if (grad.coeff(sc) >= 0 ) {
                           grad.coeffRef(sc) -= class_weight;
                           if (grad.coeff(sc) <= 0) {
-                              // the upper bound for the last class will be at the end of 
-                              // the last example. If we make it at +inf then it will create
-                              // problems if the order of the classes ever changes without
-                              // optimizing the LU bounds.
                               u.coeffRef(cs) = allproj.coeff(*i);
-                              // Loop is over example projections ordered by
-                              // increasing upper bound, so end up with the highest
-                              // projection for this class in 'u'.
                           }
                       }
                   }
@@ -888,19 +914,9 @@ void optimizeLU(VectorXd& l, VectorXd& u,
           }else{
               // only the classes ranked lower than the classes of this example are affected
               other_weight = C2;
-              if (params.ml_wt_by_nclasses) {
-                  other_weight /= nclasses.coeff(idx);
-              }
-
-              // how many classes of the curent instance should be ranked higher
-              //  times the weight of each
-              //  if each class has its own weight will need to
-              //  be calculated below (or have it precomputed for each example
-              //  as a corresponding wclasses to nclasses to be wclasses the same as wc
-              //  corresponds to nc
+              if (params.ml_wt_by_nclasses) other_weight /= nclasses.coeff(idx);
               double right_update = other_weight * nclasses.coeff(idx);
 
-              // calling y.coeff is expensive so get the classes in the ranked order here
               classes.resize(0);
               for (SparseMb::InnerIterator it(y,idx); it; ++it) {
                   if (it.value()) {
@@ -909,48 +925,44 @@ void optimizeLU(VectorXd& l, VectorXd& u,
               }
               if (classes.size() == 0)
                   continue;
-
               std::sort(classes.begin(),classes.end());
-              // we  update the upper bounds.
-              // if a class has higher rank than the highest rank class of this example
-              // it's upper bound will not be influenced by this example
-              //	      int class_end = sorted_class[classes.back()]; // make sure classes is not empty
-
-#if MCTHREADS
-#ifdef _OPENMP
-#endif
-              // make sure there is enough work to do to paralelize this
-              int n_chunks = classes.back()/min_chunk_size + 1;
+	      if (classes.back() == 0)
+		  continue;
+              //getBoundGrad(grad, u, idx, *i, sorted_class, 0,classes.back(),classes,right_update,-other_weight,allproj,none_filtered,filtered);
+#if BOUNDGRAD_THREAD && defined(_OPENMP)
+	      // make sure there is enough work to do to paralelize this
+	      int n_chunks = classes.back()/min_chunk_size + 1;
               n_chunks = n_chunks < max_n_chunks?n_chunks:max_n_chunks;
-              int chunk_size = classes.back()/n_chunks;
-              int remaining = classes.back()%n_chunks;
-              for (int chunk=0; chunk < n_chunks; chunk++)
-              {
-#if MCTHREADS
-#pragma omp task default(shared) firstprivate(chunk) shared(grad, u, idx, i, sorted_class, classes, right_update, other_weight, allproj, none_filtered, filtered, chunk_size, remaining)
-#endif
+              if( n_chunks > 1 ){
+                  int chunk_size = classes.back()/n_chunks;
+                  int remaining = classes.back()%n_chunks;
+                  for (int chunk=0; chunk < n_chunks; chunk++)
                   {
-                      int sc_start = chunk*chunk_size + (chunk<remaining?chunk:remaining);
-                      int sc_incr = chunk_size + (chunk<remaining);
-                      // #pragma omp critical
-                      // {
-                      //   cout << "0   " << idx << "   " << *i << "   " << sc_start << "   " << sc_incr << "    " << chunk << "   " << classes.back() << endl;
-                      // }
-                      getBoundGrad(grad, u, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, right_update, -other_weight, allproj, none_filtered, filtered);
+#pragma omp task default(shared) firstprivate(chunk) shared(grad, u, idx, i, sorted_class, classes, right_update, other_weight, allproj, none_filtered, filtered, chunk_size, remaining)
+                      {
+                          int sc_start = chunk*chunk_size + (chunk<remaining?chunk:remaining);
+                          int sc_incr = chunk_size + (chunk<remaining);
+                          // #pragma omp critical
+                          // {
+                          //   cout << "0   " << idx << "   " << *i << "   " << sc_start << "   " << sc_incr << "    " << chunk << "   " << classes.back() << endl;
+                          // }
+                          getBoundGrad(grad, u, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, right_update, -other_weight, allproj, none_filtered, filtered);
+                      }
                   }
-              }
-#if MCTHREADS
 #pragma omp taskwait
-#endif
-#else // if not _OPENMP
-              getBoundGrad(grad, u, idx, *i, sorted_class, 0,classes.back(),classes,right_update,-other_weight,allproj,none_filtered,filtered);
-#endif // _OPENMP
+              }else{
+                  getBoundGrad(grad, u, idx, *i, sorted_class, 0,classes.back(),classes,right_update,-other_weight,allproj,none_filtered,filtered);
+              }
+#else // 1 chunk, or not _OPENMP
+	      getBoundGrad(grad, u, idx, *i, sorted_class, 0,classes.back(),classes,right_update,-other_weight,allproj,none_filtered,filtered);
+#endif // _OPENMP	   
           }
       }
     }
 
-#if MCTHREADS
+#if 0 && MCTHREADS
 #pragma omp single
+//#pragma omp section
 #endif
     {
       double class_weight, other_weight;
@@ -963,22 +975,17 @@ void optimizeLU(VectorXd& l, VectorXd& u,
       // to minimize cash misses and false sharing
       VectorXd grad(noClasses);
       double classweight;
-      for (size_t sc = 0; sc <noClasses; sc++)
-	{
-	  // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
-	  classweight = wc.coeff(sorted_class[sc]);
-	  if (classweight == 0)
-	    {
-	      // there are no examples of this class
-	      // so just put l and u to 0
-	      l.coeffRef(sorted_class[sc]) = 0.0;
-	      grad.coeffRef(sc) = -1;
-	    }
-	  else
-	    {
-	      grad.coeffRef(sc) = C1*classweight;
-	    }
-	}
+#pragma omp parallel for schedule(static,64)
+      for (size_t sc = 0; sc <noClasses; ++sc) {
+          // this does not work if the remove_class_constraints is true (i.e. true classes can be filtered)!!
+          classweight = wc.coeff(sorted_class[sc]);
+          if( classweight == 0 ){ // there are no examples of this class  so just put l and u to 0
+              l.coeffRef(sorted_class[sc]) = 0.0;
+              grad.coeffRef(sc) = -1;
+          }else{
+              grad.coeffRef(sc) = C1*classweight;
+          }
+      }
 
       //      VectorXd grad = C1*wc;
       for (std::vector<size_t>::const_reverse_iterator i = indices.rbegin(); i != indices.rend(); i++)
@@ -991,44 +998,25 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 	      idx -= n;
 	    }
 
-	  if (!plus)
-	    {
-	      // only the lower bounds of the classes of this example are affected
-	      class_weight = C1;
-	      if (params.ml_wt_class_by_nclasses)
-		{
-		  class_weight /= nclasses.coeff(idx);
-		}
-	      for (SparseMb::InnerIterator it(y,idx); it; ++it)
-		{
-		  if (it.value())
-		    {
-		      int cs = it.col();
-		      int sc = class_order[cs];
-		      if (grad.coeff(sc) >= 0 )
-			{
-			  grad.coeffRef(sc) -= class_weight;
-			  if (grad.coeff(sc) <= 0 )
-			    {
-			      // the lower bound for the last class will be at the end of the
-                              // last [reverse] example. If we make it at +inf then it will
-                              // create problems if the order of the classes ever changes
-                              // without optimizing the LU bounds.
-			      l.coeffRef(cs) = allproj.coeff(*i);
-			    }
-			}
-		    }
-		}
-	    }
-	  else
-	    {
+	  if (!plus){
+              // only the lower bounds of the classes of this example are affected
+              class_weight = C1;
+              if (params.ml_wt_class_by_nclasses) class_weight /= nclasses.coeff(idx);
+              for (SparseMb::InnerIterator it(y,idx); it; ++it) {
+                  if (it.value()) {
+                      int cs = it.col();
+                      int sc = class_order[cs];
+                      if (grad.coeff(sc) >= 0 ) {
+                          if( (grad.coeffRef(sc) -= class_weight) <= 0 ){
+                              l.coeffRef(cs) = allproj.coeff(*i);
+                          }
+                      }
+                  }
+              }
+          }else{
 	      // only the classes ranked higher than the classes of this example are affected
 	      other_weight = C2;
-	      if (params.ml_wt_by_nclasses)
-		{
-		  other_weight /= nclasses.coeff(idx);
-		}
-
+	      if (params.ml_wt_by_nclasses) other_weight /= nclasses.coeff(idx);
 
 	      // calling y.coeff is expensive so get the classes in the ranked order here
 	      classes.resize(0);
@@ -1045,30 +1033,28 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 
 	      int n_active = noClasses - classes.front() - 1;
 	      if (n_active == 0)
-		{
 		  continue;
-		}
-#ifdef _OPENMP
+#if BOUNDGRAD_THREAD && defined(_OPENMP)
 	      // make sure there is enough work to do to paralelize this
 	      int n_chunks = n_active/min_chunk_size + 1;
-	      n_chunks = n_chunks < max_n_chunks?n_chunks:max_n_chunks;
-	      int chunk_size = n_active/n_chunks;
-	      int remaining = n_active%n_chunks;
-	      for (int chunk=0; chunk < n_chunks; chunk++)
-		{
-#if MCTHREADS
+              n_chunks = n_chunks < max_n_chunks?n_chunks:max_n_chunks;
+              if( n_chunks > 1 ){
+                  int chunk_size = n_active/n_chunks;
+                  int remaining = n_active%n_chunks;
+                  for (int chunk=0; chunk < n_chunks; chunk++)
+                  {
 #pragma omp task default(shared) firstprivate(chunk) shared(grad, l, idx, i, sorted_class, classes, other_weight, allproj, none_filtered, filtered, chunk_size, remaining)
-#endif
-		  {
-		    int sc_start = classes.front() + 1 + chunk*chunk_size + (chunk<remaining?chunk:remaining);
-		    int sc_incr = chunk_size + (chunk<remaining);
-		    getBoundGrad(grad, l, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, 0.0, other_weight, allproj, none_filtered, filtered);
-		  }
-		}
-#if MCTHREADS
+                      {
+                          int sc_start = classes.front() + 1 + chunk*chunk_size + (chunk<remaining?chunk:remaining);
+                          int sc_incr = chunk_size + (chunk<remaining);
+                          getBoundGrad(grad, l, idx, *i, sorted_class, sc_start, sc_start + sc_incr, classes, 0.0, other_weight, allproj, none_filtered, filtered);
+                      }
+                  }
 #pragma omp taskwait
-#endif
-#else // if not _OPENMP
+              }else{
+                  getBoundGrad(grad, l, idx, *i, sorted_class, classes.front() + 1,noClasses,classes, 0.0, other_weight, allproj, none_filtered, filtered);
+              }
+#else // 1 chunk, or not _OPENMP
 	      getBoundGrad(grad, l, idx, *i, sorted_class, classes.front() + 1,noClasses,classes, 0.0, other_weight, allproj, none_filtered, filtered);
 #endif // _OPENMP
 	    }
@@ -1435,48 +1421,6 @@ void optimizeLU(VectorXd& l, VectorXd& u,
     }
 #endif
 
-      // gradL = ;
-      // for (i = 2*n-1; i>=0; i--)
-      // 	{
-      // 	  bool plus = false;
-      // 	  size_t idx = indices[n];
-      // 	  if (idx >= n)
-      // 	    {
-      // 	      plus = true;
-      // 	      idx -= n;
-      // 	    }
-      // 	  for (SparseMb::Iterator it(y,idx); it; ++it)
-      // 	    {
-      // 	      if (it.value())
-      // 		{
-      // 		  cs2 = it.col();
-      // 		  if (cs2 == cs && !plus)
-      // 			  gradU -= C1;
-      // 			}
-      // 		      else
-      // 			{
-      // 			  gradL += C1;
-      // 			}
-      // 		    }
-      // 		  else
-      // 		    {
-      // 		      if (class_order[cs2] < class_order[cs] && plus)
-      // 			{
-      // 			  gradL -= C2;
-      // 			}
-      // 		      if (class_order[cs2] > class_order[cs] && !plus)
-      // 			{
-      // 			  gradU += C2;
-      // 			}
-      // 		    }
-      // 	       	}
-      // 	    }
-      // 	  if (gradU > 0)
-      // 	    {
-      // 	      l.coeffRef(c) = allproj.coeff(indices[i]);
-      // 	      break;
-      // 	    }
-      // 	}
 }
 
 

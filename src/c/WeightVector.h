@@ -332,8 +332,39 @@ class WeightVector
   template<typename EigenType> inline double project_row(const EigenType& x, const int row) const
     {
       //return my_scale*DotProductInnerVector(my_weights,x,row);
-      return my_scale*((x.row(row)*my_weights)(0,0));
+      //return my_scale*((x.row(row)*my_weights)(0,0));
+      return x.row(row).dot(my_weights) * my_scale;
     }
+
+  /** A very minor speed increase... */
+  template<typename _Scalar, int _Options, typename _Index> inline // Eigen does NOT ||ize, so...
+      double project_row_sparse(const Eigen::SparseMatrix<_Scalar,_Options,_Index>& x, const int row) const
+      {
+          //return my_scale*DotProductInnerVector(my_weights,x,row);
+          //return my_scale*((x.row(row)*my_weights)(0,0));
+#if 0
+          return x.row(row).dot(my_weights) * my_scale;
+#else
+          typedef typename Eigen::SparseMatrix<_Scalar,_Options,_Index> SMat;
+          //typename SMat::Scalar ret(0);   // XXX <--- remove Complex support
+          double ret(0.0);
+          typename SMat::Index const nSparseRow = ( x.isCompressed()
+                                                    ? x.outerIndexPtr()[row+1] - x.outerIndexPtr()[row]
+                                                    : x.innerNonZeroPtr()[row] );
+          typename SMat::Index const outer = x.outerIndexPtr()[row];
+          typename SMat::Scalar const * const __restrict__ vals = x.valuePtr();
+          typename SMat::Index  const * const __restrict__ idxs = x.innerIndexPtr();
+#pragma omp simd
+//#pragma omp parallel for simd // XXX WRONG but great convergence, and slow
+//#pragma omp parallel for simd schedule(static,1024) reduction(+:ret)
+          for(typename SMat::Index i = outer; i<outer+nSparseRow; ++i){
+              //ret += Eigen::numext::conj( x.valuePtr()[i] ) * my_weights.coeff( x.innerIndexPtr()[i] );
+              ret += vals[i] * my_weights.coeff( idxs[i] );
+          }
+          //assert( ret*my_scale == project_row(x,row) );
+          return ret;
+#endif
+      }
 
   //
   // ------------------- project( VectorXd& proj, EigenType const& x ) ------------
@@ -344,16 +375,17 @@ class WeightVector
   template<typename _Scalar, int _Options, typename _Index> inline // Eigen does NOT ||ize, so...
       void project(VectorXd& proj,
                    Eigen::SparseMatrix<_Scalar,_Options,_Index> const& x) const {
-#pragma omp parallel for schedule(static,256)
+#pragma omp parallel for simd schedule(static,4096)
           for(size_t i=0U; i<x.rows(); ++i){
-              proj.coeffRef(i) = project_row( x, i );
+              //proj.coeffRef(i) = project_row( x, i );
               //proj.coeffRef(i) = x.row(i) .dot(my_weights) * my_scale;
+              proj.coeffRef(i) = project_row_sparse( x, i ) * my_scale;
           }
       }
   template<typename Scalar, int _Flags, typename _Index> inline // Eigen does NOT ||ize, so...
       void project(VectorXd& proj,
                    Eigen::MappedSparseMatrix<Scalar,_Flags,_Index> const& x) const {
-#pragma omp parallel for schedule(static,256)
+#pragma omp parallel for schedule(static,4096)
           for(size_t i=0U; i<x.rows(); ++i){
               proj.coeffRef(i) = project_row( x, i );
           }

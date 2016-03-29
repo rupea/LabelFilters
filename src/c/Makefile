@@ -51,7 +51,8 @@ LDFLAGS ?= $(BOOSTLINK) -lboost_program_options
 
 PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -DMCTHREADS=1 -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+PROFILE_CPPFLAGS+=-DMCTHREADS=0
 #PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
@@ -388,7 +389,7 @@ t%.log:
 		echo ......... kcachegrind t$*.callgrind
 u%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
-		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=16; \
+		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=8; \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
@@ -397,6 +398,14 @@ u%.log:
 v%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
 		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=FALSE; export OMP_THREAD_LIMIT=$*; \
+		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
+		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
+		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > v$*.callgrind 2> v$*.err; \
+		echo ......... kcachegrind v$*.callgrind
+w%.log:
+	export OMP_DISPLAY_ENV=VERBOSE; \
+		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=$$(($**2)); \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \

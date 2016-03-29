@@ -265,16 +265,16 @@ void init_ordered_class_list(int& left_classes, double& left_update,
 // on a subset of classes and instances
 
 void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
-			size_t idx_start, size_t idx_end,
-			int sc_start, int sc_end,
+			const size_t idx_start, const size_t idx_end,
+			const int sc_start, const int sc_end,
 			const VectorXd& proj, const VectorXsz& index,
 			const SparseMb& y, const VectorXi& nclasses,
-			int maxclasses,
+			const int maxclasses,
 			const vector<int>& sorted_class,
 			const vector<int>& class_order,
 			const VectorXd& sortedLU,
 			const boolmatrix& filtered,
-			double C1, double C2,
+			const double C1, const double C2,
 			const param_struct& params )
 {
   int sc, cp;
@@ -304,15 +304,9 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
       #endif
 
       class_weight = C1;
+      if (params.ml_wt_by_nclasses) other_weight /= nclasses.coeff(i);
       other_weight = C2;
-      if (params.ml_wt_by_nclasses)
-	{
-	  other_weight /= nclasses.coeff(i);
-	}
-      if (params.ml_wt_class_by_nclasses)
-	{
-	  class_weight /= nclasses.coeff(i);
-	}
+      if (params.ml_wt_class_by_nclasses) class_weight /= nclasses.coeff(i);
 
 
       init_ordered_class_list(left_classes, left_update,
@@ -427,15 +421,15 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 
 // function to calculate the multiplier of the gradient for w for a single example.
 
-double compute_single_w_gradient_size ( int sc_start, int sc_end,
+double compute_single_w_gradient_size (const int sc_start, const int sc_end,
 				       const double proj, const size_t i,
 				       const SparseMb& y, const VectorXi& nclasses,
-				       int maxclasses,
+				       const int maxclasses,
 				       const vector<int>& sorted_class,
 				       const vector<int>& class_order,
 				       const VectorXd& sortedLU,
 				       const boolmatrix& filtered,
-				       double C1, double C2,
+				       const double C1, const double C2,
 				       const param_struct& params )
 {
   double multiplier = 0.0;

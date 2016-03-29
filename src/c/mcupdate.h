@@ -6,7 +6,7 @@ struct MCupdate
     template<typename EigenType> 
         static void update( WeightVector& w, /*VectorXd& sortedLU, VectorXd& sortedLU_avg,*/
                             MCpermState & luPerm,      // sortlu and sortlu_avg are input and output
-                            const EigenType& x, const SparseMb& y,
+                            const EigenType& x, const SparseMb& y, const VectorXd& xSqNorms,
                             const double C1, const double C2, const double lambda,
                             const unsigned long t, const double eta_t,
                             const size_t nTrain, //const size_t batch_size,
@@ -47,8 +47,8 @@ struct MCupdate
             // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU
             assert( luPerm.ok_sortlu_avg == true ); // accumulator begins at all zeros, so true
             if (params.update_type == SAFE_SGD) {
-                update_safe_SGD(w, sortedLU, sortedLU_avg,
-                                x, y, C1, C2, lambda, t, eta_t, nTrain, // nTrain is just x.rows()
+                update_safe_SGD(w, sortedLU, sortedLU_avg, x, y, xSqNorms,
+                                C1, C2, lambda, t, eta_t, nTrain, // nTrain is just x.rows()
                                 nclasses, maxclasses, sorted_class, class_order, filtered,
                                 sc_chunks, sc_chunk_size, sc_remaining,
                                 params);

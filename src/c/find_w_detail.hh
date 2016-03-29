@@ -10,6 +10,15 @@
 //#include <iosfwd>                             // std::cerr
 #include <iostream>                             // std::cerr
 
+template<typename EigenType> inline
+void calc_sqNorms( EigenType const& x, VectorXd& sqNorms ){
+    sqNorms.resize(x.rows());
+#pragma omp parallel for schedule(static,1024)
+    for(size_t i=0U; i<x.rows(); ++i)
+        sqNorms.coeffRef(i) = x.row(i).squaredNorm();
+}
+
+
 /** initialize projection vector \c w prior to calculating \c weights[*,projection_dim].
  * \p w         WeightedVector for SGD iterations
  * \p x         nExamples x d training data (each row is one input vector)
@@ -186,7 +195,7 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx,
 
     template<typename EigenType>
 void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
-                      const EigenType& x, const SparseMb& y,
+                      const EigenType& x, const SparseMb& y, const VectorXd& sqNormsX,
                       const double C1, const double C2, const double lambda,
                       const unsigned long t, const double eta_t,
                       const size_t n, const VectorXi& nclasses, const int maxclasses,
@@ -218,7 +227,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 
 
 #if MCTHREADS
-#pragma omp parallel for default(shared) reduction(+:multiplier)
+#pragma omp parallel for default(shared) reduction(+:multiplier) schedule(static,1)
 #endif
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
@@ -247,10 +256,11 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     do
     {
         // WARNING: for now it assumes that norm(x) = 1!!!!!
-        new_proj = proj - eta*lambda*proj - eta*multiplier;
+        new_proj = proj - eta*lambda*proj - eta*multiplier*sqNormsX.coeff(i);
+        if(0) std::cout<<"eta:"<<eta<<" proj:"<<proj<<" new_proj:"<<new_proj<<" norm:"<<sqNormsX.coeff(i)<<endl;
         new_multiplier=0;
 #if MCTHREADS
-#pragma omp parallel for  default(shared) reduction(+:new_multiplier)
+#pragma omp parallel for  default(shared) reduction(+:new_multiplier) schedule(static,1)
 #endif
         for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
         {
@@ -287,8 +297,8 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     // update L and U with w fixed.
     // use new_proj since it is exactly the projection obtained with the new w
     bool const accumulate_sortedLU = (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch);
-#if MCTHREADS
-#pragma omp parallel for  default(shared)
+#if 1 || MCTHREADS
+#pragma omp parallel for default(shared)
 #endif
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
@@ -301,9 +311,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
                                           y, nclasses, maxclasses,
                                           sorted_class, class_order,
                                           filtered, C1, C2, eta_t, params);
-        }
-        else
-        {
+        }else{
             update_single_sortedLU(sortedLU, sc_start, sc_start+sc_incr, new_proj, i,
                                    y, nclasses, maxclasses, sorted_class, class_order,
                                    filtered, C1, C2, eta_t, params);
@@ -358,12 +366,41 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
 
     // first compute all the projections so that we can update w directly
     assert( batch_size <= n );
+#if 1
     for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
     {
         i = (batch_size < n? ((size_t) rand()) % n: idx );
         proj.coeffRef(idx)  = w.project_row(x,i);
         index.coeffRef(idx) = i;
     }
+#else // sampling WITHOUT replacement, in rand case ...
+    if( batch_size < n ){ // sample without replacement: batch_size of n
+        // choose batch_size monotonic items
+        while(size_t low=0U, i=batch_size; i--; ){
+            size_t r = batch_size-low+1-i;
+            low += ( r? rand()%r : 0 );
+            index.coeffRef(i) = low;
+            ++low;
+        }
+        for(size_t i=batch_size; i>1; --i){
+            size_t r = rand()%i;
+            size_t tmp = index.coeff(r);        // swap i <--> r
+            index.coeffRef(r) = index.coeff(i);
+            index.coeffRef(i) = tmp;
+        }
+#pragma omp parallel for schedule(static,32)
+        for(size_t i=0U; i<batch_size; ++i){
+            proj.coeffRef(i) = w.project_row(x,i);
+        }
+    }else{
+#pragma omp parallel for schedule(static,32)
+        for (idx = 0; idx < n; ++idx){
+            index.coeffRef(idx) = i;
+            proj.coeffRef(i) = w.project_row(x,i);
+        }
+    }
+#endif
+
     // now we can update w and L,U directly
 
     multipliers.setZero();
@@ -402,18 +439,26 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
             {
                 //#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
                 {
-                    //idx_locks[idx_chunk].YieldLock();
+#if MCTHREADS
+                    idx_locks[idx_chunk].YieldLock();
+#endif
                     multipliers.segment(idx_start, idx_incr) += multipliers_chunk;
-                    //idx_locks[idx_chunk].Unlock();
+#if MCTHREADS
+                    idx_locks[idx_chunk].Unlock();
+#endif
                 }
-                //sc_locks[sc_chunk].YieldLock();
+#if MCTHREADS
+                sc_locks[sc_chunk].YieldLock();
+#endif
                 // update the lower and upper bounds
                 // divide by batch_size here because the gradients have
                 // not been averaged
                 sortedLU.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk * (eta_t / batch_size);
                 //		  sortedLU_gradient.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk;
-                //sc_locks[sc_chunk].Unlock();
+#if MCTHREADS
+                sc_locks[sc_chunk].Unlock();
                 //#pragma omp taskwait
+#endif
             }
 #if MCTHREADS
             #pragma omp taskwait

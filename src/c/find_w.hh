@@ -53,10 +53,11 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     //}
 
     size_t const batch_size = (params.batch_size < 1 || params.batch_size > n) ? (size_t) n : params.batch_size;
+    VectorXd xSqNorms;
     if (params.update_type == SAFE_SGD)
     {
-        // save_sgd update only works with batch size 1
-        assert(batch_size == 1);
+        assert(batch_size == 1); // save_sgd update only works with batch size 1
+        calc_sqNorms( x, xSqNorms );
     }
 
     //std::vector<int> classes = get_classes(y);
@@ -382,7 +383,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
             // compute the gradient and update
             if (params.update_type == SAFE_SGD) {
                 update_safe_SGD(w, sortedLU, sortedLU_avg,
-                                x, y, C1, C2, lambda, t, eta_t, n,
+                                x, y, xSqNorms, C1, C2, lambda, t, eta_t, n,
                                 nclasses, maxclasses, sorted_class, class_order, filtered,
                                 sc_chunks, sc_chunk_size, sc_remaining,
                                 params);

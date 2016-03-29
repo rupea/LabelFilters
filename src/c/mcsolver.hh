@@ -302,15 +302,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
     // how to split the work for gradient update iterations
     int const nThreads = this->getNthreads( params );
-    MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, nThreads, params );
 #ifndef NDEBUG
+    MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, nThreads, params );
     {// in debug mode check no change from original settings
         const size_t batch_size = (params.batch_size < 1 || params.batch_size > nTrain) ? (size_t) nTrain : params.batch_size;
-        if (params.update_type == SAFE_SGD)
-        {
-            // save_sgd update only works with batch size 1
-            assert(batch_size == 1);
-        }
         cout<<" batch_size = "<<batch_size<<endl;
         int const idx_chunks = nThreads;
         int const idx_chunk_size = batch_size/idx_chunks;
@@ -331,6 +326,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
      
         assert( updateSettings.sc_locks != nullptr );
     }
+#else
+    //MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, nThreads, params );
+    MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, 2, params );
 #endif
     size_t const& batch_size    = updateSettings.batch_size; // really only for print_report ?
 
@@ -342,6 +340,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     // Then what is total weight of each class? (used for optimizeLU)
     VectorXd wc; // wc[class] = weight of each class (= nc[class] if params.ml_wt_class_by_nclasses==false)
     init_wc(wc, nclasses, y, params);   // wc is used if optimizeLU_epoch>0
+    VectorXd xSqNorms;
+    if (params.update_type == SAFE_SGD) calc_sqNorms( x, xSqNorms ); 
 
     //keep track of which classes have been elimninated for a particular example
     boolmatrix filtered(nTrain,nClass);
@@ -508,6 +508,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         cout<<"  ... starting with     weights"<<prettyDims(weights)<<":\n"<<weights<<endl;
         cout<<"  ... starting with weights_avg"<<prettyDims(weights_avg)<<":\n"<<weights_avg<<endl;
         cout<<"  ... beginning at projection_dim="<<projection_dim<<" reuse_dim="<<reuse_dim<<endl;
+        cout<<"  ... sc_chunks="<<updateSettings.sc_chunks<<" MCTHREADS="<<MCTHREADS<<endl;
     }
     // XXX make more robust to continued runs?
     weights             .conservativeResize(d, nProj);
@@ -586,7 +587,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
             // --> update( w, MCpermState, /* R/O: */x, y, MCsoln, MCiterBools, MCiterState, MCbatchState, params )
             // --> the ONLY place where 'w' is modified
             // update --> invalidates projection_avg and projection
-            MCupdate::update(w, luPerm,  /*R/O:*/x, y, C1, C2, lambda, t, eta_t, nTrain, \
+            MCupdate::update(w, luPerm,  /*R/O:*/x, y, xSqNorms, C1, C2, lambda, t, eta_t, nTrain, \
                              nclasses, maxclasses, filtered, updateSettings, params); \
             xwProj.w_changed(); // Projections no good. They map raw data in 'x' ---> the updated line in 'w'
             if(t4.reorder) {

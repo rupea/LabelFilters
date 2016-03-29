@@ -230,31 +230,33 @@ namespace detail {
     /** eigen_io_txtbool \em should return with \c is.eof(), and may normally
      * return with \c is.fail(). */
     std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x ){
-        //cout<<"WARNING: eigen_io_txtbool needs to be tested"<<endl;
+        int const verbose=0;
         typedef uint64_t Idx;
         Idx rows;
         Idx cols;
         io_txt(is,rows);
         io_txt(is,cols);
+        if( rows<=0 || cols <= 0 )
+            throw std::runtime_error("bad eigen_io_txtbool rows/cols input");
         is>>ws;         // OK now do linewise parse, 1 line per example
-        //cout<<" eigen_io_txtbool: rows="<<rows<<" cols="<<cols<<endl;
+        if(verbose)cout<<" eigen_io_txtbool: rows="<<rows<<" cols="<<cols<<endl;
         std::string line;
         typedef Eigen::Triplet<bool> T;
         std::vector<T> tripletList;
         tripletList.reserve( rows );    // at least!!!
         for(int row=0; getline(is,line); ++row ){    // one row per line
-            //cout<<"row="<<row<<" line="<<line<<" parse: "; cout.flush();
+            if(verbose>1){cout<<"row="<<row<<" line="<<line<<" parse: "; cout.flush();}
             istringstream iss(line);
             Idx idx;
             while(iss>>idx){
-                //cout<<" "<<idx; cout.flush();
+                if(verbose>=2){cout<<" "<<idx; cout.flush();}
                 tripletList.push_back( T(row,idx,true) );
             }
-            //cout<<endl;
+            if(verbose>=2)cout<<endl;
         }
         x.resize(rows,cols);
         x.setFromTriplets( tripletList.begin(), tripletList.end() );
-        //cout<<" eigen_io_txtbool read SUCCESS"<<endl;
+        if(verbose)cout<<" eigen_io_txtbool read SUCCESS"<<endl;
         return is;
     }
 
