@@ -224,8 +224,8 @@ do-vg: demo-mcsolver
 tail-vg:
 	tail -n1 erik/log-op0*.vg
 	tail -n1 erik/log-mp0*.vg
-do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
-do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver
+do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver test-scaling.log
+do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver test-scaling.log
 	./demo-quick > demo-quick.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
@@ -317,6 +317,12 @@ demo-quick: erik/demo-quick.cpp libmcfilter-dbg.a
 demo-mcsolver: | libmcfilter-dbg.a
 demo-mcsolver: erik/demo-mcsolver.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
+test-scaling.log: demo-mcsolver
+	@echo "Test simple problem with xscale 1.0 and 2.0" > $@
+	./demo-mcsolver -p0v >> $@
+	@echo -e "\n\n\n Same problem scaling all x data and C1,C2 by 2.0" >> $@
+	./demo-mcsolver -p0vx >> $@
+	# 2 solutions in $@ should have {lb,ub} different by roughly a factor of 2.0
 demo-printing: erik/demo-printing.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 demo-parms: | libmcfilter-dbg.a
@@ -374,19 +380,27 @@ mcproj.log: mcgenx mcproj mcsolve erik/mcsolve0
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.
 
+#mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_program_options.a -lprofiler /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0
+#mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_program_options.a -lprofiler /usr/lib/debug/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 -lpthread /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 
 mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_program_options.a -lprofiler
 	$(CXX) -o $@ $(CPPFLAGS) -Wno-error=maybe-uninitialized -I. -DPROFILE $^
 
 #TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=100 --optlu=10 --treport=10 --proj=1 --threads=0
 TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000000 --optlu=10000 --treport=50000 --proj=1 --threads=0
 #TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000 --optlu=1 --treport=100 --proj=1 --threads=0	 # bang on --optlu
+
+LEARNING_PROFILE:=learning.profile
+# If you install the libgomp1-dbg package, then you can get nicer kcachegrind summaries...
+LEARNING_PROFILE+=--lib_prefix=/usr/lib/debug/usr/lib/x86_64-linux-gnu --add_lib=libgomp.so.1.0.0
+# currently v8.log has the shortest wall time. (24.13 s, cf 55 s before working on omp stuff)
+# For 4 threads, u4.log has shortest wall time (28.92 s, but v4 was not far behind: 29.17 s)
 t%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
 		export OMP_NUM_THREADS=$*; export OMP_THREAD_LIMIT=16; export OMP_DYNAMIC=FALSE; \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS); } 2>&1 | tee $@; \
-		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > t$*.callgrind 2> t$*.err; \
+		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > t$*.callgrind 2> t$*.err; \
 		echo ......... kcachegrind t$*.callgrind
 u%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
@@ -394,7 +408,7 @@ u%.log:
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
-		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > u$*.callgrind 2> u$*.err; \
+		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > u$*.callgrind 2> u$*.err; \
 		echo ......... kcachegrind u$*.callgrind
 v%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
@@ -402,7 +416,7 @@ v%.log:
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
-		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > v$*.callgrind 2> v$*.err; \
+		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > v$*.callgrind 2> v$*.err; \
 		echo ......... kcachegrind v$*.callgrind
 w%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
@@ -410,7 +424,7 @@ w%.log:
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
-		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > w$*.callgrind 2> w$*.err; \
+		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > w$*.callgrind 2> w$*.err; \
 		echo ......... kcachegrind w$*.callgrind
 x%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
@@ -418,7 +432,7 @@ x%.log:
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
 		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
-		google-pprof --callgrind ./mcsolve-opt-prof learning.profile > x$*.callgrind 2> x$*.err; \
+		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > x$*.callgrind 2> x$*.err; \
 		echo ......... kcachegrind x$*.callgrind
 
 clean: 

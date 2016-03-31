@@ -54,7 +54,7 @@ ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
                           bool verbose = false);
 
 /** predict, w/o PredictionSet.
- * \p w is some ovaW linear svm transform matrix.
+ * \p w is a set of linear projection lines
  */
 template <typename Eigentype>
 PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
@@ -65,7 +65,7 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
                          size_t const start_class = 0);
 
 /** predict, with PredictionSet.
- * \p w is some ovaW linear svm transform matrix.
+ * \p w is a set of linear projection lines
  */
 template <typename Eigentype>
 void predict( PredictionSet* predictions,

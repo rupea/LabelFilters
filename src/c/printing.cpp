@@ -144,6 +144,7 @@ namespace detail {
 
     std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x )
     {
+        int const verbose=1;
         std::array<char,4> magic;
         io_bin( is, magic );
         if( ! MAGIC_EQU(magic,magicSparseMbBin) )
@@ -159,15 +160,20 @@ namespace detail {
         assert( x.outerSize() == rows );
         assert( x.innerSize() == cols );
         assert( x.data().size() == nData );
+        if(verbose) cout<<" r,c,nData = "<<rows<<", "<<cols<<", "<<nData<<endl;
         {
             auto idxp = x.outerIndexPtr();
             if(nData < numeric_limits<uint_least8_t>::max()){
+                if(verbose){cout<<" u8 oindex..."; cout.flush();}
                 uint_least8_t tmp; for(size_t i=0U; i<rows + 1U ; ++i) *idxp++ = NEXT_IDX(tmp);
             }else if(nData < numeric_limits<uint_least16_t>::max()){
+                if(verbose){cout<<" u16 oindex..."; cout.flush();}
                 uint_least16_t tmp; for(size_t i=0U; i<rows + 1U ; ++i) *idxp++ = NEXT_IDX(tmp);
             }else if(nData < numeric_limits<uint_least32_t>::max()){
+                if(verbose){cout<<" u32 oindex..."; cout.flush();}
                 uint_least32_t tmp; for(size_t i=0U; i<rows + 1U ; ++i) *idxp++ = NEXT_IDX(tmp);
             }else{ // original, VERY wide Idx
+                if(verbose){cout<<" Idx oindex..."; cout.flush();}
                 Idx tmp;
                 for(size_t i=0U; i<rows + 1U ; ++i){
                     *idxp++ = NEXT_IDX(tmp);
@@ -175,16 +181,21 @@ namespace detail {
                 }
             }
         }
-        assert( x.outerIndexPtr()[rows] == nData );
+        if( x.outerIndexPtr()[rows] != nData )
+            throw std::runtime_error(" wrong number of oindex values!");
         {
             auto idxp = x.innerIndexPtr();
-            if(nData < numeric_limits<uint_least8_t>::max()){
+            if(cols < numeric_limits<uint_least8_t>::max()){
+                if(verbose){cout<<" u8 iindex..."; cout.flush();}
                 uint_least8_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
-            }else if(nData < numeric_limits<uint_least16_t>::max()){
+            }else if(cols < numeric_limits<uint_least16_t>::max()){
+                if(verbose){cout<<" u16 iindex..."; cout.flush();}
                 uint_least16_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
-            }else if(nData < numeric_limits<uint_least32_t>::max()){
+            }else if(cols < numeric_limits<uint_least32_t>::max()){
+                if(verbose){cout<<" u32 iindex..."; cout.flush();}
                 uint_least32_t tmp; for(size_t i=0U; i<nData; ++i) *idxp++ = NEXT_IDX(tmp);
             }else{
+                if(verbose){cout<<" Idx iindex..."; cout.flush();}
                 Idx tmp;
                 for(size_t i=0U; i<nData; ++i){
                     *idxp++ = NEXT_IDX(tmp);
@@ -192,12 +203,14 @@ namespace detail {
                 }
             }
         }
+        if(verbose){cout<<" setting 'true'"; cout.flush();}
         { // set all 'values' to 'true' --- they are not present in the istream
             auto valp = x.valuePtr();
             for(size_t i=0U; i<nData; ++i){
                 *valp++ = true;
             }
         }
+        if(verbose)cout<<" eigen_io_binbool input OK"<<endl;
 #undef NEXT_IDX
         return is;
     }

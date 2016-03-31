@@ -193,11 +193,14 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx,
     cerr << endl;
 }
 
+/** - [ejk] LOTS of changes... iSqNorm*multiplier --> propagate further down the code ??
+ * - and then eta or eta_t in final adjustment loops ???
+ */
     template<typename EigenType>
-void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
+void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg, double& eta_t,
                       const EigenType& x, const SparseMb& y, const VectorXd& sqNormsX,
                       const double C1, const double C2, const double lambda,
-                      const unsigned long t, const double eta_t,
+                      const unsigned long t,
                       const size_t n, const VectorXi& nclasses, const int maxclasses,
                       const std::vector<int>& sorted_class, const std::vector<int>& class_order,
                       const boolmatrix& filtered,
@@ -214,9 +217,9 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 #endif
 
     size_t i = ((size_t) rand()) % n;
-    // WARNING: for now it assumes that norm(x) = 1!!!!!
-    assert(x.row(i).norm() == 1);
-    double proj = w.project_row(x,i);
+    double const proj = w.project_row(x,i);
+    double const iSqNorm = sqNormsX.coeff(i); // [alex]
+    //double const iNorm = std::sqrt(iSqNorm);
 
     vector<int> sample;
     if (params.class_samples)
@@ -237,8 +240,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
         multiplier +=
             ( params.class_samples
               ? compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
-                                                      sample,
-                                                      proj, i,
+                                                      sample, proj, i,
                                                       y, nclasses, maxclasses,
                                                       sorted_class, class_order,
                                                       sortedLU, filtered, C1, C2, params)
@@ -252,11 +254,19 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     // make sure we do not overshoot with the update
     // this is expensive, so we might want an option to turn it off
     double new_multiplier, new_proj;
-    double eta = eta_t;
+    double eta = eta_t;       // ORIGINAL
+    //double & eta = eta_t;       // NOW WE MODIFY eta_t itself
+    // original values 2.0, 0.5 could be a bit unstable for some problems (ex. mnist)
+    double const eta_bigger = 2.0;
+    double const eta_smaller = 1.0 / eta_bigger;
     do
     {
         // WARNING: for now it assumes that norm(x) = 1!!!!!
-        new_proj = proj - eta*lambda*proj - eta*multiplier*sqNormsX.coeff(i);
+        //new_proj = proj - eta*lambda*proj - eta*multiplier;   // original, with WARNING
+        new_proj = proj - eta*lambda*proj - eta*multiplier*iSqNorm;     // [alex]
+        //
+        // The [alex]  suggestion seems OK.  Actually made no big difference
+        //
         if(0) std::cout<<"eta:"<<eta<<" proj:"<<proj<<" new_proj:"<<new_proj<<" norm:"<<sqNormsX.coeff(i)<<endl;
         new_multiplier=0;
 #if MCTHREADS
@@ -281,24 +291,30 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
                                                    sorted_class, class_order,
                                                    sortedLU, filtered, C1, C2, params) );
         }
-        eta = eta/2;
-    } while (multiplier*new_multiplier < -1e-5);
+        eta *= eta_smaller;
+        if( eta < 1.e-8 ) break;        // ??? params.eta_min ??? [ejk] [ok]
+    } while (
+             multiplier*new_multiplier < -1e-5
+             //multiplier*new_multiplier*iSqNorm < -1e-5 [ejk]
+             );
 
     // last eta did not overshooot so restore it
-    eta = eta*2;
-    //update w
-    if (params.avg_epoch && t >= params.avg_epoch){
-        // updates both the curent w and the average w
+    if( eta >= 1.e-8) // <-- NEW: [ejk] [ok]
+        eta *= eta_bigger;
+    // at this point...
+    //new_proj = proj - eta*lambda*proj - eta*multiplier*sqNormsX.coeff(i);
+
+    //update w [ejk] multiplier*iSqNorm here seems not a good thing
+    if (params.avg_epoch && t >= params.avg_epoch)      // update current and avg w
         w.batch_gradient_update_avg(x, i, multiplier, lambda, eta);
-    }else{ // update only the current w
+    else                                                // update only current w
         w.batch_gradient_update    (x, i, multiplier, lambda, eta);
-    }
 
     // update L and U with w fixed.
     // use new_proj since it is exactly the projection obtained with the new w
     bool const accumulate_sortedLU = (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch);
 #if 1 || MCTHREADS
-#pragma omp parallel for default(shared)
+#pragma omp parallel for default(shared) schedule(static,1)
 #endif
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
     {
@@ -306,15 +322,20 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
         int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
         if (params.class_samples)
         {
+            // [ejk] in these calls it seemed reasonable to use 'eta' instead of eta_t
             update_single_sortedLU_sample(sortedLU, sc_start, sc_start+sc_incr,
                                           sample, new_proj, i,
                                           y, nclasses, maxclasses,
                                           sorted_class, class_order,
-                                          filtered, C1, C2, eta_t, params);
+                                          //filtered, C1, C2, eta_t, params
+                                          filtered, C1, C2, eta, params // [ejk]
+                                          );
         }else{
             update_single_sortedLU(sortedLU, sc_start, sc_start+sc_incr, new_proj, i,
                                    y, nclasses, maxclasses, sorted_class, class_order,
-                                   filtered, C1, C2, eta_t, params);
+                                   //filtered, C1, C2, eta_t, params
+                                   filtered, C1, C2, eta, params // [ejk]
+                                   );
         }
         // update the average LU
         // need to do something special when samplin classes to avoid the O(noClasses) complexity.

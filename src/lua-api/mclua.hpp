@@ -218,6 +218,7 @@ print(p:str())    -- now have some nondefault parameters
         static int s_savex();   ///< save binary fmt xfile
         static int s_savey();   ///< save binary fmt yfile
         static int s_quadx();   ///< convert x dimensions to include quadratic terms
+        // XXX s_rownormx();      ///< row-normalize every x.row(i) example
     private:
         //struct param_struct pInit;
         //std::string cmdLine;

@@ -21,6 +21,8 @@ int testnum = TESTNUM;
 bool use_mcsolver = true;
 bool use_dense = true;
 bool use_external = false;
+bool use_batch = false;
+double xscale = 1.0;
 std::string saveBasename = std::string("");
 size_t problem = 2U;
 string problem_msg;
@@ -115,6 +117,7 @@ int testparms(int argc, char**argv) {
     use_mcsolver = true;
     use_dense = true;
     use_external = false;
+    xscale=1.0;
     bool dohelp=false;
     for(int a=1; a<argc; ++a){
         for(char* ca=argv[a]; *ca!='\0'; ){
@@ -125,6 +128,7 @@ int testparms(int argc, char**argv) {
                     <<"\n   m|o         m[default] mcsolver code | o original code"
                     <<"\n   D|S         Dense[default] | Sparse matrices"
                     <<"\n   X           eXternal-memory x-matrix"
+                    <<"\n   x           scale all x values by 2.0"
                     <<"\n   s<string>   save file base name (only for 'm') [default=none]"
                     <<"\n   h           this help"
                     <<"\n   v           increase verbosity [default=0]"
@@ -141,7 +145,9 @@ int testparms(int argc, char**argv) {
             else if(*ca == 'o')         use_mcsolver=false;
             else if(*ca == 'D')         use_dense=true;
             else if(*ca == 'S')         use_dense=false;
+            else if(*ca == 'b')         use_batch=true;
             else if(*ca == 'X')         use_external=true;
+            else if(*ca == 'x')         xscale=2.0;
             else if(*ca == 'p')         problem = *++ca - '0';
             else if(*ca == 's'){
                 saveBasename.assign(++ca);
@@ -271,6 +277,8 @@ void check_solution( DenseM & weights, DenseM const& lower_bounds, DenseM const&
     // Note that even though input examples were row-wise d-dimensional,
     //      the w-matrix is a bunch of column-wise vectors.
 
+    cout<<" w(raw) ";
+    for(int r=0U; r<weights.rows(); ++r) cout<<(r==0U?"":"         ")<<weights.row(r)<<"\n";
     auto wn = weights.colwise().norm();
     cout<<" norms "; cout<<wn<<endl;
     weights.colwise().normalize();
@@ -450,7 +458,25 @@ int main(int argc,char** argv)
         hyperRect( corner, edges, verts );
         for(uint32_t i=0U; i<verts.rows(); ++i,++n){ cout<<" "<<n; cout.flush(); x.row(n) = verts.row(i); yVec(n)=2; }
     }
+    if( xscale != 1.0 ){
+        x *= xscale;
+        params.C1 *= xscale;
+        params.C2 *= xscale;
+    }
     SparseMb y = labelVec2Mat(yVec);
+    if(verbose){
+        cout<<" x data"<<(xscale!=1.0?" (scaled by 2.0)":"")<<endl;
+        for(size_t r=0U; r<x.rows(); ++r){
+            cout<<"\tyVec("<<r<<")="<<yVec.coeff(r);
+            cout<<"\tx.row("<<r<<") = {";
+            for(size_t c=0U; c<x.cols(); ++c){
+                cout<<" "<<x.coeff(r,c);
+            }
+            cout<<" }"<<endl;
+        }
+    }
+    if( use_batch ) params.update_type = MINIBATCH_SGD;
+    else { params.update_type = SAFE_SGD; params.batch_size = 1; }
 
     // Starting off a new calculation:
     srand(rand_seed);

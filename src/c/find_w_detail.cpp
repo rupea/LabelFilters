@@ -673,9 +673,7 @@ void update_single_sortedLU( VectorXd& sortedLU,
     } // while(1)
 }
 
-
-// generates num_samples uniform samples between 0 and max-1 with replacement,
-//  and sorts them in ascending order
+/** sample with replacement .. i.e. may contain duplicates */
 void get_ordered_sample(vector<int>& sample, int max, int num_samples)
 {
   sample.resize(num_samples);

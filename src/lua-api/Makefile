@@ -39,7 +39,7 @@ PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -g -O3 $(PROFILE_OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
-.PHONY: lib prep FORCE
+.PHONY: lib lib-dbg prep FORCE
 all: lib linkme linkme-dbg
 profile_learnproj: 
 	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
@@ -80,6 +80,9 @@ check-headers:
 
 #lib: libmclua.a libmclua-dbg.a
 lib: libmclua.so libmclua-dbg.so
+	rm -f mcparm.so && ln -sf libmclua.so mcparm.so
+lib-dbg: libmclua.so libmclua-dbg.so
+	rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
 #LIBMCLUA_FILES:=mclua.o
 #libmclua.a: ../c/libmcfilter.a
 #libmclua-dbg.a: ../c/libmcfilter-dbg.a
@@ -103,10 +106,8 @@ DEP_LIB_DIR:=-Wl,-rpath,$(MCSRC_DIR)/c -L../c
 # 2) link to the libmcfilter compiled at corresponding debug level
 libmclua.so: $(patsubst %.cpp,%.lo,$(LIBMCLUA_SRC)) | ../c/libmcfilter.so
 	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter $(BOOSTLINK) -L$(MILDE_DIR)/lib -Wl,-rpath,$(MILDE_DIR)/lib
-	# rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
 libmclua-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIBMCLUA_SRC)) | ../c/libmcfilter-dbg.so
 	$(CXX) -o $@ -shared $^ $(DEP_LIB_DIR) -lmcfilter-dbg $(BOOSTLINK) -L$(MILDE_DIR)/lib -Wl,-rpath,$(MILDE_DIR)/lib
-	rm -f mcparm.so && ln -sf libmclua-dbg.so mcparm.so
 
 # links, but don't know how to "run" lua from inside C++ code yet...
 #   For now, you can test as   make clean && make && lua_cpp parms.lua

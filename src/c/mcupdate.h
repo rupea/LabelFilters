@@ -6,16 +6,12 @@ struct MCupdate
     template<typename EigenType> 
         static void update( WeightVector& w, /*VectorXd& sortedLU, VectorXd& sortedLU_avg,*/
                             MCpermState & luPerm,      // sortlu and sortlu_avg are input and output
+                            double & eta_t,        // --update=SAFE will MODIFY eta_t now
                             const EigenType& x, const SparseMb& y, const VectorXd& xSqNorms,
                             const double C1, const double C2, const double lambda,
-                            const unsigned long t, const double eta_t,
-                            const size_t nTrain, //const size_t batch_size,
+                            const unsigned long t, const size_t nTrain,
                             const VectorXi& nclasses, const int maxclasses,
-                            /*const std::vector<int>& sorted_class, const std::vector<int>& class_order,*/
                             const boolmatrix& filtered,
-                            //const size_t sc_chunks, const size_t sc_chunk_size, const size_t sc_remaining,
-                            //const int idx_chunks, const int idx_chunk_size, const int idx_remaining,
-                            //MutexType* idx_locks, MutexType* sc_locks,
                             MCupdateChunking const& updateSettings,
                             param_struct const& params)
         {
@@ -47,8 +43,9 @@ struct MCupdate
             // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU
             assert( luPerm.ok_sortlu_avg == true ); // accumulator begins at all zeros, so true
             if (params.update_type == SAFE_SGD) {
-                update_safe_SGD(w, sortedLU, sortedLU_avg, x, y, xSqNorms,
-                                C1, C2, lambda, t, eta_t, nTrain, // nTrain is just x.rows()
+                update_safe_SGD(w, sortedLU, sortedLU_avg, eta_t,
+                                x, y, xSqNorms,
+                                C1, C2, lambda, t, nTrain, // nTrain is just x.rows()
                                 nclasses, maxclasses, sorted_class, class_order, filtered,
                                 sc_chunks, sc_chunk_size, sc_remaining,
                                 params);

@@ -51,9 +51,10 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx,
  * - may require x input data to have unit norms (?) */
 template<typename EigenType>
 void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
+                      double& eta_t,
                       const EigenType& x, const SparseMb& y, const VectorXd& sqNormsX,
                       const double C1, const double C2, const double lambda,
-                      const unsigned long t, const double eta_t,
+                      const unsigned long t,
                       const size_t n, const VectorXi& nclasses, const int maxclasses,
                       const std::vector<int>& sorted_class, const std::vector<int>& class_order,
                       const boolmatrix& filtered,
@@ -154,9 +155,11 @@ void update_single_sortedLU( VectorXd& sortedLU,
 			     const param_struct& params);
 
 
-// generates num_samples uniform samples between 0 and max-1 with replacement,
-//  and sorts them in ascending order
+/** generates num_samples uniform samples between 0 and max-1 with replacement,
+ *  and sorts them in ascending order. */
 void get_ordered_sample(std::vector<int>& sample, int max, int num_samples);
+// See http://erikerlandson.github.io/blog/2015/11/20/very-fast-reservoir-sampling/
+//void get_ordered_distinct(std::vector<int>& sample, int max, int num_samples);
 
 
 // function to calculate the multiplier of the gradient for w for a single example.

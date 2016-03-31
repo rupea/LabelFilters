@@ -64,8 +64,8 @@ namespace opt {
              , "NONE | LAMBDA | ALL lambda reweighting method")
             ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "?")
             ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "?")
-            ("negclass", value<uint32_t>()->default_value(p.class_samples)
-             , "# of negative classes used at each iter, 0 ~ all classes")
+            ("sample", value<uint32_t>()->default_value(p.class_samples)
+             , "# -ve classes used for each [chunked] gradient estimate, 0 ~ all classes")
             ("remove_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_constraints)
              , "after each projection, remove constraints")
             ("remove_class", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
@@ -102,7 +102,7 @@ namespace opt {
         if(parms.avg_epoch == 0U && parms.reorder_type == REORDER_AVG_PROJ_MEANS )
             parms.reorder_type = REORDER_PROJ_MEANS;
         fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
-        parms.class_samples 	        =vm["negclass"].as<uint32_t>(); // 0;
+        parms.class_samples 	        =vm["sample"].as<uint32_t>(); // 0;
         parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
         parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
         parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
@@ -225,6 +225,10 @@ namespace opt {
             (",S", value<bool>(&outShort)->implicit_value(true)->default_value(true),"S|L output SHORT")
             (",L", value<bool>(&outLong)->implicit_value(true)->default_value(false),"S|L output LONG")
             ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
+            ("xunit", value<bool>()->implicit_value(true)->default_value(false), "row-normalize x examples")
+            ("xscale", value<double>()->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
+            // xquad ?
+
             //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
             ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
             ;
@@ -241,6 +245,8 @@ namespace opt {
           , outShort(true)
           , outLong(false)
           , xnorm(false)
+          , xunit(false)
+          , xscale(1.0)
           //, threads(0U)           // unused?
           , verbose(0)            // cmdline value can be -ve to reduce output
         {}
@@ -300,6 +306,8 @@ namespace opt {
             solnFile=vm["solnfile"].as<string>();
             outFile=vm["output"].as<string>();
             xnorm=vm["xnorm"].as<bool>();
+            xunit=vm["xunit"].as<bool>();
+            if( vm.count("xscale") ) xscale=vm["xscale"].as<double>();
             //threads=vm["threads"].as<uint32_t>();
             verbose=vm["verbose"].as<int>();
 
@@ -320,13 +328,14 @@ namespace opt {
         {
             cerr<<"Invalid argument: "<<e.what()<<endl;
             throw;
-        }catch(std::exception const& e){
-            cerr<<"Error: "<<e.what()<<endl;
-            throw;
-        }catch(...){
-            cerr<<"Command-line parsing exception of unknown type!"<<endl;
-            throw;
         }
+        //catch(std::exception const& e){
+        //    cerr<<"Error: "<<e.what()<<endl;
+        //    throw;
+        //}catch(...){
+        //    cerr<<"Command-line parsing exception of unknown type!"<<endl;
+        //    throw;
+        //}
         if( ! keepgoing ) exit(0);
 #if 0 && ARGSDEBUG > 0
         // Good, boost parsing does not touch argc/argv
@@ -396,6 +405,9 @@ namespace opt {
             (",D", value<bool>(&outDense)->implicit_value(true),"(S) S|D output DENSE")
             ("yfile,y", value<string>()->default_value(string("")), "TBD: optional validation y data (slc/mlc/SparseMb)")
             ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
+            ("xunit", value<bool>()->implicit_value(true)->default_value(false), "row-normalize x examples")
+            ("xscale", value<double>()->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
+            // xquad ?
             ("help,h", value<bool>()->implicit_value(true), "this help")
             //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
             ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
@@ -412,7 +424,8 @@ namespace opt {
             , outDense(false)
             , yFile()
             , xnorm(false)
-            //, threads(0U)
+            , xunit(false)
+            , xscale(1.0)
             , verbose(0)
         {}
 
@@ -467,11 +480,12 @@ namespace opt {
             solnFile=vm["solnfile"].as<string>();
             outFile=vm["output"].as<string>();
             xnorm=vm["xnorm"].as<bool>();
-            //threads=vm["threads"].as<uint32_t>();
+            xunit=vm["xunit"].as<bool>();
+            xscale=vm["xscale"].as<double>();
             verbose=vm["verbose"].as<int>();
 
             if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
-            if( outFile.size() && outFile .rfind(".soln") != outFile .size() - 5U ) outFile.append(".proj");
+            if( outFile.size() && outFile .rfind(".proj") != outFile .size() - 5U ) outFile.append(".proj");
 
             //{cout<<" -"; if(outBinary) cout<<"B"; if(outText)   cout<<"T"; if(outSparse) cout<<"S"; if(outDense)  cout<<"D";}
             //if(vm.count("-B")) outBinary=true;
@@ -486,8 +500,6 @@ namespace opt {
             if( outSparse == outDense ) throw std::runtime_error(" Only one of S|D, please");
 
             yFile=vm["yfile"].as<string>();
-            xnorm=vm["xnorm"].as<bool>();
-            //threads=vm["threads"].as<uint32_t>();
             if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
 
             // projections operation doesn't need solver parms

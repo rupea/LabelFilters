@@ -142,9 +142,15 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 
     double lambda, C1, C2;
     if(params.C1>=0.0 && params.C2>=0.0){
+#if 1 // original version
         lambda = 1.0/params.C2;
         C1 = params.C1/params.C2;
         C2 = 1.0;
+#else // new
+        C1 = params.C1;
+        C2 = params.C2;
+        if( C2 > 1.e-2 ) lambda = C1/C2; else lambda = 100.0;
+#endif
     }else{ // try to provide a reasonble 'auto' mode
         // untested [ejk]
         //double x = n * noClasses;
@@ -382,12 +388,18 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
             eta_t = set_eta(params, t, lambda);
             // compute the gradient and update
             if (params.update_type == SAFE_SGD) {
-                update_safe_SGD(w, sortedLU, sortedLU_avg,
-                                x, y, xSqNorms, C1, C2, lambda, t, eta_t, n,
+                // [ejk] update_safe_SGD now MODIFIES eta_t ...  but eta_t vanishes :(
+                //double eta_t_usual = set_eta(params,t,lambda);
+                //if( t==1 ) eta_t = params.eta;
+                //std::cout<<" eta_t,eta_t'="<<std::right<<std::setw(9)<<eta_t_usual
+                //<<","<<std::left<<std::setw(9)<<eta_t; std::cout.flush();
+                update_safe_SGD(w, sortedLU, sortedLU_avg, eta_t,
+                                x, y, xSqNorms, C1, C2, lambda, t, n,
                                 nclasses, maxclasses, sorted_class, class_order, filtered,
                                 sc_chunks, sc_chunk_size, sc_remaining,
                                 params);
             } else if (params.update_type == MINIBATCH_SGD) {
+                //eta_t = set_eta(params, t, lambda);
                 update_minibatch_SGD(w, sortedLU, sortedLU_avg,
                                      x, y, C1, C2, lambda, t, eta_t, n, batch_size/*<--*/,
                                      nclasses, maxclasses, sorted_class, class_order, filtered,

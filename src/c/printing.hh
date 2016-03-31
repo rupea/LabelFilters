@@ -35,7 +35,9 @@ namespace detail {
     template<typename T> inline std::istream&
         io_bin( std::istream& is, T& x )
         {
-            assert( is.good() );
+            //assert( is.good() );
+            if( ! is.good() )
+                throw std::runtime_error("io_bin: read failure");
             is.read (reinterpret_cast<char*>(&x),sizeof(T));
             //std::cout<<" Rsz"<<sizeof(T)<<" value "<<x<<std::endl;
             return is;

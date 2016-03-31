@@ -31,3 +31,20 @@ Main function: src/octave/run_svm_test.m
   - provide a repo --> eigen conversion utility for dense/sparse, slc/mlc data
     - Eigen matrices must be memory contiguous
     - y label are only supported as a integers 0..nClasses-1 (not strings as in repo)
+
+TODO:
+ - --update=SAFE should be the default
+ - --update=SAFE should set the batch size to 1
+ - --update=SAFE should have parameters to control the eta schedule
+   - for example, "cautious" problems like mnist might use
+     eta_bigger = 1.01 and eta_smaller = 0.8
+ - trying out a change to keep --update=SAFE eta and avoid resetting it to "eta_t"
+ - add s_rownormx to lua api, to verify update_safe_SGD normalization effects.
+
+After seeing how poor mnist results were (without data augmentation)
+I think we need to:
+ - add setQuantiles support
+ - add per-projection binary projection output
+ - add per-projection quantile-based scoring output
+   - and a 'final-score' output
+ - consider mixture-of-experts scoring for binary/quantile projectors

@@ -614,6 +614,13 @@ namespace mcgen {
                 parms.multi = vm["seed"].as<uint32_t>();
                 parms.parts = vm["parts"].as<uint32_t>();
                 parms.noise = vm["noise"].as<bool>();
+                parms.ball  = vm["ball"].as<bool>();
+                if( parms.ball ){
+                    cout<<" WARNING: --ball option is NOT TESTED"
+                        <<"\n          Just project 'cube' data onto unit sphere :("
+                        <<"\n          Current problems may not even be separable!"
+                        <<endl;
+                }
                 cout<<" DBG noise = "<<parms.noise<<endl;
                 //if( vm.count("trivial") ) {
                 //    int32_t const t = vm["trivial"].as<int32_t>();
@@ -790,8 +797,6 @@ int main(int argc, char** argv)
         os<<"mcgen-"<<canonicalArgs<<".axes.txt";
         axesFile = os.str();
     }
-    // XXX for now assume unit cube (easiest)
-    p.ball = false;
     /** help partition a range into \c p linear parts */
     struct LinearEquipartition {
         uint32_t const n;       ///< equal parts
@@ -1392,6 +1397,32 @@ int main(int argc, char** argv)
         }
     }
 
+    // 8. HACK WARNING --ball projects onto a unit sphere,
+    //    possibly destroying separability!
+    //    probably destroying proposed solution
+    if( p.ball ){
+        cout<<" Projecting examples onto ball"<<endl;
+        vector<float> m(x[0].size(),0.5f);        // new "origin"
+        for(auto & xx: x){
+            for(size_t i=0U; i<m.size(); ++i) xx[i] -= m[i];    // adopt new origin
+            double l2=0.0;
+            for(auto const a: xx) l2+=a*a;
+            if( l2<1.e-10 ){ for(auto & a: xx) a=0.0; xx[0]=1.0; } // bad case
+            else{ // project onto unit sphere, blindly :(
+                double const linv = 1.0 / std::sqrt(l2);
+                for(auto & a: xx ) a *= linv;
+            }
+        }
+        if(1){
+            cout<<" all examples, projected onto ball:"<<endl;
+            for(uint32_t i=0; i<x.size(); ++i){
+                cout<<"\tball x["<<setw(3)<<perm[i]<<"] y="<<setw(3)<<y[perm[i]]<<" @ {";
+                for(auto const xi: x[perm[i]]) cout<<" "<<xi;
+                cout<<" }\n";
+            }
+        }
+    }
+
 
     // 9a. generate training files x,y : mcgen-slc-dr4.repo ("slc","dr4") in text format
     if(1){
@@ -1973,7 +2004,7 @@ int main(int argc, char** argv)
             for(int i=0U; i<mcs.nClass; ++i){
                 for(uint32_t p=0U; p<mcs.nProj; ++p){
                     l.coeffRef(i,p) = numeric_limits<double>::max();
-                    u.coeffRef(i,p) = numeric_limits<double>::min();
+                    u.coeffRef(i,p) = numeric_limits<double>::lowest(); // -ve (min ~ +ve eps)
                 }
             }
             {// Form ACTUAL {l,u} bounds of training examples [p.nx x p.dim]
@@ -1989,6 +2020,7 @@ int main(int argc, char** argv)
                         assert( v.size() == p.dim );
                         assert( cls < mcs.nClass );
                         for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
+                            //cout<<" cls,p = "<<cls<<","<<p;
                             float const vdots = dot( v, soln[p] );
                             l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
                             u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
@@ -1999,30 +2031,32 @@ int main(int argc, char** argv)
                             assert( v.size() == p.dim );
                             assert( cls < mcs.nClass );
                             for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
+                                //cout<<" cls,p = "<<cls<<","<<p;
                                 float const vdots = dot( v, soln[p] );
                                 l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
                                 u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
                             }
                         }
                     }
-                    // Now push apart the {l,u} bounds by a slight bit (non-zero margin)
-                    //    see comments in Filter.h about bad things with zero-margin {l,u} !
-                    l.array() -= 1.1111e-4;
-                    u.array() += 1.1111e-4;
-                    if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
-                        cout<<" {l,u} solns from Eigen col(p).transpose() ...:";
-                        for(uint32_t p=0U; p<soln.size(); ++p){
-                            cout<<"\n\tl["<<p<<"] = "<<l.col(p).transpose();
-                            cout<<"\n\tu["<<p<<"] = "<<u.col(p).transpose();
-                        }
-                        cout<<endl;
-                    }
-                    if(1){
-                        cout<<"\n *** Final MCsoln to save ***"<<endl;
-                        mcs.pretty(cout);
-                    }
                 }
             }//end forming {l,u} bounds
+            //cout<<endl;
+            // Now push apart the {l,u} bounds by a slight bit (non-zero margin)
+            //    see comments in Filter.h about bad things with zero-margin {l,u} !
+            l.array() -= 1.1111e-4;
+            u.array() += 1.1111e-4;
+            if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
+                cout<<" {l,u} projection bounds from Eigen col(p).transpose() ...:";
+                for(uint32_t p=0U; p<soln.size(); ++p){
+                    cout<<"\n\tl["<<p<<"] = "<<l.col(p).transpose();
+                    cout<<"\n\tu["<<p<<"] = "<<u.col(p).transpose();
+                }
+                cout<<endl;
+            }
+            if(1){
+                cout<<"\n *** Final MCsoln to save ***"<<endl;
+                mcs.pretty(cout);
+            }
             string fnameSolnBase;
             {
                 stringstream oss;

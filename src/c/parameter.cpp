@@ -79,7 +79,7 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"eta0 "<<left<<p.eta);
     WIDE(os,c2,right<<setw(11)<<"treorder "<<left<<p.reorder_epoch);
-    WIDE(os,c3,right<<setw(15)<<"negclass "<<left<<p.class_samples);
+    WIDE(os,c3,right<<setw(15)<<"sample "<<left<<p.class_samples);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"etamin "<<left<<p.min_eta);
     WIDE(os,c2,right<<setw(11)<<"optlu "<<left<<p.optimizeLU_epoch);

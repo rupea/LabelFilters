@@ -208,6 +208,25 @@ public:
     template< typename EIGENTYPE >
         void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* const params_arg = nullptr );
 
+#if 0
+    /** TBD - For each projection add a \b median value for each class label.
+     * This augments {l,u} bounds information, and can be used to provide a
+     * \e crude non-binary score for each class.
+     *
+     * This is a quick'n'easy \e built-in alternative to using a more powerful
+     * decision mechanism, like Alex's original one-vs-all SVM to continue the
+     * label-filtering process.
+     *
+     * <B>Begin with just setting the medians </B>
+     * This could be \em extended to track a set of quantiles.
+     * Quantiles could be compactly stored as \c true_lower,
+     * \c true_upper bounds, followed by byte-values[16?]
+     * for the approx positions of intermediate quantiles.
+     */
+    template< typename EIGENTYPE >
+        setQuantiles( EIGENTYPE const& x, SparseMb const& y );
+#endif
+
     enum Trim { TRIM_LAST, TRIM_AVG };
     /** Free memory by moving selected {w,l,u} data into {w,l,u}_avg.
      * - After a \c solve, or a \c read we may have:

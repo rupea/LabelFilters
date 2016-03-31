@@ -42,6 +42,21 @@ namespace opt {
             if( A::parms.resume ) throw std::runtime_error(" --resume needs --solnfile=... or explicit default parms");
             if( A::parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu needs --solnfile=... or explicit default parms");
         }
+        if(verbose>=1){
+            cout<<" +MCsolveProgram --xfile="<<A::xFile <<" --yFile="<<A::yFile;
+            if(A::solnFile.size()) cout<<" --solnFile="<<A::solnFile;
+            if(A::outFile.size()) cout<<" --output="<<A::outFile;
+            if(A::outBinary) cout<<" -B";
+            if(A::outText)   cout<<" -T";
+            if(A::outShort)  cout<<" -S";
+            if(A::outLong)   cout<<" -L";
+            if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
+            //if(A::threads)   cout<<" --threads="<<A::threads;
+            if(A::xnorm)     cout<<" --xnorm";
+            if(A::xunit)     cout<<" --xunit";
+            if(A::xscale!=1.0) cout<<" --xscale="<<A::xscale;
+            cout<<endl;
+        }
     }
     void MCsolveProgram::tryRead( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
@@ -107,12 +122,14 @@ namespace opt {
         // read SparseMb y;
         if(yFile.size()){
             ifstream yfs;
+            bool yOk = false;
             try{
                 yfs.open(yFile);
                 if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
                 ::detail::eigen_io_binbool( yfs, y );
                 assert( y.cols() > 0U );
                 if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
+                yOk = true;
             }catch(po::error& e){
                 cerr<<"Invalid argument: "<<e.what()<<endl;
                 throw;
@@ -123,19 +140,21 @@ namespace opt {
                 cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
                 throw;
             }
-            cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
-            try{
-                yfs.close();
-                yfs.open(yFile);
-                if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-                ::detail::eigen_io_txtbool( yfs, y );
-                assert( y.cols() > 0U );
-                // yfs.fail() is expected
-                if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
-            }
-            catch(std::exception const& e){
-                cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
-                throw;
+            if( !yOk ){
+                cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
+                try{
+                    yfs.close();
+                    yfs.open(yFile);
+                    if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+                    ::detail::eigen_io_txtbool( yfs, y );
+                    assert( y.cols() > 0U );
+                    // yfs.fail() is expected
+                    if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
+                }
+                catch(std::exception const& e){
+                    cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
+                    throw;
+                }
             }
             assert( y.size() > 0 );
         }
@@ -150,21 +169,6 @@ namespace opt {
 #endif
         if( sparseOk && xnorm )
             throw std::runtime_error("sparse --xfile does not support --xnorm");
-        if(verbose>=1 && y.rows() < 50 ){       // print only for small tests
-            if( denseOk ){
-                cout<<"xDense:\n"<<xDense<<endl;
-                cout<<"y:\n"<<y<<endl;
-                cout<<"parms:\n"<<A::parms<<endl;
-            }else{ //sparseOk
-                cout<<"xSparse:\n"<<xSparse<<endl;
-                cout<<"y:\n"<<y<<endl;
-                cout<<"parms:\n"<<A::parms<<endl;
-            }
-        }
-    }
-    void MCsolveProgram::trySolve( int const verb/*=0*/ ){
-        int const verbose = A::verbose + verb;
-        if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;
         if( denseOk ){
             if( A::xnorm ){
                 VectorXd xmean;
@@ -183,6 +187,49 @@ namespace opt {
                 normalize_col(xDense);
 #endif
             }
+        }
+        if( A::xunit ){
+            VectorXd xSqNorms;
+            if( denseOk ){
+                for(size_t r=0U; r<xDense.rows(); ++r){
+                    double const l2 = xDense.row(r).squaredNorm();
+                    if( l2 > 1.e-10 ){
+                        xDense.row(r) *= (1.0/sqrt(l2));
+                    }
+                }
+            }else if( sparseOk ){
+                for(size_t r=0U; r<xSparse.rows(); ++r){
+                    double const l2 = xSparse.row(r).squaredNorm();
+                    if( l2 > 1.e-10 ){
+                        xSparse.row(r) *= (1.0/sqrt(l2));
+                    }
+                }
+            }
+        }
+        if( A::xscale != 1.0 ){
+            if( denseOk ){
+                xDense *= A::xscale;
+            }else if( sparseOk ){
+                xSparse *= A::xscale;
+            }
+        }
+
+        if(verbose>=1 && y.rows() < 50 ){       // print only for small tests
+            if( denseOk ){
+                cout<<"xDense:\n"<<xDense<<endl;
+                cout<<"y:\n"<<y<<endl;
+                cout<<"parms:\n"<<A::parms<<endl;
+            }else{ //sparseOk
+                cout<<"xSparse:\n"<<xSparse<<endl;
+                cout<<"y:\n"<<y<<endl;
+                cout<<"parms:\n"<<A::parms<<endl;
+            }
+        }
+    }
+    void MCsolveProgram::trySolve( int const verb/*=0*/ ){
+        int const verbose = A::verbose + verb;
+        if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;
+        if( denseOk ){
             S::solve( xDense, y, &(A::parms) );
         }else if( sparseOk ){
             // normalization NOT YET SUPPORTED for sparse
@@ -192,6 +239,15 @@ namespace opt {
         }
         // S::solve uses A::parms for the run, and will update S:parms to record
         // how the next outFile (.soln) was obtained.
+#if 0
+        // --- post-processing --- opportunity to add 'easy' stuff to MCsoln ---
+        if( denseOk ){
+            S::setQuantiles( xDense, y );
+        }else if( sparseOk ){
+            S::setQuantiles( xSparse, y );
+        }
+        // ---------------------------------------------------------------------
+#endif
     }
     void MCsolveProgram::trySave( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;

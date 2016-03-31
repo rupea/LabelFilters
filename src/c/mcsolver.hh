@@ -177,7 +177,7 @@ inline void MCpermState::getSortlu_avg( VectorXd& sortlu_test ) const
             /* cout<<" t="<<t<<" before 'update', luPerm.ok_sortlu="<<luPerm.ok_sortlu<<endl; */ \
             luPerm.mkok_sortlu(); \
             assert( luPerm.ok_sortlu ); \
-            MCupdate::update(w, luPerm,       x, y, C1, C2, lambda, t, eta_t, nTrain, \
+            MCupdate::update(w, luPerm, eta_t,      x, y, C1, C2, lambda, t, nTrain, \
                              nclasses, maxclasses, filtered, updateSettings, params); \
 }while(0)
 #endif
@@ -354,10 +354,16 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     if( ! params.resume ){      // NEW --- needs checking
         if(  params.C1 >= 0.0 && params.C2 >= 0.0 ){
             this->t = 0U;
+#if 0
             /*double*/this-> lambda = 1.0/params.C2;
             /*double*/this-> C1 = params.C1/params.C2;
             /*double*/this-> C2 = 1.0;
             //this->eta_t = params.eta; // actually, via seteta(params,t,lambda), below
+#else // new -- For un-row-normalized data, want to scale C1,C2 proportionally ??
+            C1 = params.C1;
+            C2 = params.C2;
+            if( C2 > 1.e-2 ) lambda = C1/C2; else lambda = 100.0;
+#endif
         }else{
             //this-> C2 = 1.0; // / sqrt(nClass);
             //long int no_remaining = total_constraints - no_filtered;
@@ -569,7 +575,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         while (t < params.max_iter) {
             ++t;
             MCiterBools t4(t, params);          // "time for" ... various const bool
-            eta_t = set_eta(params, t, lambda); // set eta for this iteration
             if (!params.report_epoch && t % 1000 == 0) { // print some progress
                 snprintf(iter_str,30, "Projection %d > ", projection_dim+1);
                 print_progress(iter_str, t, params.max_iter);
@@ -582,13 +587,22 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                                       luPerm.rev, luPerm.sortlu, filtered, C1, C2, params);
                 }
             }
+            double eta_t_usual = set_eta(params, t, lambda); // set eta for this iteration
+            //if( params.update_type == MINIBATCH_SGD             // NEW XXX
+            //    || ( params.update_type == SAFE_SGD && t==1 ) ){
+            eta_t = eta_t_usual;
+            //}
+            //if( params.update_type==SAFE_SGD && t4.report ){
+            //    std::cout<<" mcs:eta_t,eta_t'="<<std::right<<std::setw(9)<<eta_t_usual
+            //        <<","<<std::left<<std::setw(9)<<eta_t<<" "; std::cout.flush();
+            //}
             // compute the gradient and update
             //      modifies w, sortedLU, (sortedLU_avg) ONLY  (l,u,l_avg,u_avg values may be stale)
             // --> update( w, MCpermState, /* R/O: */x, y, MCsoln, MCiterBools, MCiterState, MCbatchState, params )
             // --> the ONLY place where 'w' is modified
             // update --> invalidates projection_avg and projection
-            MCupdate::update(w, luPerm,  /*R/O:*/x, y, xSqNorms, C1, C2, lambda, t, eta_t, nTrain, \
-                             nclasses, maxclasses, filtered, updateSettings, params); \
+            MCupdate::update(w, luPerm, eta_t,   /*R/O:*/x, y, xSqNorms, C1, C2, lambda, t,
+                             nTrain, nclasses, maxclasses, filtered, updateSettings, params);
             xwProj.w_changed(); // Projections no good. They map raw data in 'x' ---> the updated line in 'w'
             if(t4.reorder) {
                 if(ITER_TRACE){ std::cout<<" REORDER"<<t<<" "; std::cout.flush(); }

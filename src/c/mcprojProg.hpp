@@ -54,6 +54,12 @@ namespace opt {
          * For each example row of \c x{Dense|Sparse},
          * raw output is a bitset of feasible classes. */
         std::vector<boost::dynamic_bitset<>> feasible;
+
+#if 0 // pure binary outputs might not be very useful.
+        /** Alt per-projection outputs (detail view of results).
+         * If used, size of 1st dim will be \c soln.nProj. */
+        std::vector< std::vector< boost::dynamic_bitset >> projFeasible;
+#endif
     };
 
 }//opt::

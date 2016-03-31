@@ -1,4 +1,8 @@
 linkme
+x-mnist.bin
+y-mnist.bin
+*.log
+*.soln
 linkme-dbg
 libmclua*
 mc.soln
