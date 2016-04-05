@@ -241,6 +241,10 @@ namespace opt {
      * incorrectly eliminated, could the set of projection lines be used as a
      * mixture of experts instead?  Under what run conditions would that be a
      * correct view?
+     *
+     * \todo project --> mcpredict.h (project) --> mcpredict.cpp (projectionsToBitsets)
+     *       modify projectionsToBitsets to track per-projection all-example stats
+     *       (like ConfusionMatrix PER PROJECTION)
      */
     void MCprojProgram::tryProj( int const verb/*=0*/ )
     {
