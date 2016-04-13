@@ -10,48 +10,106 @@
 
 using namespace std;
 
+void param_finalize( uint32_t const nTrain ,uint32_t nClass, param_struct &p ){
+    param_struct def = set_default_params(); // might be nice to remove this someday
+
+    if( p.C1 <= 0.0 ){
+        p.C1 *= - static_cast<double>(nClass);
+        //p.C1 = def.C1 * nClass;
+    }
+
+    if( p.avg_epoch > nTrain ){ // or flag value numeric_limits<uint32_t>::max()
+        p.avg_epoch = nTrain;
+    }
+
+    // first set batch size correctly, which MIGHT jiggle max_iter
+    if( p.batch_size==0U || p.batch_size > nTrain ) p.batch_size = nTrain;
+    if( p.batch_size > 1U ){
+        if( p.max_iter > 0U ){
+            p.max_iter = def.max_iter / p.batch_size;
+            if( p.max_iter <= 0U ) p.max_iter = 1U;
+        }
+    }
+    if( p.max_iter == 0U ){
+        cout<<" Are there cases like resume/reoptlu where max_iter==0 makes sense ?"<<endl;
+        //p.max_iter = def.max_iter / batch_size;
+    }
+
+    // if asking for --optlu, make sure it happens at least once (at end)
+    if( p.optimizeLU_epoch > p.max_iter ){ // or == numeric_limits<uint32_t>::max()
+        p.optimizeLU_epoch = p.max_iter;
+    }
+
+}
+
 void print_parameter_usage()
 {
-  cout << "     parameters - a structure with the optimization parameters. If a parmeter is not present the default is used" << endl;
-  cout << "         Parameters (structure field names) are:" << endl;
-  cout << "           no_projections - number of projections to be learned [5]" << endl;
-  //cout << "           tot_projections - number of projections total (rest will be random orthogonal unit vectors) [5]" << endl;
-  cout << "           C1 - the penalty for an example being outside it's class bounary" << endl;
-  cout << "           C2 - the penalty for an example being inside other class' boundary" << endl;
-  cout << "           max_iter - maximum number of iterations [1e^6]" << endl;
-  cout << "           batch_size - size of the minibatch [1000]" << endl;
-  cout << "           update_type - how to update w, L and U [minibatch]" << endl;
-  cout << "                           minibatch - update w, L and U together using minibatch SGD" <<endl;
-  cout << "                           safe - update w first without overshooting, then update L and U using projected gradient. batch_size will be set to 1" << endl;
-  cout << "           avg_epoch - iteration to start averaging at. 0 for no averaging [0]" << endl;
-  cout << "           reorder_epoch - number of iterations between class reorderings. 0 for no reordering of classes [1000]" << endl;
-  cout << "           reorder_type - how to order the classes [avg_proj_mean]: " << endl;
-  cout << "                           avg_proj_means reorder by the mean of the projection on the averaged w (if averaging has not started is the ame as proj_mean" << endl;
-  cout << "                           proj_means reorder by the mean of the projection on the current w" << endl;
-  cout << "                           range_midpoints reorder by the midpoint of the [l,u] interval (i.e. (u-l)/2)" << endl;
-  cout << "           optimizeLU_epoch - number of iterations between full optimizations of  the lower and upper class boundaries. Expensive. 0 for no optimization [10000]" << endl;
-  cout << "           report_epoch - number of iterations between computation and report the objective value (can be expensive because obj is calculated on the entire training set). 0 for no reporting [1000]." << endl;
-  cout << "           report_avg_epoch - number of iterations between computation and report the objective value for the averaged w (this can be quite expensive if full optimization of LU is turned on, since it first fully optimize LU and then calculates the obj on the entire training set). 0 for no reporting [0]." << endl;
-  cout << "           eta - initial learning rate [1]" << endl;
-  cout << "           eta_type - type of learning rate decay:[lin]" << endl;
-  cout << "                        const (eta)" << endl;
-  cout << "                        sqrt (eta/sqrt(t))" << endl;
-  cout << "                        lin (eta/(1+eta*lambda*t))" << endl;
-  cout << "                        3_4 (eta*(1+eta*lambda*t)^(-3/4)" << endl;
-  cout << "           min_eta - minimum value of the learning rate (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]" << endl;
-  cout << "           remove_constraints - whether to remove the constraints for instances that fall outside the class boundaries in previous projections. [false] " << endl;
-  cout << "           remove_class_constraints - whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. [false] " << endl;
-  cout << "           reweight_lambda - whether to diminish lambda and/or C1 as constraints are eliminated. 0 - do not diminish any, 1 - diminish lambda only, 2 - diminish lambda and C1 (increase C2) [1]." << endl;
-  cout << "           ml_wt_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering other class contraints. [false]" << endl;
-  cout << "           ml_wt_class_by_nclasses - whether to weight an example by the number of classes it belongs to when conssidering its class contraints.[false]" << endl;
-  cout << "           seed - random seed. 0 for time dependent seed. [0]" << endl;
-  cout << "           num_threads - number of threads to run on. Negative value for architecture dependent maximum number of threads. [0]" << endl;
-  cout << "           finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [0]" << endl;
-  cout << "           no_finite_diff_tests - number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. [1]" << endl;
-  cout << "           finite_diff_test_delta - the size of the finite difference. [1e-2]" << endl;
-  cout << "           resume - whether to continue with additional projections. Takes previous projections from w_prev l_prev and u_prev. [false]" << endl;
-  cout << "           reoptimize_LU - optimize l and u for given projections w_prev. Implies resume is true (i.e. if no_projections > w_prev.cols() additional projections will be learned. [false]" << endl;
-  cout << "           class_samples - the number of negative classes to sample for each example at each iteration. 0 to use all classes. [0]" << endl;
+  cout<<
+      " parameters - a structure with the optimization parameters."
+      "\n              If a parmeter is not present the default is used"
+      "\n   Main Parameters (structure field names) are:"
+      "\n     no_projections - number of projections to be learned [5]"
+      "\n     C1 - the penalty for an example being outside it's class bounary"
+      "\n     C2 - the penalty for an example being inside other class' boundary"
+      "\n     max_iter - maximum number of iterations [1e^6]"
+      "\n     eta - initial learning rate [1]"
+      "\n     seed - random seed. 0 for time dependent seed. [0]"
+      "\n     num_threads - number of threads to run on. [0 = default num threads]"
+      "\n     resume - whether to continue with additional projections."
+      "\n              Takes previous projections from w_prev l_prev and u_prev. [false]"
+      "\n     reoptimize_LU - optimize l and u for given projections w_prev. Implies"
+      "\n              resume is true (i.e. if no_projections > w_prev.cols() additional"
+      "\n              projections will be learned. [false]"
+      "\n     class_samples - the number of negative classes to sample for each example"
+      "\n              at each iteration. 0 to use all classes. [0]"
+      "\n   Development Parameters are:"
+      "\n     batch_size - size of the minibatch [1000]"
+      "\n     update_type - how to update w, L and U [SAFE]"
+      "\n              MINIBATCH - update w, L and U together using minibatch SGD" 
+      "\n              SAFE - update w first without overshooting, then update L and U"
+      "\n                     using projected gradient. batch_size will be set to 1"
+      "\n     eta_type - type of learning rate decay:[lin]"
+      "\n                  CONST (eta)"
+      "\n                  SQRT (eta/sqrt(t))"
+      "\n                  LIN (eta/(1+eta*lambda*t))"
+      "\n                  3_4 (eta*(1+eta*lambda*t)^(-3/4) [default]"
+      "\n     min_eta - minimum value of the learning rate"
+      "\n              (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]"
+      "\n     avg_epoch - iteration to start averaging at. 0 for no averaging [0]"
+      "\n     reorder_epoch - number of iterations between class reorderings. 0 for no reordering of classes [1000]"
+      "\n     report_epoch - number of iterations between computation and report the objective value"
+      "\n              (can be expensive because obj is calculated on the entire training set)."
+      "\n              0 for no reporting [1000]."
+      "\n     report_avg_epoch - number of iterations between computation and report the objective"
+      "\n              value for the averaged w (this can be quite expensive if full optimization"
+      "\n              of LU is turned on, since it first fully optimize LU and then calculates"
+      "\n              the obj on the entire training set). 0 for no reporting [0]."
+      "\n     optimizeLU_epoch - number of iterations between full optimizations of  the"
+      "\n              lower and upper class boundaries. Expensive. 0 for no optimization [10000]"
+      "\n     remove_constraints - whether to remove the constraints for instances that fall"
+      "\n              outside the class boundaries in previous projections. [false] "
+      "\n     remove_class_constraints - whether to remove the constraints for examples that fell"
+      "\n              outside their own class boundaries in previous projections. [false] "
+      "\n     reweight_lambda - whether to diminish lambda and/or C1 as constraints are eliminated."
+      "\n              0 - do not diminish any,"
+      "\n              1 - diminish lambda only,"
+      "\n              2 - diminish lambda and C1 (increase C2) [1]."
+      "\n     reorder_type - how to order the classes [avg_proj_mean]: "
+      "\n              AVG_PROJ_MEANS reorder by the mean of the projection on the"
+      "\n              AVERAGED w (if averaging has not started is the ame as proj_mean"
+      "\n              PROJ_MEANS reorder by the mean of the projection on the current w"
+      "\n              RANGE_MIDPOINTS reorder by the midpoint of the [l,u] interval (i.e. (u-l)/2)"
+      "\n     ml_wt_by_nclasses - UNTESTED whether to weight an example by the number of classes it belongs"
+      "\n              to when conssidering other class contraints. [false]"
+      "\n     ml_wt_class_by_nclasses - UNTESTED whether to weight an example by the number of classes it"
+      "\n              belongs to when conssidering its class contraints.[false]"
+#if GRADIENT_TEST /* || others?*/
+      "\n   Compile-time Parameters are:"
+      "\n     finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [0]"
+      "\n     no_finite_diff_tests - number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. [1]"
+      "\n     finite_diff_test_delta - the size of the finite difference. [1e-2]"
+#endif
+      <<endl;
 }
 
 std::ostream& operator<<( std::ostream& os, param_struct const& p )
@@ -83,15 +141,21 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"etamin "<<left<<p.min_eta);
     WIDE(os,c2,right<<setw(11)<<"optlu "<<left<<p.optimizeLU_epoch);
+#if GRADIENT_TEST
     WIDE(os,c3,right<<setw(15)<<"tgrad "<<left<<p.finite_diff_test_epoch);
+#endif
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"threads "<<left<<p.num_threads);
     WIDE(os,c2,right<<setw(11)<<"tavg "<<left<<p.report_avg_epoch);
+#if GRADIENT_TEST
     WIDE(os,c3,right<<setw(15)<<"ngrad "<<left<<p.no_finite_diff_tests);
+#endif
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"remove_constraints "<<left<<p.remove_constraints);     // bool
     WIDE(os,c2,right<<setw(11)<<"avg_epoch (avg) "<<left<<p.avg_epoch);
+#if GRADIENT_TEST
     WIDE(os,c3,right<<setw(15)<<"grad "<<left<<p.finite_diff_test_delta);
+#endif
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"remove_class "<<left<<p.remove_class_constraints);       // bool
     WIDE(os,c2,right<<setw(11)<<"resume "<<left<<p.resume);  // bool
@@ -228,8 +292,13 @@ using namespace detail;
         IO(C1); \
         IO(C2); \
         IO(max_iter); \
-        IO(batch_size); \
+        IO(seed); \
+        IO(num_threads); \
+        IO_AS(bool,uint32_t,resume); \
+        IO_AS(bool,uint32_t,reoptimize_LU); \
+        IO(class_samples); \
         IO_enum(update_type); \
+        IO(batch_size); \
         IO(eps); \
         IO_enum(eta_type); \
         IO(eta); \
@@ -245,16 +314,9 @@ using namespace detail;
         IO_enum(reorder_type); \
         IO_AS(bool,uint32_t,ml_wt_by_nclasses); \
         IO_AS(bool,uint32_t,ml_wt_class_by_nclasses); \
-        IO(num_threads); \
-        IO(seed); \
-        IO(finite_diff_test_epoch); \
-        IO(no_finite_diff_tests); \
-        IO(finite_diff_test_epoch); \
-        IO(no_finite_diff_tests); \
-        IO(finite_diff_test_delta); \
-        IO_AS(bool,uint32_t,resume); \
-        IO_AS(bool,uint32_t,reoptimize_LU); \
-        IO(class_samples);
+        IF_GRADIENT_TEST( IO(finite_diff_test_epoch) ); \
+        IF_GRADIENT_TEST( IO(no_finite_diff_tests) ); \
+        IF_GRADIENT_TEST( IO(finite_diff_test_delta) ); \
 
 int write_ascii( std::ostream& os, param_struct const& p )
 {

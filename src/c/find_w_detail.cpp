@@ -1212,7 +1212,7 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
   //const int noClasses = y.cols();
   double obj_val = 0;
   //  size_t no_filtered = filtered.count();
-  bool none_filtered = filtered.count()==0;
+  bool none_filtered = filtered.count()==0;     // OUCH ! slow operation
   //int maxclasses = nclasses.maxCoeff();
 #if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:obj_val)

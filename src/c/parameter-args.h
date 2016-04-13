@@ -105,11 +105,13 @@ namespace opt {
         std::string solnFile;   ///< solution file basename
 
         std::string outFile;    ///< output[.proj] file basename (or cout)
+        uint32_t maxProj;       ///< output.proj with projections 0..maxProj-1 [0=all projections]
         bool outBinary;         ///< outFile format
         bool outText;           ///< outFile format
         bool outSparse;         ///< outFile format
         bool outDense;          ///< outFile format
-        std::string yFile;      ///< y data file name (for validation: TBD)
+        bool yPerProj;          ///< per-projection validation?
+        std::string yFile;      ///< y data file name (for validation)
         bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
         bool xunit/*=false*/;   ///< normalize each x example to unit length
         double xscale;          ///< multiply each x example by a constant

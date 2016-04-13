@@ -37,14 +37,15 @@ namespace opt {
         // defaults: if given explicitly as \c defparms
         if(verbose>=1){
             //++A::verbose;
-            cout<<" +MCprojProgram --xfile="<<A::xFile <<" --yFile="<<A::yFile;
+            cout<<" +MCprojProgram --xfile="<<A::xFile;
             if(A::solnFile.size()) cout<<" --solnFile="<<A::solnFile;
             if(A::outFile.size()) cout<<" --output="<<A::outFile;
+            if(A::maxProj) cout<<" --proj="<<A::maxProj;
             if(A::outBinary) cout<<" -B";
             if(A::outText)   cout<<" -T";
             if(A::outSparse) cout<<" -S";
             if(A::outDense)  cout<<" -D";
-            if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
+            if(A::yFile.size()) cout<<(A::yPerProj?" --Yfile=":" --yfile")<<A::yFile;
             //if(A::threads)   cout<<" --threads="<<A::threads;
             if(A::xnorm)     cout<<" --xnorm";
             if(A::xunit)     cout<<" --xunit";
@@ -250,8 +251,8 @@ namespace opt {
     {
         int const verbose = A::verbose + verb;  // verb modifies the initial value from MCprojArgs --verbose
         if(verbose>=1) cout<<" MCprojProgram::tryProj() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;
-#ifndef NDEBUG
-        if(1){ // test that one of the low-level routines runs...
+#if NDEBUG
+        { // This is still fairly high level -- it does ALL projections in x
             cout<<"\t\tjust for show test... START (deprecated)"<<endl;
             VectorXsz no_active;
             ActiveDataSet * ads=nullptr;
@@ -270,52 +271,59 @@ namespace opt {
             cout<<"\t\tjust for show test... DONE"<<endl;
         }
 #endif
-        if( denseOk ){
-            feasible = project( xDense, soln );
-            if(verbose>=1){                                // dump x and 'feasible' classes
-                cout<<" feasible["<<feasible.size()<<"] classes, after project(xDense,soln)"; cout.flush();
-                if(verbose>=2){
-                    cout<<":"<<endl;
-                    for(uint32_t i=0U; i<feasible.size(); ++i){
-                        auto const& fi = feasible[i];
-                        cout<<" x.row("<<setw(4)<<i<<")=";
-                        OUTWIDE(cout,40,xDense.row(i));
-                        cout<<"   classes: ";
-                        for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
-                        //for(uint32_t c=0U; c<fi.size(); ++c) cout<<fi[c];
-                        cout<<endl;
-                    }
-                }else{
-                    cout<<endl;
-                }
-            }
-        }else if( sparseOk ){
-            if(A::xnorm && verbose>=1) cout<<"// normalization NOT YET SUPPORTED for sparse"<<endl;
-            feasible = project( xSparse, soln );
-            if(verbose>=1){                                    // dump x and 'feasible' classes
-                cout<<" feasible["<<feasible.size()<<"] classes, after project(xDense,soln)"; cout.flush();
-                if(verbose>=2){
-                    cout<<":"<<endl;
-                    for(uint32_t i=0U; i<feasible.size(); ++i){
-                        auto const& fi = feasible[i];
-                        cout<<" x.row("<<setw(4)<<i<<")=";
-                        //OUTWIDE(cout,40,xSparse.row(i)); // Eigen bug: unwanted CR (dense row output OK)
-                        {
-                            ostringstream oss;
-                            oss<<xSparse.row(i);
-                            string s = oss.str();
-                            cout<<setw(40)<<s.substr(0,s.size()-1);
+        if( A::yPerProj || A::maxProj )
+        {
+            cout<<(A::yPerProj?" -Y":" ")<<(A::maxProj?" -p":" ")<<" options **NOT IMPLEMENTED**"
+                <<"\nHere, may want to unroll predict.cpp: projectionsToActiveSet per projection"
+                <<endl;
+        }if(1){ // high-level "do ALL projections" routine
+            if( denseOk ){
+                feasible = project( xDense, soln );
+                if(verbose>=1){                                // dump x and 'feasible' classes
+                    cout<<" feasible["<<feasible.size()<<"] classes, after project(xDense,soln)"; cout.flush();
+                    if(verbose>=2){
+                        cout<<":"<<endl;
+                        for(uint32_t i=0U; i<feasible.size(); ++i){
+                            auto const& fi = feasible[i];
+                            cout<<" x.row("<<setw(4)<<i<<")=";
+                            OUTWIDE(cout,40,xDense.row(i));
+                            cout<<"   classes: ";
+                            for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+                            //for(uint32_t c=0U; c<fi.size(); ++c) cout<<fi[c];
+                            cout<<endl;
                         }
-                        cout<<"   classes: ";
-                        for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+                    }else{
                         cout<<endl;
                     }
-                }else{
-                    cout<<endl;
                 }
+            }else if( sparseOk ){
+                if(A::xnorm && verbose>=1) cout<<"// normalization NOT YET SUPPORTED for sparse"<<endl;
+                feasible = project( xSparse, soln );
+                if(verbose>=1){                                    // dump x and 'feasible' classes
+                    cout<<" feasible["<<feasible.size()<<"] classes, after project(xDense,soln)"; cout.flush();
+                    if(verbose>=2){
+                        cout<<":"<<endl;
+                        for(uint32_t i=0U; i<feasible.size(); ++i){
+                            auto const& fi = feasible[i];
+                            cout<<" x.row("<<setw(4)<<i<<")=";
+                            //OUTWIDE(cout,40,xSparse.row(i)); // Eigen bug: unwanted CR (dense row output OK)
+                            {
+                                ostringstream oss;
+                                oss<<xSparse.row(i);
+                                string s = oss.str();
+                                cout<<setw(40)<<s.substr(0,s.size()-1);
+                            }
+                            cout<<"   classes: ";
+                            for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+                            cout<<endl;
+                        }
+                    }else{
+                        cout<<endl;
+                    }
+                }
+            }else{
+                throw std::runtime_error("neither sparse nor dense training x was available");
             }
-        }else{
-            throw std::runtime_error("neither sparse nor dense training x was available");
         }
     }
     struct ConfusionMatrix{
@@ -470,6 +478,12 @@ namespace opt {
     void MCprojProgram::tryValidate( int const verb/*=0*/ )
     {
         int const verbose = A::verbose + verb;  // verb modifies the initial value from MCprojArgs --verbose
+        if( A::yPerProj || A::maxProj )
+        {
+            cout<<(A::yPerProj?" -Y":" ")<<(A::maxProj?" -p":" ")<<" options **NOT IMPLEMENTED**"
+                <<"\nHere, may want to unroll predict.cpp: projectionsToActiveSet per projection"
+                <<endl;
+        }
         if( y.size() ){
             cout<<" McprojProgram::tryValidate() against --yfile "<<yFile<<endl;
             ConfusionMatrix cm = confusion( feasible, y );

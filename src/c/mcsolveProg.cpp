@@ -226,6 +226,9 @@ namespace opt {
             }
         }
     }
+    /** \sa mcsolver.hh for \ref MCsolver::solve implementation.
+     * \ref MCsolver::solve is a compact rewrite of the original
+     * \ref solve_optimization routine. */
     void MCsolveProgram::trySolve( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
         if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;

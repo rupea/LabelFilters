@@ -36,84 +36,168 @@ namespace opt {
      */
     void mcParameterDesc( po::options_description & desc, param_struct const& p )
     {
-        desc.add_options()
-            ("help,h", "")
-            //("verbose,v", "")
+        po::options_description main("Main options");
+        main.add_options()
             ("proj", value<uint32_t>()->default_value(p.no_projections) , "# of projections")
             ("C1", value<double>()->default_value(p.C1), "~ label in correct [l,u]")
             ("C2", value<double>()->default_value(p.C2), "~ label outside other [l,u]")
+            ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
+            ("seed", value<uint32_t>()->default_value(p.seed), "random number seed")
+            ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
             ("maxiter", value<uint32_t>()->default_value(p.max_iter), "max iterations per projection")
-            ("batchsize,b", value<uint32_t>()->default_value(p.batch_size), "batch size")
-            ("update,u", value<std::string>()->default_value(tostring(p.update_type)), "BATCH | SAFE : gradient update type")
+            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "resume an existing soln?")
+            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize {l,u} bounds of existing soln?")
+            ("sample", value<uint32_t>()->default_value(p.class_samples)
+             , "Cap -ve classes for chunked gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all")
+            ;
+        po::options_description dev("Development options");
+        dev.add_options()
+            ("update,u", value<std::string>()->default_value(tostring(p.update_type)), "BATCH | SAFE : gradient update type\nBATCH implies default batchsize of max(1000,nExamples)")
+            ("batchsize,b", value<uint32_t>()->default_value(p.batch_size), "batch size: !=1 => BATCH, 0~full gradient, [1000 if BATCH]")
             ("eps", value<double>()->default_value(p.eps), "unused cvgce threshold")
             //("eta", value<double>()->default_value(p.eta), "initial learning rate")
             // ... ohoh: eta cannot [fully] be a prefix of any other option
-            ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
             ("etatype", value<std::string>()->default_value(tostring(p.eta_type))
              , "CONST | SQRT | LIN | 3_4 : learning rate schedule")
             ("etamin", value<double>()->default_value(p.min_eta), "learning rate limit")
-            ("optlu", value<uint32_t>()->default_value(p.optimizeLU_epoch), "expensive exact {l,u} soln period")
+            ("optlu", value<uint32_t>(), "expensive exact {l,u} soln period [0=none, def=once, at maxiter")
             ("treorder", value<uint32_t>()->default_value(p.reorder_epoch), "reorder iteration period")
             ("reorder", value<std::string>()->default_value(tostring(p.reorder_type))
              , "Permutation re-ordering: AVG projected means | PROJ projected means | MID range midpoints."
              " If --avg=0, default is PROJ")
             ("treport", value<uint32_t>()->default_value(p.report_epoch), "period for reports about latest iter")
-            ("avg", value<uint32_t>()->default_value(p.avg_epoch), "averaging start iteration")
+            ("avg", value<uint32_t>(), "averaging start iteration [def. nExamples]")
             ("tavg", value<uint32_t>()->default_value(p.report_avg_epoch), "period for reports about avg, expensive")
             ("reweight", value<std::string>()->default_value(tostring(p.reweight_lambda))
              , "NONE | LAMBDA | ALL lambda reweighting method")
-            ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "?")
-            ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "?")
-            ("sample", value<uint32_t>()->default_value(p.class_samples)
-             , "# -ve classes used for each [chunked] gradient estimate, 0 ~ all classes")
             ("remove_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_constraints)
              , "after each projection, remove constraints")
             ("remove_class", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
              , "after each projection, remove already-separated classes(?)")
-            ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
-            ("seed", value<uint32_t>()->default_value(p.seed), "random number seed")
+            ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "UNTESTED")
+            ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "UNTESTED")
+            ;
+        // Add generic, main and development option groups
+        desc.add_options()
+            ("help,h", "")
+            //("verbose,v", "")
+            ;
+        desc.add(main).add(dev);
+
+#if GRADIENT_TEST /*|| others?*/
+        po::options_description compiled("Compile-time options (enabled by compile flags)");
+#if GRADIENT_TEST
+        compiled_add_options()
             ("tgrad", value<uint32_t>()->default_value(p.finite_diff_test_epoch), "iter period for finite difference gradient test")
             ("ngrad", value<uint32_t>()->default_value(p.no_finite_diff_tests), "directions per gradient test")
             ("grad", value<double>()->default_value(p.finite_diff_test_delta), "step size per gradient test")
-            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "resume an existing soln?")
-            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize {l,u} bounds of existing soln?")
             ;
+#endif
+        desc.add(compiled);
+#endif
     }
 
     void extract( po::variables_map const& vm, param_struct & parms ){
         //if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
         //if( vm.count("proj") )
         parms.no_projections            =vm["proj"].as<uint32_t>();
-        parms.C1	                =vm["C1"].as<double>();   //10.0;
-        parms.C2	                =vm["C2"].as<double>();   //1.0;
-        parms.max_iter	                =vm["maxiter"].as<uint32_t>(); //1e6;
-        parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
+        //parms.C1	                =vm["C1"].as<double>();         //1.0; // LATER: *nClasses
+        parms.C2	                =vm["C2"].as<double>();         //1.0;
+        parms.max_iter	                =vm["maxiter"].as<uint32_t>();  //1e8;
+        parms.eta	                =vm["eta0"].as<double>();       //0.1;
+        parms.seed 	                =vm["seed"].as<uint32_t>(); // 0;
+        parms.num_threads 	        =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
+        parms.resume 	                =vm["resume"].as<bool>(); // false;
+        parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
+        parms.class_samples 	        =vm["sample"].as<uint32_t>(); // 0;
+        // Development options
         fromstring( vm["update"].as<string>(), parms.update_type );
+        parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
         parms.eps	                =vm["eps"].as<double>(); //1e-4;
-        parms.eta	                =vm["eta0"].as<double>(); //0.1;
         fromstring( vm["etatype"].as<string>(), parms.eta_type );
         parms.min_eta	                =vm["etamin"].as<double>(); // 0;
-        parms.optimizeLU_epoch	        =vm["optlu"].as<uint32_t>(); //10000; // expensive
+        //parms.optimizeLU_epoch	        =vm["optlu"].as<uint32_t>(); //10000; // expensive
         parms.reorder_epoch	        =vm["treorder"].as<uint32_t>(); //1000;
         fromstring( vm["reorder"].as<string>(), parms.reorder_type );
         parms.report_epoch	        =vm["treport"].as<uint32_t>(); //1000;
         parms.report_avg_epoch	        =vm["tavg"].as<uint32_t>(); //0; // this is expensive so the default is 0
-        parms.avg_epoch	                =vm["avg"].as<uint32_t>(); //0;
-        if(parms.avg_epoch == 0U && parms.reorder_type == REORDER_AVG_PROJ_MEANS )
-            parms.reorder_type = REORDER_PROJ_MEANS;
+        //parms.avg_epoch	                =vm["avg"].as<uint32_t>(); //0;
         fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
-        parms.class_samples 	        =vm["sample"].as<uint32_t>(); // 0;
         parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
         parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
         parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
         parms.remove_class_constraints 	=vm["remove_class"].as<bool>(); // false;
-        parms.num_threads 	        =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
-        parms.seed 	                =vm["seed"].as<uint32_t>(); // 0;
+        // Compile-time options
+#if GRADIENT_TEST
         parms.finite_diff_test_epoch	=vm["tgrad"].as<uint32_t>(); //0;
         parms.no_finite_diff_tests	=vm["ngrad"].as<uint32_t>(); //1000;
         parms.finite_diff_test_delta	=vm["grad"].as<double>(); //1e-4;
-        parms.resume 	                =vm["resume"].as<bool>(); // false;
-        parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
+#endif
+        // NEW - some options have side effects that we may not be able to
+        //       set up just yet.   Set some flag values if need to correct things later.
+        // but this ALWAYS might change if nExamples=x.rows() > 1000U
+        //
+        // This must be kept in sync with paramter.cpp routine param_finalize(nTrain,nClass,param_struct&)
+        //
+        // Note: we MIGHT skip this here, but let's set things just in case we can determine
+        //       final values at this point ...
+        //
+
+        // batch size effects ... NOTE: if batch size != 1 it MIGHT change later
+        if( vm.count("batchsize") && parms.batch_size != 1 && parms.update_type != MINIBATCH_SGD ){
+            cout<<"--batch_size != 1 implies --update=BATCH"<<endl;
+            parms.update_type = MINIBATCH_SGD;
+        }
+        if( parms.update_type == MINIBATCH_SGD && vm.count("batchsize") == 0 ){
+            cout<<"--update_type=BATCH implies --batchsize=1000"<<endl;
+            parms.batch_size = 1000U;
+        }
+        if( parms.update_type != MINIBATCH_SGD ){
+            assert( parms.batch_size == 1U );
+        }
+        // batch_size == 0     ? ---> later batch_size = nTrain (nExamples)
+        // batch_size > nTrain ? ---> later batch_size = nTrain
+        // batch_size > 1      ? ---> max_iter /= batch_size, UNLESS explicit max_iter
+        if( vm.count("maxiter") == 0U && parms.batch_size != 1 ){
+            parms.max_iter = 0U;                // FLAG for max_iter/batch_size
+        }
+
+        // This side-effect is OK to do now...
+        if( vm.count("etatype") == 0 && parms.avg_epoch == 0 ){
+            parms.eta_type = ETA_SQRT;
+        }
+        // This is the logic THAT WE CAN'T EVALUATE fully correctly just yet...        
+        //    ... so just set flag values for "auto", if not specified ...
+
+        parms.optimizeLU_epoch = numeric_limits<uint32_t>::max(); // FLAG for 'max_iter"
+        if( vm.count("optlu") ) {
+            parms.optimizeLU_epoch       = vm["optlu"].as<uint32_t>(); // expensive
+        }
+
+        parms.C1	      = vm["C1"].as<double>();
+        if( vm.count("C1") == 0 ){
+            parms.C1                    = -parms.C1; // FLAG for C1 *= -nClasses, later
+        }
+
+        parms.avg_epoch = numeric_limits<uint32_t>::max(); // FLAG for nExamples (x.rows())
+        if( vm.count("avg") ){
+            parms.avg_epoch	        = vm["avg"].as<uint32_t>(); //0;
+            if(parms.avg_epoch == 0U && parms.reorder_type == REORDER_AVG_PROJ_MEANS ){
+                cout<<"--avg=0 => --reorder=AVG changed to --reorder=MEANS"<<endl;
+                parms.reorder_type = REORDER_PROJ_MEANS;
+            }
+        }
+#if 0
+        if( parms.batch_size > 1U ){
+            if( vm.count("max_iter") == 0U ){
+                parms.max_iter /= parms.batch_size();
+                if( parms.max_iter < 1U ) parms.max_iter = 1U;
+            }
+            if( vm.count("treport") == 0U ){
+                parms.report_epoch /= parms.batch_size();
+            }
+        }
+#endif
     }
 
     std::string helpMcParms(){
@@ -398,19 +482,21 @@ namespace opt {
         desc.add_options()
             ("xfile,x", value<string>()->required(), "x data (row-wise nExamples x dim)")
             ("solnfile,s", value<string>()->required(), "solnfile[.soln] starting solver state")
-            ("output,o", value<string>()->default_value(string("")), "output[.soln] file base name [def. cout]")
+            ("output,o", value<string>()->default_value(string("")), "output[.proj] file base name [def. cout]. output.proj has boolean class data.")
+            ("proj,p", value<uint32_t>()->implicit_value(0U)->default_value(0U), "**TBD** Use up to --proj projections for output file [0=all] **TBD")
             (",B", value<bool>(&outBinary)->implicit_value(true),"(T) T|B output BINARY")
             (",T", value<bool>(&outText)->implicit_value(true),"(T) T|B output TEXT")
             (",S", value<bool>(&outSparse)->implicit_value(true),"(S) S|D output SPARSE")
             (",D", value<bool>(&outDense)->implicit_value(true),"(S) S|D output DENSE")
-            ("yfile,y", value<string>()->default_value(string("")), "TBD: optional validation y data (slc/mlc/SparseMb)")
+            ("yfile,y", value<string>()->default_value(string("")), "[y] validation data (slc/mlc/SparseMb)")
+            ("Yfile,Y", value<string>()->default_value(string("")), "**TBD** [y] validation data - per projection analysis")
             ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
             ("xunit", value<bool>()->implicit_value(true)->default_value(false), "row-normalize x examples")
             ("xscale", value<double>()->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
             // xquad ?
             ("help,h", value<bool>()->implicit_value(true), "this help")
             //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
-            ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
+            ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output. v=1: validate y per projection")
             ;
     }
     MCprojArgs::MCprojArgs()
@@ -418,6 +504,7 @@ namespace opt {
             xFile()
             , solnFile()
             , outFile()
+            , maxProj(0U)
             , outBinary(false)
             , outText(true)
             , outSparse(true)
@@ -479,6 +566,7 @@ namespace opt {
             xFile=vm["xfile"].as<string>();
             solnFile=vm["solnfile"].as<string>();
             outFile=vm["output"].as<string>();
+            maxProj=vm["proj"].as<uint32_t>();
             xnorm=vm["xnorm"].as<bool>();
             xunit=vm["xunit"].as<bool>();
             xscale=vm["xscale"].as<double>();
