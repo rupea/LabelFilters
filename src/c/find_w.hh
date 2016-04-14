@@ -646,6 +646,17 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                 if (params.reweight_lambda == REWEIGHT_ALL){
                     C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                 }
+                // New: test for early exit ...
+                cout<<setw(20)<<tostring(params.reweight_lambda)<<" : total_constraints="
+                    <<total_constraints<<" minus no_filtered="<<no_filtered<<" leaving"
+                    " no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
+                if( no_filtered > total_constraints )
+                    throw std::runtime_error(" programmer error: removed more constraints than exist?");
+                if( no_remaining == 0 ){
+                    cout<<setw(20)<<""<<"   Cannot continue, no more constraints left to satisfy"<<endl;
+                    OPT_PROFILE_STOP();
+                    break;
+                }
             }
         }
         //      C2*=((n-1)*noClasses)*1.0/no_remaining;

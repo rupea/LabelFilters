@@ -370,11 +370,26 @@ int main(int argc,char** argv)
     params.update_type    = MINIBATCH_SGD;
     params.batch_size     = nex;            // minibatch == # of examples (important)
 
-    int const use_old_settings = 1;       // old setting worked, new ones (apr14 '2016) did not.
-    if(use_old_settings){
+    int const settings = 99;      // old setting worked, new ones (apr14 '2016) did not... fixing...
+    if(settings == 0){            // OK
         params.remove_constraints = false;        // new default is TRUE
         params.reweight_lambda = REWEIGHT_ALL;    // new default is REWEIGHT_LAMBDA
+    }else if(settings == 1){      // OK
+        params.remove_constraints = false;
+        params.reweight_lambda = REWEIGHT_LAMBDA;
+    }else if(settings == 2){      // OK
+        params.remove_constraints = true;
+        params.reweight_lambda = REWEIGHT_NONE;
+    }else if(settings == 3){      // hit "no more constraints left", now exit (without bug)
+        params.remove_constraints = true;
+        params.reweight_lambda = REWEIGHT_LAMBDA;
+    }else if(settings == 4){      // hit "no more constraints left", now exit (without bug)
+        params.remove_constraints = true;
+        params.reweight_lambda = REWEIGHT_ALL;
+    }else{ // all new settings.  Celebrate if this works!
+        ;
     }
+
 
 #if 1 // for a quick run
     params.no_projections = 2U;             // There is only one optimum for problems 0,1,2 (increase to see something in 'top')
