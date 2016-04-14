@@ -163,11 +163,13 @@ namespace opt {
         }
 #ifndef NDEBUG
         assert( denseOk || sparseOk );
-        if( denseOk ){
-            assert( xDense.rows() == y.rows() );
-        }else{ //sparseOk
-            assert( xSparse.rows() == y.rows() );
-            // col-norm DISALLOWED
+        if( y.size() ){ // y is optional, for projection operation (allows validation)
+            if( denseOk ){
+                assert( xDense.rows() == y.rows() );
+            }else{ //sparseOk
+                assert( xSparse.rows() == y.rows() );
+                // col-norm DISALLOWED
+            }
         }
 #endif
         if( sparseOk && xnorm )

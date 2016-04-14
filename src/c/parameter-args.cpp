@@ -41,12 +41,12 @@ namespace opt {
             ("proj", value<uint32_t>()->default_value(p.no_projections) , "# of projections")
             ("C1", value<double>()->default_value(p.C1), "~ label in correct [l,u]")
             ("C2", value<double>()->default_value(p.C2), "~ label outside other [l,u]")
+            ("maxiter", value<uint32_t>()->default_value(p.max_iter), "max iterations per projection")
             ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
             ("seed", value<uint32_t>()->default_value(p.seed), "random number seed")
             ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
-            ("maxiter", value<uint32_t>()->default_value(p.max_iter), "max iterations per projection")
-            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "resume an existing soln?")
-            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize {l,u} bounds of existing soln?")
+            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "resume existing soln?")
+            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize existing [l,u]?")
             ("sample", value<uint32_t>()->default_value(p.class_samples)
              , "Cap -ve classes for chunked gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all")
             ;
@@ -488,8 +488,8 @@ namespace opt {
             (",T", value<bool>(&outText)->implicit_value(true),"(T) T|B output TEXT")
             (",S", value<bool>(&outSparse)->implicit_value(true),"(S) S|D output SPARSE")
             (",D", value<bool>(&outDense)->implicit_value(true),"(S) S|D output DENSE")
-            ("yfile,y", value<string>()->default_value(string("")), "[y] validation data (slc/mlc/SparseMb)")
-            ("Yfile,Y", value<string>()->default_value(string("")), "**TBD** [y] validation data - per projection analysis")
+            ("yfile,y", value<string>(), "[y] validation data (slc/mlc/SparseMb)")
+            ("Yfile,Y", value<string>(), "**TBD** [y] validation data - per projection analysis")
             ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
             ("xunit", value<bool>()->implicit_value(true)->default_value(false), "row-normalize x examples")
             ("xscale", value<double>()->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
@@ -509,6 +509,7 @@ namespace opt {
             , outText(true)
             , outSparse(true)
             , outDense(false)
+            , yPerProj(false)
             , yFile()
             , xnorm(false)
             , xunit(false)
@@ -587,7 +588,17 @@ namespace opt {
             if( outBinary == outText ) throw std::runtime_error(" Only one of B|T, please");
             if( outSparse == outDense ) throw std::runtime_error(" Only one of S|D, please");
 
-            yFile=vm["yfile"].as<string>();
+            yPerProj = false;
+            yFile=string("");
+            if( vm.count("yfile") && vm.count("Yfile") )
+                throw std::runtime_error("Can only specify one of --yfile (shorter) or --Yfile (longer output)");
+            if( vm.count("yfile") ){
+                yFile = vm["yfile"].as<string>();
+            }
+            if( vm.count("Yfile") ){
+                yPerProj = true;
+                yFile = vm["Yfile"].as<string>();
+            }
             if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
 
             // projections operation doesn't need solver parms

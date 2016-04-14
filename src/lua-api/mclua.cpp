@@ -271,12 +271,20 @@ namespace MILDE {
         scr_TRY( "<mcparm>:set({args}) -> <table:string->various>" ){
             scr_USR( scr_MCparm, x, ERR_LBL );
             scr_ARGS( args, ERR_LBL );
+            // Main options
             MCSET(int,no_projections);
             MCSET(real8,C1);
             MCSET(real8,C2);
             MCSET(uint8,max_iter);
-            MCSET(uint8,batch_size);
+            MCSET(uint8,eta);
+            MCSET(int,seed);
+            MCSET(int,num_threads);
+            MCSET(bool,resume);
+            MCSET(bool,reoptimize_LU);
+            MCSET(int,class_samples);
+            // Development options
             MCSET_ENUM(fromstring,update_type); // fromstring(args[key], enum&)
+            MCSET(uint8,batch_size);
             MCSET(real8,eps);
             MCSET_ENUM(fromstring,eta_type); // string --> enum Eta_Type
             MCSET(real8,min_eta);
@@ -291,14 +299,11 @@ namespace MILDE {
             MCSET_ENUM(fromstring,reorder_type); // enum Reorder_Type
             MCSET(bool,ml_wt_by_nclasses);
             MCSET(bool,ml_wt_class_by_nclasses);
-            MCSET(int,num_threads);
-            MCSET(int,seed);
+#if GRADIENT_TEST
             MCSET(uint8,finite_diff_test_epoch);
             MCSET(uint8,no_finite_diff_tests);
             MCSET(real8,finite_diff_test_delta);
-            MCSET(bool,resume);
-            MCSET(bool,reoptimize_LU);
-            MCSET(int,class_samples);
+#endif
             return 0;
         }scr_CATCH;
     }
@@ -342,12 +347,20 @@ namespace MILDE {
             scr_USR( scr_MCparm, x, ERR_LBL );
             {
                 scr_ARGMAP( argmap, NOT_ARGS );
+                // Main options
                 MCSET_int(    no_projections );
                 MCSET_double( C1 );
                 MCSET_double( C2 );
                 MCSET_size_t( max_iter );
-                MCSET_size_t( batch_size );
+                MCSET_double( eta );
+                MCSET_int(    seed );
+                MCSET_int(    num_threads );
+                MCSET_bool(   resume );
+                MCSET_bool(   reoptimize_LU );
+                MCSET_int(    class_samples );
+                // Development options
                 MCSET_enum(   update_type ); // tostring(enum Update_Type)
+                MCSET_size_t( batch_size );
                 MCSET_double( eps );
                 MCSET_enum(   eta_type ); // enum Eta_Type
                 MCSET_double( min_eta );
@@ -362,14 +375,11 @@ namespace MILDE {
                 MCSET_enum(   reorder_type ); // enum Reorder_Type
                 MCSET_bool(   ml_wt_by_nclasses );
                 MCSET_bool(   ml_wt_class_by_nclasses );
-                MCSET_int(    num_threads );
-                MCSET_int(    seed );
+#if GRADIENT_TEST
                 MCSET_size_t( finite_diff_test_epoch );
                 MCSET_size_t( no_finite_diff_tests );
                 MCSET_double( finite_diff_test_delta );
-                MCSET_bool(   resume );
-                MCSET_bool(   reoptimize_LU );
-                MCSET_int(    class_samples );
+#endif
                 return 1;       // returns some table
             }
 NOT_ARGS:
@@ -414,12 +424,20 @@ GOT_ALL:
             param_struct def = set_default_params();
             Args p;      // --> all keys will actually be strings, MILDE types
             // ArgMap p; // --> all keys will be closes lua base type, LUA types
+            // Main options
             MCARGS(uint4,no_projections);
             MCARGS(real8,C1);
             MCARGS(real8,C2);
             MCARGS(uint8,max_iter);
-            MCARGS(uint8,batch_size);
+            MCARGS(real8,eta);
+            MCARGS(int,num_threads);
+            MCARGS(int,seed);
+            MCARGS(bool,resume);
+            MCARGS(bool,reoptimize_LU);
+            MCARGS(int,class_samples);
+            // Development options
             MCARGS(int,update_type); // enum Update_Type
+            MCARGS(uint8,batch_size);
             MCARGS(real8,eps);
             MCARGS(int,eta_type); // enum Eta_Type
             MCARGS(real8,min_eta);
@@ -434,14 +452,11 @@ GOT_ALL:
             MCARGS(int,reorder_type); // enum Reorder_Type
             MCARGS(bool,ml_wt_by_nclasses);
             MCARGS(bool,ml_wt_class_by_nclasses);
-            MCARGS(int,num_threads);
-            MCARGS(int,seed);
+#if GRADIENT_TEST
             MCARGS(uint4,finite_diff_test_epoch);
             MCARGS(uint4,no_finite_diff_tests);
             MCARGS(real8,finite_diff_test_delta);
-            MCARGS(bool,resume);
-            MCARGS(bool,reoptimize_LU);
-            MCARGS(int,class_samples);
+#endif
             GAS.d_si->put_stack( p );
             return 1;
         }scr_CATCH;
@@ -469,12 +484,20 @@ GOT_ALL:
             param_struct def = set_default_params();
             // Args p; // --> all keys will actually be strings, MILDE types
             ArgMap p;  // --> all keys will be closes lua base type, LUA types
+            // Main options
             MCARGS(int,,no_projections);
             MCARGS(dbl,,C1);
             MCARGS(dbl,,C2);
             MCARGS(int,,max_iter);
-            MCARGS(int,,batch_size);
+            MCARGS(dbl,,eta);
+            MCARGS(int,,seed);
+            MCARGS(int,,num_threads);
+            MCARGS(bool,,resume);
+            MCARGS(bool,,reoptimize_LU);
+            MCARGS(int,,class_samples);
+            // Development options
             MCARGS(str,tostring,update_type); // tostring(enum Update_Type)
+            MCARGS(int,,batch_size);
             MCARGS(dbl,,eps);
             MCARGS(str,tostring,eta_type); // enum Eta_Type
             MCARGS(dbl,,min_eta);
@@ -485,18 +508,15 @@ GOT_ALL:
             MCARGS(int,,optimizeLU_epoch);
             MCARGS(bool,,remove_constraints);
             MCARGS(bool,,remove_class_constraints);
-            MCARGS(int,,reweight_lambda);
+            MCARGS(str,tostring,reweight_lambda); // enum Reweight_Type
             MCARGS(str,tostring,reorder_type); // enum Reorder_Type
             MCARGS(bool,,ml_wt_by_nclasses);
             MCARGS(bool,,ml_wt_class_by_nclasses);
-            MCARGS(int,,num_threads);
-            MCARGS(int,,seed);
+#if GRADIENT_TEST
             MCARGS(int,,finite_diff_test_epoch);
             MCARGS(int,,no_finite_diff_tests);
             MCARGS(dbl,,finite_diff_test_delta);
-            MCARGS(bool,,resume);
-            MCARGS(bool,,reoptimize_LU);
-            MCARGS(int,,class_samples);
+#endif
             GAS.d_si->put_stack( p );
             return 1;
         }scr_CATCH;
@@ -534,16 +554,23 @@ GOT_VERBOSE:
         if(verbose) oss<<" "<<MSG; \
         oss<<"\n"; \
     }}while(0)
+                // Main options
                 MCPARM(20,no_projections,"number of projections to be made");
                 MCPARM(20,C1,"penalty for example outside its class boundary");
                 MCPARM(20,C2,"penalty for example inside other class's boundary");
                 MCPARM(20,max_iter,"max # iterations");
-                MCPARM(20,batch_size,"minibatch size");
+                MCPARM(25,eta,"initial learning rate");
+                MCPARM(20,seed,"for srand");
+                MCPARM(20,num_threads,"perhaps use OMP_NUM_THREADS instead?");
+                MCPARM(20,resume,"bool: train more projections?");
+                MCPARM(20,reoptimize_LU,"bool: reoptimize class bounds");
+                MCPARM(20,class_samples,"number of negative classes to use at each gradient iteration [0=all]");
+                // Development options
                 MCPARM(20,update_type,"how to update w, L and U");
+                MCPARM(20,batch_size,"minibatch size");
                 MCPARM(20,eps,"not used");
                 MCPARM(20,eta_type,"learning rate decay schedule");
-                MCPARM(25,eta,"initial learning rate");
-                MCPARM(25,min_eta,"min value of learning rate");
+                MCPARM(20,min_eta,"min value of learning rate");
                 MCPARM(20,avg_epoch,"iteration at which avg'ing starts");
                 MCPARM(20,reorder_epoch,"iterations between class reorderings");
                 MCPARM(20,report_epoch,"iterations between report of objective value (over ENTIRE training set)");
@@ -555,15 +582,11 @@ GOT_VERBOSE:
                 MCPARM(20,reorder_type,"rank by projected means of boundaries of prev projections");
                 MCPARM(27,ml_wt_by_nclasses,"bool: other constraints weight examples by # classes example belongs to");
                 MCPARM(27,ml_wt_class_by_nclasses,"bool: self constraints weight examples by # classes example belongs to");
-                MCPARM(20,num_threads,"perhaps use OMP_NUM_THREADS instead?");
-                MCPARM(20,seed,"for srand");
+#if GRADIENT_TEST
                 MCPARM(20,finite_diff_test_epoch,"gradient correctness test interval");
                 MCPARM(20,no_finite_diff_tests,"# rand examples tested for gradient correctness during each test");
                 MCPARM(20,finite_diff_test_delta,"threshold for gradient correctness test");
-                MCPARM(20,resume,"bool: train more projections?");
-                MCPARM(20,reoptimize_LU,"bool: reoptimize class bounds");
-                MCPARM(20,class_samples,"number of negative classes to use at each gradient iteration [0=all]");
-
+#endif
 #undef MCPARM
                 if( nNonDefault == 0U )
                     oss<<"          All values at default settings";
