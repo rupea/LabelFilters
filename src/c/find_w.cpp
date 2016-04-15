@@ -175,6 +175,128 @@ void MCsoln::pretty( std::ostream& os ) const {
     //os<<"--------- medians:\n"<<medians<<endl; // NOT YET THERE
 }
 
+struct MCLazyData {
+    struct MeanStdev{
+        size_t n;               ///< common vector size
+        /** \f$\frac{1}{n}\sum_0^n x_i\f$. Valid for any \c n. */
+        VectorXd mean;
+        /** unbiased version, \f$\sigma^2=\frac{1}{n-1}\sum_1^n(x_i-\mu)^2\f$.
+         * Meaningful only for n>1. */
+        VectorXd stdev;
+    };
+    MCLazyData() : rowOk(false), colOk(false), row2Ok(false), col2Ok(false)
+                   , row_mean0(false), row_stdev1(false), col_mean0(false), col_stdev1(false)
+                   , row(nullptr), col(nullptr), row2(), col2() {}
+    ~MCLazyData() { if(row){ delete row; row=nullptr; } if(col){ delete col; col=nullptr; } }
+    // quick invalidation (release memory only when nec. hopefully in destructor)
+    bool rowOk, colOk, row2Ok, col2Ok;
+    // remember if any normalizations have been done
+    bool row_mean0, row_stdev1, col_mean0, col_stdev1;
+    struct MeanStdev *row;
+    struct MeanStdev *col;
+    /** \f$\lVert x \rVert_2^2 = \sum_1^n x_i^2\f$.
+     * If we have \c mean and \c stdev already, we could
+     * use \f$\sigma^2 = \frac{1}{n-1}\left((\sum_1^n x_i^2) - n\mu^2\right)\f$,
+     * to set \c sumsqr with \f$\sum_1^n x_i^2 = (n-1)\sigma^2 + n(n-1)\mu^2\f$.
+     * However, sumsqr is always valid (for any \c n).
+     * (Using norm2 to help set MeanStdev is likely numerically less stable
+     *  than the normal MeanStdev method)
+     */
+    VectorXd row2; ///< row norms
+    VectorXd col2; ///< column norms
+
+    /** invalidate all stats (doesn't free memory) */
+    void changed(){
+        rowOk = colOk = row2Ok = col2Ok = row_mean0 = row_stdev1 = col_mean0 = col_stdev1 = false;
+    }
+    void setRow2( DenseM const &x ) {cout<<"setRow2 TBD"<<endl;}
+    void setRow2( SparseM const &x ) {cout<<"setRow2 TBD"<<endl;}
+    void setMeanStdev( DenseM const& x ) {cout<<"setRow2 TBD"<<endl;}
+    void setMeanStdev( SparseM const& x ) {cout<<"setRow2 TBD"<<endl;}
+};
+MCxyData::MCxyData() : xDense(), denseOk(false), xSparse(), sparseOk(false)
+                       , y(), lazx(nullptr), lazy(nullptr) {}
+MCxyData::~MCxyData(){
+    delete lazx; lazx=nullptr;
+    delete lazy; lazy=nullptr;
+}
+void MCxyData::xchanged() {
+    if( lazx ) { lazx->changed(); }
+}
+void MCxyData::ychanged() {
+    if( lazy ) { lazy->changed(); }
+}
+std::string MCxyData::shortMsg() const {
+    ostringstream oss;
+    if( denseOk ) oss<<" dense x "<<prettyDims(xDense);
+    if( sparseOk ) oss<<" sparse x "<<prettyDims(xSparse);
+    oss<<" SparseMb y "<<prettyDims(y);
+    return oss.str();
+}
+/** convert x to new matrix adding quadratic dimensions to each InnerIterator (row).
+ * Optionally scale the quadratic elements to keep them to reasonable range.
+ * For example if original dimension is 0..N, perhaps scale the quadratic
+ * terms by 1.0/N. */
+static void addQuadratic( SparseM & x, double const qscal=1.0 ){
+    x.makeCompressed();
+    VectorXi xsz(x.outerSize());
+#pragma omp parallel for schedule(static)
+    for(int i=0U; i<x.outerSize(); ++i){
+        xsz[i] = x.outerIndexPtr()[i+1]-x.outerIndexPtr()[i];
+    }
+    // final inner dim increases by square of inner dim
+    SparseM q(x.outerSize(),x.innerSize()+x.innerSize()*x.innerSize());
+    // calc exact nnz elements for each row of q
+    VectorXi qsz(x.outerSize());
+#pragma omp parallel for schedule(static)
+    for(int i=0; i<x.outerSize(); ++i){
+        qsz[i] = xsz[i] + xsz[i]*xsz[i];
+    }
+    q.reserve( qsz );           // reserve exact per-row space needed
+    // fill q
+#pragma omp parallel for schedule(dynamic,128)
+    for(int r=0; r<x.outerSize(); ++r){
+        for(SparseM::InnerIterator i(x,r); i; ++i){
+            q.insert(r,i.col()) = i.value();    // copy the original dimension
+            for(SparseM::InnerIterator j(x,r); j; ++j){
+                int col = x.innerSize() + i.col()*x.innerSize() + j.col(); // x.innerSize() is 4
+                q.insert(r,col) = i.value()*j.value()*qscal;  // fill in quad dims
+            }
+        }
+    }
+    q.makeCompressed();
+    x.swap(q);
+}
+static void addQuadratic( DenseM & x, double const qscal=1.0 ){
+    DenseM q(x.outerSize(),x.innerSize()+x.innerSize()*x.innerSize());
+#pragma omp parallel for schedule(static,128)
+    for(int r=0; r<x.outerSize(); ++r){
+        for(int i=0; i<x.innerSize(); ++i){
+            q.coeffRef(r,i) = x.coeff(r,i);
+            for(int j=0; j<x.innerSize(); ++j){
+                int col = x.innerSize() + i*x.innerSize() + j;
+                q.coeffRef(r,col) = x.coeff(r,i) * x.coeff(r,j) * qscal;
+            }
+        }
+    }
+    x.swap(q);
+}
+/** This can be very slow and should always be
+ * done with full parallelism.
+ * \throw if no data. */
+void MCxyData::quadx(double qscal /*=0.0*/){
+    if( qscal==0.0 ){
+        qscal=1.0;
+        // divide xi * xj terms by max|x| ?
+        // look at quad terms globally and make them mean 0 stdev 1 ?
+        // scale so mean is 0 and all values lie within [-2,2] ?
+    }
+    xchanged(); // remove any old x stats
+    if( sparseOk )     addQuadratic( xSparse, qscal );
+    else if( denseOk ) addQuadratic( xDense,  qscal );
+    else throw std::runtime_error(" quadx needs some x data first");
+}
+
 // private post-magicHdr I/O routines ...
 #define CHK_MAT_DIM(MAT,R,C,ERRMSG) do { \
     if( MAT.rows() != (R) || MAT.cols() != (C) ){ \

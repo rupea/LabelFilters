@@ -47,6 +47,8 @@
 #endif
 
 // --------------- inline template definition to solve optimization problem ----------------
+/** \c params is const \b mostly -- if we had to stop before params.no_projections,
+ * then params.no_projections is reduce in value. */
     template<typename EIGENTYPE> inline
 void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                         DenseM& upper_bounds, VectorXd& objective_val,
@@ -55,7 +57,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                         EIGENTYPE const& x,
                         SparseMb const& y,
                         param_struct const& params)
-
 {
     using namespace std;
     OPT_PROFILE_START("init.profile");
@@ -161,21 +162,13 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     VectorXd vect;
 
     double lambda, C1, C2;
-    if(params.C1>=0.0 && params.C2>=0.0){
-#if 1 // original version
+    if( params.C1 > 0.0 && params.C2 > 0.0 ){
         lambda = 1.0/params.C2;
         C1 = params.C1/params.C2;
         C2 = 1.0;
-#else // new
-        C1 = params.C1;
-        C2 = params.C2;
-        if( C2 > 1.e-2 ) lambda = C1/C2; else lambda = 100.0;
-#endif
-    }else{ // try to provide a reasonble 'auto' mode
-        // untested [ejk]
-        //double x = n * noClasses;
-        //double y = total_constraints * params.C2;
-        lambda = n*noClasses * 1.0 / (total_constraints*params.C2);
+    }else{ // ATTEMPT to fix up illegal C1/C2 with an 'auto' mode (development code!)
+        cout<<" UNTESTED lambda, C1, C2 settings!"<<endl;
+        lambda = n*noClasses * 1.0 / total_constraints;
         C1 = lambda;
         C2 = 1.0;
     }
@@ -625,11 +618,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
         // check if nclass and nc are used for anything else than weighting examples belonging
         //       to multiple classes
         if (params.remove_constraints && projection_dim < no_projections-1){
+            // are the project[_avg]() calls here un-needed? Here w is the weight vector for just prjax
             if (params.avg_epoch && t > params.avg_epoch ){
-                w.project_avg(projection_avg,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
+                w.project_avg(projection_avg,x);
                 update_filtered(filtered, projection_avg, l_avg, u_avg, y, params.remove_class_constraints);
             }else{
-                w.project(projection,x); // could eliminate this since it has most likely been calculated above, but we keep it here for now for clarity
+                w.project(projection,x);
                 update_filtered(filtered, projection, l, u, y, params.remove_class_constraints);
             }
 
@@ -647,20 +641,19 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                     C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                 }
                 // New: test for early exit ...
-                cout<<setw(20)<<tostring(params.reweight_lambda)<<" : total_constraints="
-                    <<total_constraints<<" minus no_filtered="<<no_filtered<<" leaving"
-                    " no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
+                cout<<setw(20)<<tostring(params.reweight_lambda)<<": total_constraints="
+                    <<total_constraints<<" minus no_filtered="<<no_filtered<<"\n"<<setw(20)
+                    <<""<<"  leaving no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
                 if( no_filtered > total_constraints )
                     throw std::runtime_error(" programmer error: removed more constraints than exist?");
                 if( no_remaining == 0 ){
-                    cout<<setw(20)<<""<<"   Cannot continue, no more constraints left to satisfy"<<endl;
+                    cout<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left to satisfy"<<endl;
+                    const_cast<param_struct&>(params).no_projections = projection_dim+1U;
                     OPT_PROFILE_STOP();
                     break;
                 }
             }
         }
-        //      C2*=((n-1)*noClasses)*1.0/no_remaining;
-        //C1*=((n-1)*noClasses)*1.0/no_remaining;
         OPT_PROFILE_STOP();
     } // end for projection_dim
     delete[]  sc_locks;  sc_locks = nullptr;

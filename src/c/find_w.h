@@ -157,6 +157,42 @@ public:
 /** For debug tests: write to sstream, read from sstream, throw if error detected */
 void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsoln::Len len);
 
+/** lazy stats for x,y data. WIP, so opaque for now. */
+struct MCLazyData;
+
+/** NEW: introduce a data wrapper.
+ *
+ * - This allows base x [,y] data to be passed/shared easily between solver
+ *   and projector objects, \c MCprojProg and \c MCsolveProgram.
+ * - Another benefit is removing duplicate code for reading data.
+ * - Eventually, may help move template code into the library? */
+class MCxyData {
+public:
+    MCxyData();
+    ~MCxyData();
+    /// \name row-wise test data matrix
+    //@{
+    // perhaps denseOk and sparseOk can be replaced by xDense.size() != 0 (etc.) ?
+    DenseM xDense;
+    bool denseOk;
+    SparseM xSparse;
+    bool sparseOk;
+    //@}
+    SparseMb y;                 ///< optional for projection operation.
+    /// \name optional, private stats
+    //@{
+private:
+    struct MCLazyData * lazx;   ///< lazy x statistics
+    struct MCLazyData * lazy;   ///< lazy y statistics
+public:
+    void xchanged();                    ///< scrap any x stats
+    void ychanged();                    ///< scrap any y stats
+    //@}
+
+    std::string shortMsg() const;       ///< format+dimensions
+    void quadx(double qscal=0.0);       ///< add quadratic dimensions (0.0 autoscales, somehow) \throw if no x data
+};
+
 /** Provide a simpler API for solving.
  * - The long \c solve template is now in a 'detail' header,
  * - The library explicitly instiates for input data \c DenseM and SparseM.

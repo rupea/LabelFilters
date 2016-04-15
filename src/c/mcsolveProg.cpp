@@ -1,5 +1,6 @@
 
 #include "mcsolveProg.hpp"
+#include "mcprojProg.hpp"
 #include "printing.hh"
 #include "normalize.h"
 
@@ -23,11 +24,8 @@ namespace opt {
                                     , param_struct const* const defparms/*=nullptr*/ )
         : ::opt::MCsolveArgs( argc, argv )
             , ::MCsolver( solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
-                , xDense()
-                , denseOk(false)
-                , xSparse()
-                , sparseOk(false)
-                , y() // SparseMb
+            , projProg()                // empty shared ptr
+            , xy( new MCxyData() )
     {
         // defaults: if given explicitly as \c defparms
         if( defparms ){
@@ -58,42 +56,48 @@ namespace opt {
             cout<<endl;
         }
     }
+    MCsolveProgram::~MCsolveProgram(){
+        if( projProg && projProg->solveProg ){  // reset known shared_ptr to me [circular]
+            //projProg->solveProg.reset();
+            projProg->solveProg = nullptr;
+        }
+    }
     void MCsolveProgram::tryRead( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
         if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
         // read the following MCsolveProgram data:
-        //DenseM xDense;
-        //bool denseOk=false;
+        //DenseM  xDense;
+        //bool    denseOk=false;
         //SparseM xSparse;
-        //bool sparseOk=false;
+        //bool    sparseOk=false;
         if( yFile.size() == 0 && xFile.size() != 0 ){
             try{
                 ifstream xfs;
-                // try to read a text libsvm format -- Y labels, then SparseX data
+                // try to read a text libsvm format -- xy->y labels, then SparseX data
                 xfs.open(xFile);
                 if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-                detail::eigen_read_libsvm( xfs, xSparse, y );
-                sparseOk = true;
+                detail::eigen_read_libsvm( xfs, xy->xSparse, xy->y );
+                xy->sparseOk = true;
                 xfs.close();
             }catch(std::exception const& e){
                 cerr<<" --xFile="<<xFile<<" and no --yFile: libsvm format input error!"<<endl;
                 throw;
             }
         }
-        if(!sparseOk){
+        if(!xy->sparseOk){
             ifstream xfs;
             // TODO XXX try Dense-Text, Sparse-Text too?
             try{
                 xfs.open(xFile);
                 if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-                ::detail::eigen_io_bin(xfs, xDense);
+                ::detail::eigen_io_bin(xfs, xy->xDense);
                 if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
                 char c;
                 xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
-                if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
+                if( ! xfs.eof() ) throw std::overflow_error("xy->xDense read did not use full file");
                 xfs.close();
-                assert( xDense.cols() > 0U );
-                denseOk=true;
+                assert( xy->xDense.cols() > 0U );
+                xy->denseOk=true;
             }catch(po::error& e){
                 cerr<<"Invalid argument: "<<e.what()<<endl;
                 throw;
@@ -103,31 +107,31 @@ namespace opt {
                     xfs.close();
                     xfs.open(xFile);
                     if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-                    ::detail::eigen_io_bin( xfs, xSparse );
+                    ::detail::eigen_io_bin( xfs, xy->xSparse );
                     if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
                     xfs.close();
-                    assert( xSparse.cols() > 0U );
-                    sparseOk=true;
+                    assert( xy->xSparse.cols() > 0U );
+                    xy->sparseOk=true;
                 }catch(...){
                     cerr<<" Doesn't seem to be sparse either"<<endl;
                 }
             }
         }
-        if(xnorm && sparseOk){
-            xDense = DenseM( xSparse );     // convert sparse --> dense
-            xSparse.resize(0,0);
-            sparseOk = false;
-            denseOk = true;
+        if(xnorm && xy->sparseOk){
+            xy->xDense = DenseM( xy->xSparse );     // convert sparse --> dense
+            xy->xSparse.resize(0,0);
+            xy->sparseOk = false;
+            xy->denseOk = true;
         }
-        // read SparseMb y;
+        // read SparseMb xy->y;
         if(yFile.size()){
             ifstream yfs;
             bool yOk = false;
             try{
                 yfs.open(yFile);
                 if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-                ::detail::eigen_io_binbool( yfs, y );
-                assert( y.cols() > 0U );
+                ::detail::eigen_io_binbool( yfs, xy->y );
+                assert( xy->y.cols() > 0U );
                 if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
                 yOk = true;
             }catch(po::error& e){
@@ -146,8 +150,8 @@ namespace opt {
                     yfs.close();
                     yfs.open(yFile);
                     if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-                    ::detail::eigen_io_txtbool( yfs, y );
-                    assert( y.cols() > 0U );
+                    ::detail::eigen_io_txtbool( yfs, xy->y );
+                    assert( xy->y.cols() > 0U );
                     // yfs.fail() is expected
                     if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
                 }
@@ -156,72 +160,72 @@ namespace opt {
                     throw;
                 }
             }
-            assert( y.size() > 0 );
+            assert( xy->y.size() > 0 );
         }
 #ifndef NDEBUG
-        assert( denseOk || sparseOk );
-        if( denseOk ){
-            assert( xDense.rows() == y.rows() );
-        }else{ //sparseOk
-            assert( xSparse.rows() == y.rows() );
+        assert( xy->denseOk || xy->sparseOk );
+        if( xy->denseOk ){
+            assert( xy->xDense.rows() == xy->y.rows() );
+        }else{ //xy->sparseOk
+            assert( xy->xSparse.rows() == xy->y.rows() );
             // col-norm DISALLOWED
         }
 #endif
-        if( sparseOk && xnorm )
+        if( xy->sparseOk && xnorm )
             throw std::runtime_error("sparse --xfile does not support --xnorm");
-        if( denseOk ){
+        if( xy->denseOk ){
             if( A::xnorm ){
                 VectorXd xmean;
                 VectorXd xstdev;
                 if(verbose>=1){
-                    cout<<"xDense ORIG:\n"<<xDense<<endl;
+                    cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
                     cout<<" xnorm!"<<endl;
                 }
 #if 1
-                column_normalize(xDense,xmean,xstdev);
+                col_normalize(xy->xDense,xmean,xstdev);
                 if(verbose>=1){
                     cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
                     cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
                 }
 #else
-                normalize_col(xDense);
+                normalize_col(xy->xDense);
 #endif
             }
         }
         if( A::xunit ){
             VectorXd xSqNorms;
-            if( denseOk ){
-                for(size_t r=0U; r<xDense.rows(); ++r){
-                    double const l2 = xDense.row(r).squaredNorm();
+            if( xy->denseOk ){
+                for(size_t r=0U; r<xy->xDense.rows(); ++r){
+                    double const l2 = xy->xDense.row(r).squaredNorm();
                     if( l2 > 1.e-10 ){
-                        xDense.row(r) *= (1.0/sqrt(l2));
+                        xy->xDense.row(r) *= (1.0/sqrt(l2));
                     }
                 }
-            }else if( sparseOk ){
-                for(size_t r=0U; r<xSparse.rows(); ++r){
-                    double const l2 = xSparse.row(r).squaredNorm();
+            }else if( xy->sparseOk ){
+                for(size_t r=0U; r<xy->xSparse.rows(); ++r){
+                    double const l2 = xy->xSparse.row(r).squaredNorm();
                     if( l2 > 1.e-10 ){
-                        xSparse.row(r) *= (1.0/sqrt(l2));
+                        xy->xSparse.row(r) *= (1.0/sqrt(l2));
                     }
                 }
             }
         }
         if( A::xscale != 1.0 ){
-            if( denseOk ){
-                xDense *= A::xscale;
-            }else if( sparseOk ){
-                xSparse *= A::xscale;
+            if( xy->denseOk ){
+                xy->xDense *= A::xscale;
+            }else if( xy->sparseOk ){
+                xy->xSparse *= A::xscale;
             }
         }
 
-        if(verbose>=1 && y.rows() < 50 ){       // print only for small tests
-            if( denseOk ){
-                cout<<"xDense:\n"<<xDense<<endl;
-                cout<<"y:\n"<<y<<endl;
+        if(verbose>=1 && xy->y.rows() < 50 ){       // print only for small tests
+            if( xy->denseOk ){
+                cout<<"xy->xDense:\n"<<xy->xDense<<endl;
+                cout<<"xy->y:\n"<<xy->y<<endl;
                 cout<<"parms:\n"<<A::parms<<endl;
-            }else{ //sparseOk
-                cout<<"xSparse:\n"<<xSparse<<endl;
-                cout<<"y:\n"<<y<<endl;
+            }else{ //xy->sparseOk
+                cout<<"xy->xSparse:\n"<<xy->xSparse<<endl;
+                cout<<"xy->y:\n"<<xy->y<<endl;
                 cout<<"parms:\n"<<A::parms<<endl;
             }
         }
@@ -231,12 +235,12 @@ namespace opt {
      * \ref solve_optimization routine. */
     void MCsolveProgram::trySolve( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
-        if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;
-        if( denseOk ){
-            S::solve( xDense, y, &(A::parms) );
-        }else if( sparseOk ){
+        if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(xy->denseOk?"dense":xy->sparseOk?"sparse":"HUH?")<<endl;
+        if( xy->denseOk ){
+            S::solve( xy->xDense, xy->y, &(A::parms) );
+        }else if( xy->sparseOk ){
             // normalization NOT YET SUPPORTED for sparse
-            S::solve( xSparse, y, &(A::parms) );
+            S::solve( xy->xSparse, xy->y, &(A::parms) );
         }else{
             throw std::runtime_error("neither sparse nor dense training x was available");
         }
@@ -244,10 +248,10 @@ namespace opt {
         // how the next outFile (.soln) was obtained.
 #if 0
         // --- post-processing --- opportunity to add 'easy' stuff to MCsoln ---
-        if( denseOk ){
-            S::setQuantiles( xDense, y );
-        }else if( sparseOk ){
-            S::setQuantiles( xSparse, y );
+        if( xy->denseOk ){
+            S::setQuantiles( xy->xDense, xy->y );
+        }else if( xy->sparseOk ){
+            S::setQuantiles( xy->xSparse, xy->y );
         }
         // ---------------------------------------------------------------------
 #endif
@@ -288,14 +292,14 @@ namespace opt {
     void MCsolveProgram::savex( std::string fname ) const {
         ofstream ofs;
         try{
-            if( !sparseOk && !denseOk )
+            if( !xy->sparseOk && !xy->denseOk )
                 throw std::runtime_error("savex no Eigen x data yet");
             ofs.open(fname);
             if( ! ofs.good() ) throw std::runtime_error("savex trouble opening fname");
-            if( sparseOk ){
-                detail::eigen_io_bin(ofs, xSparse);
-            }else{ assert(denseOk);
-                detail::eigen_io_bin(ofs, xDense);
+            if( xy->sparseOk ){
+                detail::eigen_io_bin(ofs, xy->xSparse);
+            }else{ assert(xy->denseOk);
+                detail::eigen_io_bin(ofs, xy->xDense);
             }
             if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
             ofs.close();
@@ -310,7 +314,7 @@ namespace opt {
         try{
             ofs.open(fname);
             if( ! ofs.good() ) throw std::runtime_error("savex trouble opening fname");
-            detail::eigen_io_binbool(ofs, y);
+            detail::eigen_io_binbool(ofs, xy->y);
             if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
             ofs.close();
         }catch(std::exception const& e){
@@ -320,64 +324,12 @@ namespace opt {
         }
     }
     
-    /** convert x to new matrix adding quadratic dimensions to each InnerIterator (row).
-     * Optionally scale the quadratic elements to keep them to reasonable range.
-     * For example if original dimension is 0..N, perhaps scale the quadratic
-     * terms by 1.0/N. */
-    static void addQuadratic( SparseM & x, double const qscal=1.0 ){
-        x.makeCompressed();
-        VectorXi xsz(x.outerSize());
-#pragma omp parallel for schedule(static)
-        for(int i=0U; i<x.outerSize(); ++i){
-            xsz[i] = x.outerIndexPtr()[i+1]-x.outerIndexPtr()[i];
-        }
-        // final inner dim increases by square of inner dim
-        SparseM q(x.outerSize(),x.innerSize()+x.innerSize()*x.innerSize());
-        // calc exact nnz elements for each row of q
-        VectorXi qsz(x.outerSize());
-#pragma omp parallel for schedule(static)
-        for(int i=0; i<x.outerSize(); ++i){
-            qsz[i] = xsz[i] + xsz[i]*xsz[i];
-        }
-        q.reserve( qsz );           // reserve exact per-row space needed
-        // fill q
-#pragma omp parallel for schedule(dynamic,128)
-        for(int r=0; r<x.outerSize(); ++r){
-            for(SparseM::InnerIterator i(x,r); i; ++i){
-                q.insert(r,i.col()) = i.value();    // copy the original dimension
-                for(SparseM::InnerIterator j(x,r); j; ++j){
-                    int col = x.innerSize() + i.col()*x.innerSize() + j.col(); // x.innerSize() is 4
-                    q.insert(r,col) = i.value()*j.value()*qscal;  // fill in quad dims
-                }
-            }
-        }
-        q.makeCompressed();
-        x.swap(q);
-    }
-    static void addQuadratic( DenseM & x, double const qscal=1.0 ){
-        DenseM q(x.outerSize(),x.innerSize()+x.innerSize()*x.innerSize());
-#pragma omp parallel for schedule(static,128)
-        for(int r=0; r<x.outerSize(); ++r){
-            for(int i=0; i<x.innerSize(); ++i){
-                q.coeffRef(r,i) = x.coeff(r,i);
-                for(int j=0; j<x.innerSize(); ++j){
-                    int col = x.innerSize() + i*x.innerSize() + j;
-                    q.coeffRef(r,col) = x.coeff(r,i) * x.coeff(r,j) * qscal;
-                }
-            }
-        }
-        x.swap(q);
-    }
     /** transform EVERY row of x by adding the "quadratic dimensions".
-     * i.e. append the data values of the outer product of the row vectors. */
+     * i.e. append the data values of the outer product of the row vectors.
+     * Should use full parallelism for this! \throw if no data.
+     * \sa MCxyData::quadx(). */
     void MCsolveProgram::quadx() {
-        if( sparseOk ){
-            addQuadratic( xSparse );    // transform the original data matrix
-        }else if( denseOk ){
-            addQuadratic( xDense );     // transform the original data matrix
-        }else{
-            throw std::runtime_error(" quadx needs some x data first");
-        }
+        xy->quadx();                    // autoscale
     }
                 
     /** print some smaller valid intervals, and return number of
@@ -507,21 +459,21 @@ namespace opt {
     void MCsolveProgram::tryDisplay( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
         if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
-        MCsoln & soln = S::getSoln();
-        DenseM      & w = soln.weights_avg;
-        DenseM      & ww = soln.weights;
-        cout<<" weights     norms: "; for(uint32_t c=0U; c<ww.cols(); ++c){cout<<" "<<ww.col(c).norm();} cout<<endl;
-        cout<<" weights_avg norms: "; for(uint32_t c=0U; c<w.cols(); ++c){cout<<" "<<w.col(c).norm();} cout<<endl;
-        w.colwise().normalize();                     // modify w, ww to unit-vector (? largest coeff +ve ?)
-        ww.colwise().normalize();
+        MCsoln const& soln = S::getSoln();
+        // NOTE: for normalization make a COPY (can be avoided) FIXME
+        DenseM const& w = soln.weights_avg;
+        DenseM const& ww = soln.weights;
+        vector<double> wwNorms(ww.cols()); for(uint32_t c=0U; c<ww.cols(); ++c) wwNorms[c]= ww.col(c).norm();
+        vector<double>  wNorms(ww.cols()); for(uint32_t c=0U; c< w.cols(); ++c)  wNorms[c]=  w.col(c).norm();
+        cout<<" weights     norms: "; for(uint32_t c=0U; c<ww.cols(); ++c){cout<<" "<<wwNorms[c];} cout<<endl;
+        cout<<" weights_avg norms: "; for(uint32_t c=0U; c< w.cols(); ++c){cout<<" "<< wNorms[c];} cout<<endl;
         DenseM const& l = soln.lower_bounds_avg;
         DenseM const& u = soln.upper_bounds_avg;
-        if(verbose>=1){
-            // really want to find a nicer, compact display here XXX
+        if(verbose>=1){ // really want to find a nicer, compact display here XXX
             cout<<"normalized     weights"<<prettyDims(ww)<<":\n";
-            if( ww.size() < 500U ) cout<<ww<<endl;
+            if( ww.size() < 500U ) for(uint32_t c=0; c<<ww.cols(); ++c) cout<<ww.col(c)*(wwNorms[c]>1.e-8?1.0/wwNorms[c]:1.0)<<endl;
             cout<<"normalized weights_avg"<<prettyDims(w)<<":\n";
-            if( w.size() < 500U ) cout<<w<<endl;
+            if( w.size() < 500U ) for(uint32_t c=0U; c<w.cols(); ++c) cout<<w.col(c)*(wNorms[c]>1.e-8?1.0/wwNorms[c]:1.0)<<endl;
             cout<<"      lower_bounds_avg"<<prettyDims(l)<<":\n";
             if( l.size() < 500U ) cout<<l<<endl;
             cout<<"      upper_bounds_avg"<<prettyDims(u)<<":\n";
@@ -545,5 +497,32 @@ namespace opt {
                     <<" consider running with higher C1 / lower C2"<<endl;
             }
         }
+        if(1) { // NEW TEST CODE XXX
+            cout<<"\n********* NEW TEST CODE **********"<<endl;
+            this->pretty(cout);
+            auto proj = projector("");
+            if( ! proj ) throw std::runtime_error(" Failed to construct projector associated with this solver");
+
+            //proj->tryRead(7/*verbose*/);
+            //cout<<"tryRead MCprojProgram soln is "; proj->soln.pretty(cout); cout<<endl;
+
+            proj->tryProj(7/*verbose*/);
+            proj->tryValidate(7/*verbose*/);
+        }
+    }
+
+    //std::shared_ptr<MCprojProgram> MCsolveProgram::projector(std::string args)
+    MCprojProgram * MCsolveProgram::projector(std::string args)
+    {
+        if( ! projProg ){
+            std::ostringstream cmd;            // default command string
+            // Potential difficulty -- embedded whitespace will be treated INCORRECTLY
+            cmd<<" INTERNAL --solnfile="<<solnFile<<" --xfile="<<xFile<<" --yfile="<<yFile
+                <<" "<<args;
+            //projProg = std::make_shared<MCprojProgram>( this, cmd.str() );
+            projProg = new MCprojProgram( this, cmd.str() );
+            return projProg;
+        }
+        return projProg;
     }
 }//opt::

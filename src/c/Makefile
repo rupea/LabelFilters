@@ -132,7 +132,7 @@ libs-only: | hdr-stamp
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 #demp-proj1 demo-quick demo-proj2 demo-proj3 demo-proj4 mcdumpsoln demo-prof: | libs-only
 
-test: lib demo-printing demo-io do-tests mcgen mcgenx mcproj.log
+test: lib demo-printing demo-io demo-norm do-tests mcgen mcgenx mcproj.log
 long: clean
 	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
 	&& $(MAKE) -j20 do-tests \
@@ -224,9 +224,10 @@ do-vg: demo-mcsolver
 tail-vg:
 	tail -n1 erik/log-op0*.vg
 	tail -n1 erik/log-mp0*.vg
-do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver test-scaling.log
-do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver test-scaling.log
+do-tests: | lib demo-printing demo-io demo-norm demo-quick demo-mcsolver test-scaling.log
+do-tests: | lib demo-printing demo-io demo-norm demo-quick demo-mcsolver test-scaling.log
 	./demo-quick > demo-quick.log 2>&1
+	./demo-norm > demo-norm.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
 	./demo-mcsolver > demo-mcsolver.log 2>&1
@@ -331,6 +332,9 @@ demo-parms: erik/demo-parms.cpp libmcfilter-dbg.a
 
 demo-io: | libmcfilter-dbg.a
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+demo-norm: | libmcfilter-dbg.a
+demo-norm: erik/demo-norm.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 #static linkage : 2.6M executable
 #mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a

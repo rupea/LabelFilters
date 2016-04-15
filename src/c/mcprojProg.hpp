@@ -8,8 +8,11 @@
 
 #include <vector>
 #include <boost/dynamic_bitset.hpp>
+#include <memory>
 
 namespace opt {
+
+    class MCsolveProgram;
 
     /** high level MCsolver api, as used in mcsolve executable */
     class MCprojProgram : private ::opt::MCprojArgs
@@ -17,6 +20,7 @@ namespace opt {
     {
         typedef ::opt::MCprojArgs A;
         //typedef ::MCfilter F; // or projector or predictor ???
+        friend class MCsolveProgram;
     public:
 #ifdef NDBEUG
         static const int defaultVerbose=0;
@@ -31,28 +35,31 @@ namespace opt {
          */
         MCprojProgram( int argc, char** argv
                         , int const verbose=defaultVerbose );
+        MCprojProgram( MCsolveProgram * const solver, std::string mod=std::string() );
+        ~MCprojProgram();
 
         void tryRead( int const verbose=defaultVerbose );            ///< read x,y data, or throw
         void tryProj( int const verbose=defaultVerbose );            ///< solve for projections
-        void trySave( int const verbose=defaultVerbose );            ///< save projections to sonlFile (or cout)
+        void trySave( int const verbose=defaultVerbose );            ///< save projections to solnFile (or cout)
         void tryValidate( int const verbose=defaultVerbose );        ///< validate (if y available) TBD
+
+        //void resolve(std::string args);       ///< create solver like soln, modify soln parms, and solve again
+        //Confusion? reValidate();              ///< validate the solver's solution
+        //void accept();                        ///< accept updated solver solution as this->soln
 
         ::opt::MCprojArgs const& args() const {return *this;}
         //::MCsolver const& solver() const {return *this;}
     private:
         // x examples, from A::xFile, is required, and can be sparse or dense
-        MCsoln soln;            ///< required, from A::solnFile
-        /// \name row-wise test data matrix
-        //@{
-        DenseM xDense;
-        bool denseOk;
-        SparseM xSparse;
-        bool sparseOk;
-        //@}
-        SparseMb y;             ///< optional, from A::yFile (validiation TBD)
-        /** projection data [output].
+        MCsoln soln;                                    ///< required, from A::solnFile
+        //std::shared_ptr<MCsolveProgram> solveProg;      ///< \em linked external solver [opt.] unowned ptr.
+        MCsolveProgram * solveProg;
+        std::shared_ptr<MCxyData> xy;
+        /** \b Final projection data [output].
          * For each example row of \c x{Dense|Sparse},
-         * raw output is a bitset of feasible classes. */
+         * raw output is a bitset of feasible classes.
+         * ... TBD per projection versions ?
+         */
         std::vector<boost::dynamic_bitset<>> feasible;
 
 #if 0 // pure binary outputs might not be very useful.

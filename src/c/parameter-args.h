@@ -88,7 +88,8 @@ namespace opt {
     /** wrap program options for standalone mcproj exectuable */
     struct MCprojArgs {
         MCprojArgs();
-        MCprojArgs(int argc, char**argv);
+        MCprojArgs(int argc, char**argv);       ///< main constructor (boost::program_arguments)
+        MCprojArgs(std::string args);           ///< quick'n'dirty "break at EVERY whitespace"
         /// \name lua api
         //@{
         void parse( int argc, char**argv );

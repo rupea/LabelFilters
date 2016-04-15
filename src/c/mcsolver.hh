@@ -376,7 +376,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     if( ! params.resume ){      // NEW --- needs checking
         if(  params.C1 >= 0.0 && params.C2 >= 0.0 ){
             this->t = 0U;
-#if 0
+#if 0 // original
             /*double*/this-> lambda = 1.0/params.C2;
             /*double*/this-> C1 = params.C1/params.C2;
             /*double*/this-> C2 = 1.0;
@@ -384,7 +384,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 #else // new -- For un-row-normalized data, want to scale C1,C2 proportionally ??
             C1 = params.C1;
             C2 = params.C2;
-            if( C2 > 1.e-2 ) lambda = C1/C2; else lambda = 100.0;
+            //if( C2 > 1.e-4 ) lambda = 1.0/C2; else lambda = 100.0;
+            lambda = C2;
 #endif
         }else{
             //this-> C2 = 1.0; // / sqrt(nClass);
@@ -779,14 +780,15 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                     C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                 }
                 // New: test for early exit ...
-                cout<<setw(20)<<tostring(params.reweight_lambda)<<" : total_constraints="
-                    <<total_constraints<<" minus no_filtered="<<no_filtered<<" leaving"
-                    " no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
+                cout<<setw(20)<<tostring(params.reweight_lambda)<<": total_constraints="
+                    <<total_constraints<<" minus no_filtered="<<no_filtered<<"\n"<<setw(20)
+                    <<""<<"  leaving no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
                 if( no_filtered > total_constraints )
                     throw std::runtime_error(" programmer error: removed more constraints than exist?");
                 if( no_remaining == 0 ){
-                    cout<<setw(20)<<""<<"   Cannot continue, no more constraints left to satisfy"<<endl;
-                    OPT_PROFILE_STOP();
+                    cout<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left to satisfy"<<endl;
+                    const_cast<param_struct&>(params).no_projections = prjax+1U; // <-- NB
+                    PROFILER_STOP;
                     break;
                 }
             }

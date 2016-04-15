@@ -2,6 +2,7 @@
 #include "parameter-args.h"
 #include <iostream>
 #include <cstdint>
+#include <sstream>
 
 #include <boost/program_options/parsers.hpp>    // split_unix
 
@@ -522,6 +523,37 @@ namespace opt {
     {
         this->parse(argc,argv);
     }
+    /** helper class for alternate form of constructor.
+     * This is a simple white-space tokenizer, not for
+     * hard-core robustness (no ' " treatment, ...)
+     */
+struct MkArgcArgv : public std::vector<char*>
+    {
+        MkArgcArgv( std::string cmd ) {
+            istringstream iss(cmd);
+            std::string token;
+            while(iss >> token) {
+                char *arg = new char[token.size() + 1];
+                copy(token.begin(), token.end(), arg);
+                arg[token.size()] = '\0';
+                push_back(arg);
+            }
+            push_back(nullptr);
+        }
+        ~MkArgcArgv(){
+            for(size_t i = 0; i < size(); ++i){
+                delete[] (*this)[i];
+                // (*this)[i] = nullptr;
+            }
+        }
+    };
+    MCprojArgs::MCprojArgs(std::string args)
+        : MCprojArgs()
+    {
+        MkArgcArgv a(args);
+        this->parse( a.size()-1U, &a[0] );
+    }
+
 
     void MCprojArgs::parse( int argc, char**argv ){
 #if ARGSDEBUG > 0
