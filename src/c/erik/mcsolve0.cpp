@@ -54,26 +54,6 @@ void init( po::options_description & desc ){
         ;
 }
 
-#if 0 // moved to normalization.h (and into library as column_normalize(Dense const& x, VectorXd& mean, VectorXd& stdev))
-template< typename DERIVED >
-void column_mean_stdev( Eigen::DenseBase<DERIVED> const& x, VectorXd & mean, VectorXd &var ){
-    mean.resize( x.cols() );
-    mean.setZero();
-    var.resize( x.cols() );
-    var.setZero();
-    size_t n=0U;
-    VectorXd delta( x.cols() );
-    for(uint32_t r=0U; r<x.rows(); ++r){
-        ++n;
-        delta = x.row(r).transpose() - mean;
-        mean += delta * (1.0/n);
-        var += delta.cwiseProduct( x.row(r).transpose() - mean );
-    }
-    if( n < 2 ) var.setOnes();                  // not enough data to calculate var
-    else var = (var * (1.0/(n-1))).cwiseSqrt(); // var --> correct scale --> stdev
-}
-#endif
-
 void argsParse( int argc, char**argv ){
 #define ARGSDEBUG 1
 #if ARGSDEBUG > 0
@@ -242,7 +222,7 @@ int main(int argc, char**argv){
             cout<<"xDense ORIG:\n"<<xDense<<endl;
             cout<<" xnorm!"<<endl;
 #if 1
-            column_normalize(xDense,xmean,xstdev);
+            col_normalize(xDense,xmean,xstdev);
             cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
             cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
 #else
@@ -256,7 +236,7 @@ int main(int argc, char**argv){
         mcsolver.solve( xDense, y, &parms );
     }else if( sparseOk ){
         assert( ! xnorm );
-        //if( xnorm ){ cout<<" xnorm!"<<endl; column_normalize(xSparse,xmean,xstdev); } // col-norm DISALLOWED
+        //if( xnorm ){ cout<<" xnorm!"<<endl; col_normalize(xSparse,xmean,xstdev); } // col-norm DISALLOWED
         cout<<"xSparse:\n"<<xSparse<<endl;
         cout<<"y:\n"<<y<<endl;
         cout<<"parms:\n"<<parms<<endl;

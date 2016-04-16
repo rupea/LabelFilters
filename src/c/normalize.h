@@ -109,6 +109,27 @@ void row_normalize( Eigen::DenseBase<DERIVED> & x, VectorXd & mean, VectorXd & s
         }
     }
 }
+
+#if 0 // perhaps harden this code a bit more (for var nans)
+template< typename DERIVED >
+void column_mean_stdev( Eigen::DenseBase<DERIVED> const& x, VectorXd & mean, VectorXd &var ){
+    mean.resize( x.cols() );
+    mean.setZero();
+    var.resize( x.cols() );
+    var.setZero();
+    size_t n=0U;
+    VectorXd delta( x.cols() );
+    for(uint32_t r=0U; r<x.rows(); ++r){
+        ++n;
+        delta = x.row(r).transpose() - mean;
+        mean += delta * (1.0/n);
+        var += delta.cwiseProduct( x.row(r).transpose() - mean );
+    }
+    if( n < 2 ) var.setOnes();                  // not enough data to calculate var
+    else var = (var * (1.0/(n-1))).cwiseSqrt(); // var --> correct scale --> stdev
+}
+#endif
+
 #endif
 
 

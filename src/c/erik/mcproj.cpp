@@ -198,7 +198,7 @@ int main(int argc, char**argv){
             cout<<"xDense ORIG:\n"<<xDense<<endl;
             cout<<" xnorm!"<<endl;
 #if 1 // perhaps a better alg. but I only programmed it for dense, so far
-            column_normalize(xDense,xmean,xstdev);
+            col_normalize(xDense,xmean,xstdev);
             cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
             cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
 #else

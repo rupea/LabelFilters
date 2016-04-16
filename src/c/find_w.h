@@ -182,6 +182,8 @@ public:
     /// \name optional, private stats
     //@{
 private:
+    double qscal; ///< if >0, the multiplier used for \c quadx dimensions
+    double xscal; ///< if >0, the global x multipler used for \c xscale
     struct MCLazyData * lazx;   ///< lazy x statistics
     struct MCLazyData * lazy;   ///< lazy y statistics
 public:
@@ -189,8 +191,22 @@ public:
     void ychanged();                    ///< scrap any y stats
     //@}
 
+    void xread( std::string xFile );    ///< read x (binary, sparse/dense) (txt fmt \b todo)
+    void yread( std::string xFile );    ///< read x (sparse binary or text)
+
     std::string shortMsg() const;       ///< format+dimensions
+
+    void xrunit();                      ///< scale rows have unit norm.
+    void xcunit();                      ///< scale rows have unit norm.
+
+    void xrnormal();                    ///< remove mean,stdev from x rows (dense only)
+    void xcnormal();                    ///< remove mean,stdev from x cols (dense only)
+
+    void xscale(double scal);           ///< multiply all x values by const
+    double xmul() const {return xscal;} ///< what's global x multiplier?
+
     void quadx(double qscal=0.0);       ///< add quadratic dimensions (0.0 autoscales, somehow) \throw if no x data
+    double quadmul() const {return qscal;} ///< return the used quadmul (or 0.0 if quadx has not been called)
 };
 
 /** Provide a simpler API for solving.

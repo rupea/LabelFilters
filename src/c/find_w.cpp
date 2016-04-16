@@ -1,6 +1,7 @@
 
 #include "find_w.hh"            // get template definition of the solve_optimization problem
 #include "mcsolver.hh"          // template impl of MCsolver version
+#include "normalize.h"          // MCxyData support funcs
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
@@ -202,29 +203,223 @@ struct MCLazyData {
      * (Using norm2 to help set MeanStdev is likely numerically less stable
      *  than the normal MeanStdev method)
      */
-    VectorXd row2; ///< row norms
-    VectorXd col2; ///< column norms
+    VectorXd row2; ///< row l2-norms
+    VectorXd col2; ///< column l2-norms
 
     /** invalidate all stats (doesn't free memory) */
     void changed(){
         rowOk = colOk = row2Ok = col2Ok = row_mean0 = row_stdev1 = col_mean0 = col_stdev1 = false;
     }
-    void setRow2( DenseM const &x ) {cout<<"setRow2 TBD"<<endl;}
-    void setRow2( SparseM const &x ) {cout<<"setRow2 TBD"<<endl;}
+    MeanStdev& freshRow( size_t const n ){
+        if( !row ) row = new MeanStdev();
+        row->n = n;
+        row->mean.resize(0); row->mean.resize(n);
+        row->stdev.resize(0); row->stdev.resize(n);
+        return *row;
+    }
+    MeanStdev& freshCol( size_t const n ){
+        if( !col ) col = new MeanStdev();
+        col->n = n;
+        col->mean.resize(0); col->mean.resize(n);
+        col->stdev.resize(0); col->stdev.resize(n);
+        return *col;
+    }
+    void setRow2( DenseM const &x );
+    void setRow2( SparseM const &x );
+    void setCol2( DenseM const &x );
+    //void setRow2( SparseM const &x );
+    void runit( DenseM & x );   // make x rows into unit vectors by scaling
+    void runit( SparseM & x );
+    void cunit( DenseM & x );   // make x cols into unit vectors by scaling
+    void cunit( SparseM & x );  ///< Just throws a runtime_error.
     void setMeanStdev( DenseM const& x ) {cout<<"setRow2 TBD"<<endl;}
     void setMeanStdev( SparseM const& x ) {cout<<"setRow2 TBD"<<endl;}
 };
 MCxyData::MCxyData() : xDense(), denseOk(false), xSparse(), sparseOk(false)
-                       , y(), lazx(nullptr), lazy(nullptr) {}
+                       , y(), qscal(0.0), xscal(0.0)
+                       , lazx(nullptr), lazy(nullptr) {}
 MCxyData::~MCxyData(){
     delete lazx; lazx=nullptr;
     delete lazy; lazy=nullptr;
 }
 void MCxyData::xchanged() {
-    if( lazx ) { lazx->changed(); }
+    if( lazx ) { lazx->changed();}
 }
 void MCxyData::ychanged() {
     if( lazy ) { lazy->changed(); }
+}
+void MCxyData::xscale( double const mul ){
+    if(mul != 1.0){
+        if( sparseOk ) xSparse *= mul;
+        else           xDense  *= mul;
+        if(xscal==0.0) xscal=1.0;
+        xscal *= mul;
+        qscal *= mul;
+        xchanged();
+    }
+}
+void MCLazyData::setRow2( DenseM const &x ){
+    row2.resize(0); row2.resize(x.rows());
+    row2 = x.rowwise().norm(); // TODO optimize if rowOk (faster)
+    row2Ok = true; col2Ok = false;
+}
+void MCLazyData::setRow2( SparseM const &x ){
+    row2.resize(0); row2.resize(x.rows());
+    // No: row2 = x.rowwise().norm();
+    // optimize if rowOk!
+    for(SparseM::Index i=0; i<x.rows(); ++i){
+        row2.coeffRef(i) = x.row(i).norm();
+    }
+    row2Ok = true; col2Ok = false;
+}
+void MCLazyData::setCol2( DenseM const &x ){
+    col2.resize(0); col2.resize(x.rows());
+    col2 = x.colwise().norm(); // TODO optimize if rowOk (faster)
+    col2Ok = true; row2Ok = false;
+}
+void MCLazyData::runit( DenseM& x ){
+    setRow2( x );
+    for(size_t r=0U; r<x.rows(); ++r){
+        double const f = 1.0 / row2.coeff(r);
+        if( !(f < 1.e-10) ){
+            x.row(r) *= f;
+            row2.coeffRef(r) = 1.0;
+        }
+    }
+}
+void MCLazyData::runit( SparseM& x ){
+    setRow2( x );
+    for(size_t r=0U; r<x.rows(); ++r){
+        double const f = 1.0 / row2.coeff(r);
+        if( !(f < 1.e-10) ){
+            x.row(r) *= f;
+            row2.coeffRef(r) = 1.0;
+        }
+    }
+}
+void MCLazyData::cunit( DenseM& x ){
+    setCol2( x );
+    for(size_t r=0U; r<x.rows(); ++r){
+        double const f = 1.0 / col2.coeff(r);
+        if( !(f < 1.e-10) ){
+            x.col(r) *= f;
+            col2.coeffRef(r) = 1.0;
+        }
+    }
+}
+void MCLazyData::cunit( SparseM& x ){
+    throw std::runtime_error("col unit of SparseM not supported");
+}
+
+
+void MCxyData::xrunit(){
+    if(!lazx) lazx = new MCLazyData();
+    if( denseOk ) lazx->runit(xDense);
+    else          lazx->runit(xSparse);
+}
+
+void MCxyData::xcunit(){
+    if(!lazx) lazx = new MCLazyData();
+    if( denseOk ) lazx->cunit(xDense);
+    else          lazx->cunit(xSparse);
+}
+
+void MCxyData::xrnormal(){
+    if( sparseOk ) throw std::runtime_error("row norm of SparseM? convert to DenseM, please");
+    if( !denseOk ) throw std::runtime_error("no x data for xrnormal");
+    if( lazx && lazx->row_mean0 && lazx->row_stdev1 )
+        throw std::runtime_error("possible double call to xrnormal?");
+    xchanged();
+    if(!lazx) lazx = new MCLazyData();
+    auto& ms = lazx->freshRow( xDense.rows() );    // a MeanStdev
+    row_normalize( xDense, ms.mean, ms.stdev );  // save OLD mean stdev
+    lazx->rowOk = lazx->row_mean0 = lazx->row_stdev1 = true;
+    lazx->colOk = lazx->col_mean0 = lazx->col_stdev1 = false;
+    lazx->row2.resize(0); lazx->row2.resize(xDense.rows());
+    lazx->row2.setOnes();
+    lazx->row2Ok = true;
+    lazx->col2Ok = false;
+}
+void MCxyData::xcnormal(){
+    if( sparseOk ) throw std::runtime_error("x col norm of SparseM? convert to DenseM, please");
+    if( !denseOk ) throw std::runtime_error("no x data for xrnormal");
+    if( lazx && lazx->col_mean0 && lazx->col_stdev1 )
+        throw std::runtime_error("possible double call to xcnormal?");
+    xchanged();
+    if(!lazx) lazx = new MCLazyData();
+    auto& ms = lazx->freshCol( xDense.cols() );    // a MeanStdev
+    col_normalize( xDense, ms.mean, ms.stdev );      // save OLD mean stdev
+    lazx->colOk = lazx->col_mean0 = lazx->col_stdev1 = true;
+    lazx->rowOk = lazx->row_mean0 = lazx->row_stdev1 = false;
+    lazx->col2.resize(0); lazx->col2.resize(xDense.cols());
+    lazx->col2.setOnes();
+    lazx->col2Ok = true;
+    lazx->row2Ok = false;
+}
+void MCxyData::xread( std::string xFile ){
+    ifstream xfs;
+    // TODO XXX try Dense-Text, Sparse-Text too?
+    try{
+        xfs.open(xFile);
+        if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+        ::detail::eigen_io_bin(xfs, xDense);
+        if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
+        char c;
+        xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
+        if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
+        xfs.close();
+        assert( xDense.cols() > 0U );
+        denseOk=true;
+    }catch(std::exception const& e){
+        cout<<" oops ... "<<e.what()<<endl;
+        cerr<<"Retrying xFile as SparseM..."<<endl;
+        try{
+            xfs.close();
+            xfs.open(xFile);
+            if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+            ::detail::eigen_io_bin( xfs, xSparse );
+            if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
+            xfs.close();
+            assert( xSparse.cols() > 0U );
+            sparseOk=true;
+        }catch(...){
+            cerr<<" Doesn't seem to be sparse either"<<endl;
+        }
+    }
+}
+void MCxyData::yread( std::string yFile ){
+    ifstream yfs;
+    bool yOk = false;
+    try{
+        yfs.open(yFile);
+        if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+        ::detail::eigen_io_binbool( yfs, y );
+        assert( y.cols() > 0U );
+        if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
+        yOk = true;
+    }catch(std::runtime_error const& e){
+        cerr<<e.what()<<endl;
+        //throw;
+    }catch(std::exception const& e){
+        cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
+        throw;
+    }
+    if( !yOk ){
+        cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
+        try{
+            yfs.close();
+            yfs.open(yFile);
+            if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+            ::detail::eigen_io_txtbool( yfs, y );
+            assert( y.cols() > 0U );
+            // yfs.fail() is expected
+            if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
+        }
+        catch(std::exception const& e){
+            cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
+            throw;
+        }
+    }
 }
 std::string MCxyData::shortMsg() const {
     ostringstream oss;
@@ -285,16 +480,39 @@ static void addQuadratic( DenseM & x, double const qscal=1.0 ){
  * done with full parallelism.
  * \throw if no data. */
 void MCxyData::quadx(double qscal /*=0.0*/){
+    if( !sparseOk && !denseOk ) throw std::runtime_error(" quadx needs x data");
+    if( this->qscal != 0.0 ) throw std::runtime_error("quadx called twice!?");
+    // divide xi * xj terms by max|x| ?
+    // look at quad terms globally and make them mean 0 stdev 1 ?
+    // scale so mean is 0 and all values lie within [-2,2] ?
     if( qscal==0.0 ){
-        qscal=1.0;
-        // divide xi * xj terms by max|x| ?
-        // look at quad terms globally and make them mean 0 stdev 1 ?
-        // scale so mean is 0 and all values lie within [-2,2] ?
+        // calculate some "max"-ish value, and invert it.
+        // I'll use l_{\inf} norm, or max absolute value,
+        // so as not to ruin sparsity (if any)
+        if( sparseOk ){
+            if(!xSparse.isCompressed()) xSparse.makeCompressed();
+#if 0 // not available for sparse..   l_{\inf} norm == max absolute value
+            qscal = xSparse.lpNorm<Eigen::Infinity>();
+#else
+            SparseM::Index const nData = xSparse.outerIndexPtr()[ xSparse.outerSize() ];
+            auto       b = xSparse.valuePtr();
+            auto const e = b + nData;
+            SparseM::Scalar maxabs=0.0;
+            for( ; b<e; ++b) maxabs = std::max( maxabs, std::abs(*b) );
+            qscal = maxabs;
+#endif
+        }else{
+            // not supported: qscal = xDense.cwiseAbs().max();
+            qscal = xDense.lpNorm<Eigen::Infinity>();
+        }
+        qscal = 1.0/qscal;
+        // (note all compares with NaN are false, except !=)
+        if( !(qscal > 1.e-12) ) qscal=1.0; // ignore strange/NaN scaling
     }
     xchanged(); // remove any old x stats
-    if( sparseOk )     addQuadratic( xSparse, qscal );
-    else if( denseOk ) addQuadratic( xDense,  qscal );
-    else throw std::runtime_error(" quadx needs some x data first");
+    if( sparseOk ) addQuadratic( xSparse, qscal );
+    else           addQuadratic( xDense,  qscal );
+    this->qscal = qscal;
 }
 
 // private post-magicHdr I/O routines ...

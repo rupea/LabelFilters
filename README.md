@@ -33,6 +33,8 @@ Main function: src/octave/run_svm_test.m
 TODO:
  - per-axis confusion matrix printouts
  - TEST resume / reoptlu options 
+ - if ... remove_constraints and none left and still want more projections
+      ... can we do better than early exit?
 
 - TODO: when within Milde:
   - remove historical cruft, all matlab, and all liblinear stuff

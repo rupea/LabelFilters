@@ -85,37 +85,7 @@ namespace opt {
             }
         }
         if(!xy->sparseOk){
-            ifstream xfs;
-            // TODO XXX try Dense-Text, Sparse-Text too?
-            try{
-                xfs.open(xFile);
-                if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-                ::detail::eigen_io_bin(xfs, xy->xDense);
-                if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
-                char c;
-                xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
-                if( ! xfs.eof() ) throw std::overflow_error("xy->xDense read did not use full file");
-                xfs.close();
-                assert( xy->xDense.cols() > 0U );
-                xy->denseOk=true;
-            }catch(po::error& e){
-                cerr<<"Invalid argument: "<<e.what()<<endl;
-                throw;
-            }catch(std::exception const& what){
-                cerr<<"Retrying xFile as SparseM..."<<endl;
-                try{
-                    xfs.close();
-                    xfs.open(xFile);
-                    if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-                    ::detail::eigen_io_bin( xfs, xy->xSparse );
-                    if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
-                    xfs.close();
-                    assert( xy->xSparse.cols() > 0U );
-                    xy->sparseOk=true;
-                }catch(...){
-                    cerr<<" Doesn't seem to be sparse either"<<endl;
-                }
-            }
+            xy->xread(xFile);
         }
         if(xnorm && xy->sparseOk){
             xy->xDense = DenseM( xy->xSparse );     // convert sparse --> dense
@@ -125,42 +95,8 @@ namespace opt {
         }
         // read SparseMb xy->y;
         if(yFile.size()){
-            ifstream yfs;
-            bool yOk = false;
-            try{
-                yfs.open(yFile);
-                if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-                ::detail::eigen_io_binbool( yfs, xy->y );
-                assert( xy->y.cols() > 0U );
-                if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
-                yOk = true;
-            }catch(po::error& e){
-                cerr<<"Invalid argument: "<<e.what()<<endl;
-                throw;
-            }catch(std::runtime_error const& e){
-                cerr<<"ERROR: tryRead(), "<<e.what()<<endl;
-                //throw;
-            }catch(std::exception const& e){
-                cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
-                throw;
-            }
-            if( !yOk ){
-                cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
-                try{
-                    yfs.close();
-                    yfs.open(yFile);
-                    if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-                    ::detail::eigen_io_txtbool( yfs, xy->y );
-                    assert( xy->y.cols() > 0U );
-                    // yfs.fail() is expected
-                    if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
-                }
-                catch(std::exception const& e){
-                    cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
-                    throw;
-                }
-            }
-            assert( xy->y.size() > 0 );
+            xy->yread(yFile);
+            if( !(xy->y.size() > 0) ) throw std::runtime_error("trouble reading y data");
         }
 #ifndef NDEBUG
         assert( xy->denseOk || xy->sparseOk );
@@ -193,29 +129,10 @@ namespace opt {
             }
         }
         if( A::xunit ){
-            VectorXd xSqNorms;
-            if( xy->denseOk ){
-                for(size_t r=0U; r<xy->xDense.rows(); ++r){
-                    double const l2 = xy->xDense.row(r).squaredNorm();
-                    if( l2 > 1.e-10 ){
-                        xy->xDense.row(r) *= (1.0/sqrt(l2));
-                    }
-                }
-            }else if( xy->sparseOk ){
-                for(size_t r=0U; r<xy->xSparse.rows(); ++r){
-                    double const l2 = xy->xSparse.row(r).squaredNorm();
-                    if( l2 > 1.e-10 ){
-                        xy->xSparse.row(r) *= (1.0/sqrt(l2));
-                    }
-                }
-            }
+            xy->xrunit();
         }
         if( A::xscale != 1.0 ){
-            if( xy->denseOk ){
-                xy->xDense *= A::xscale;
-            }else if( xy->sparseOk ){
-                xy->xSparse *= A::xscale;
-            }
+            xy -> xscale( A::xscale );
         }
 
         if(verbose>=1 && xy->y.rows() < 50 ){       // print only for small tests
