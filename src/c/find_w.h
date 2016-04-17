@@ -192,7 +192,9 @@ public:
     //@}
 
     void xread( std::string xFile );    ///< read x (binary, sparse/dense) (txt fmt \b todo)
-    void yread( std::string xFile );    ///< read x (sparse binary or text)
+    void yread( std::string yFile );    ///< read x (sparse binary or text)
+    void xwrite( std::string xFile ) const; ///< save x (binary only, for now)
+    void ywrite( std::string yFile ) const; ///< save y (binary only, for now)
 
     std::string shortMsg() const;       ///< format+dimensions
 
@@ -207,6 +209,13 @@ public:
 
     void quadx(double qscal=0.0);       ///< add quadratic dimensions (0.0 autoscales, somehow) \throw if no x data
     double quadmul() const {return qscal;} ///< return the used quadmul (or 0.0 if quadx has not been called)
+    
+    // I got annoyed with weighting for an error before aborting trying binary
+    // reads. So let me (everywhere, sigh) use a magic header, for a quick check.
+    static std::array<char,4> magic_xSparse; ///< 0x00,'X','s','8' (or 4 for floats)
+    static std::array<char,4> magic_xDense;  ///< 0x00,'X','d','8' (or 4 for floats)
+    static std::array<char,4> magic_yBin;    ///< 0x00,'Y','s','b'
+    // feel free to add any other [binary] formats.
 };
 
 /** Provide a simpler API for solving.
@@ -303,6 +312,8 @@ public:
     void trim( enum Trim const kp = TRIM_AVG );
 
 private:
+    /** twice, we need to chop unused projections from the solution */
+    void chopProjections(size_t const nProj);
     int getNthreads( param_struct const& params ) const;
 };
 #endif // proposed

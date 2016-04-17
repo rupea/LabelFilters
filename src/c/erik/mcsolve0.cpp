@@ -154,6 +154,9 @@ int main(int argc, char**argv){
         if( parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu requires --solnfile=...");
     }
     cout<<"argc,argv -->\n"<<parms<<endl;          // pretty print final parms
+    // Note: now MCxyData handles all the I/O
+    //       MCxyData uses a magic hdr, but I'll just ignore it here.
+    array<char,4> magicHdr;
     DenseM xDense;
     bool denseOk=false;
     SparseM xSparse;
@@ -164,20 +167,19 @@ int main(int argc, char**argv){
         try{
             xfs.open(xFile);
             if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+            ::detail::io_bin(xfs, magicHdr );     // Now this might be MCxyData::magic_xDense
             ::detail::eigen_io_bin(xfs, xDense);
             xfs.close();
             if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
             assert( xDense.cols() > 0U );
             denseOk=true;
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
         }catch(std::exception const& what){
             cerr<<"Retrying xFile as SparseM..."<<endl;
             try{
                 xfs.close();
                 xfs.open(xFile);
                 if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+                ::detail::io_bin(xfs, magicHdr );     // Now this might be MCxyData::magic_xSparse
                 ::detail::eigen_io_bin( xfs, xSparse );
                 if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
                 xfs.close();
@@ -200,12 +202,10 @@ int main(int argc, char**argv){
         try{
             yfs.open(yFile);
             if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+            ::detail::io_bin(yfs, magicHdr );     // Now this might be MCxyData::magic_yBin
             ::detail::eigen_io_binbool( yfs, y );
             assert( y.cols() > 0U );
             if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
         }catch(std::runtime_error const& e){
             cerr<<e.what()<<endl;
             throw;

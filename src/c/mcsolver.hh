@@ -447,17 +447,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                                           lambda, C1, C2, params); 
     };
 
-    if (weights.cols() > nProj) { // <--- weights_avg would be better ?
-        cerr<<"Warning: the number of requested filters is lower than the number of filters already learned."
-           "\n\tDropping the extra filters" << endl;
-        weights.conservativeResize(d, nProj);
-        weights_avg.conservativeResize(d, nProj);
-        lower_bounds.conservativeResize(nClass, nProj);
-        upper_bounds.conservativeResize(nClass, nProj);
-        lower_bounds_avg.conservativeResize(nClass, nProj);
-        upper_bounds_avg.conservativeResize(nClass, nProj);
-    }
-
+    chopProjections(nProj);
     int prjax = 0;
     int reuse_dim = weights_avg.cols();
     cout<<"  ... begin with weights"<<prettyDims(weights)<<" weights_avg"<<prettyDims(weights_avg)
@@ -787,7 +777,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                     throw std::runtime_error(" programmer error: removed more constraints than exist?");
                 if( no_remaining == 0 ){
                     cout<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left to satisfy"<<endl;
+                    const_cast<param_struct*>(params_arg)->no_projections = prjax+1U; // <-- NB
                     const_cast<param_struct&>(params).no_projections = prjax+1U; // <-- NB
+                    chopProjections( prjax+1U );
                     PROFILER_STOP;
                     break;
                 }

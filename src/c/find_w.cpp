@@ -358,48 +358,75 @@ void MCxyData::xcnormal(){
 }
 void MCxyData::xread( std::string xFile ){
     ifstream xfs;
+    std::array<char,4> magicHdr;
     // TODO XXX try Dense-Text, Sparse-Text too?
     try{
         xfs.open(xFile);
+        io_bin(xfs,magicHdr);
         if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-        ::detail::eigen_io_bin(xfs, xDense);
-        if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
-        char c;
-        xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
-        if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
-        xfs.close();
-        assert( xDense.cols() > 0U );
-        denseOk=true;
-    }catch(std::exception const& e){
-        cout<<" oops ... "<<e.what()<<endl;
-        cerr<<"Retrying xFile as SparseM..."<<endl;
-        try{
+        if( MAGIC_EQU(magicHdr,MCxyData::magic_xDense)){
+            ::detail::eigen_io_bin(xfs, xDense);
+            if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
+            char c;
+            xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
+            if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
             xfs.close();
-            xfs.open(xFile);
-            if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+            assert( xDense.cols() > 0U );
+            denseOk=true;
+        }else if( MAGIC_EQU(magicHdr,MCxyData::magic_xSparse)){
             ::detail::eigen_io_bin( xfs, xSparse );
             if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
             xfs.close();
             assert( xSparse.cols() > 0U );
             sparseOk=true;
-        }catch(...){
-            cerr<<" Doesn't seem to be sparse either"<<endl;
+        }else{
+            cerr<<" Neither sparse nor dense binary x data was detected"<<endl;
+            // Not here [yet]: text formats? libsvm? milde repo?
         }
+    }catch(std::exception const& e){
+        cout<<" oops reading x data from "<<xFile<<" ... "<<e.what()<<endl;
+        throw;
+    }
+}
+void MCxyData::xwrite( std::string fname ) const { // write binary (either sparse/dense)
+    ofstream ofs;
+    try{
+        if( !sparseOk && !denseOk )
+            throw std::runtime_error("savex no Eigen x data yet");
+        ofs.open(fname);
+        if( ! ofs.good() ) throw std::runtime_error("savex trouble opening fname");
+        if( sparseOk ){
+            io_bin(ofs,MCxyData::magic_xSparse);
+            detail::eigen_io_bin(ofs, xSparse);
+        }else{ assert(denseOk);
+            io_bin(ofs,MCxyData::magic_xSparse);
+            detail::eigen_io_bin(ofs, xDense);
+        }
+        if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
+        ofs.close();
+    }catch(std::exception const& e){
+        cerr<<" trouble writing "<<fname<<" : unknown exception"<<endl;
+        ofs.close();
+        throw;
     }
 }
 void MCxyData::yread( std::string yFile ){
+    std::array<char,4> magicHdr;
     ifstream yfs;
     bool yOk = false;
     try{
         yfs.open(yFile);
         if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-        ::detail::eigen_io_binbool( yfs, y );
-        assert( y.cols() > 0U );
-        if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
-        yOk = true;
+        io_bin(yfs,magicHdr);
+        if( MAGIC_EQU(magicHdr,magic_yBin) ){
+            ::detail::eigen_io_binbool( yfs, y );
+            assert( y.cols() > 0U );
+            if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
+            yOk = true;
+        }
     }catch(std::runtime_error const& e){
         cerr<<e.what()<<endl;
-        //throw;
+        //throw; // continue execution -- try text format
     }catch(std::exception const& e){
         cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
         throw;
@@ -414,11 +441,27 @@ void MCxyData::yread( std::string yFile ){
             assert( y.cols() > 0U );
             // yfs.fail() is expected
             if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
+            yOk=true;
         }
         catch(std::exception const& e){
             cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
             throw;
         }
+    }
+}
+void MCxyData::ywrite( std::string yFile ) const { // write binary y data (not very compact!)
+    ofstream ofs;
+    try{
+        ofs.open(yFile);
+        if( ! ofs.good() ) throw std::runtime_error("ywrite trouble opening file");
+        io_bin(ofs,MCxyData::magic_yBin);
+        detail::eigen_io_binbool(ofs, y);
+        if( ! ofs.good() ) throw std::runtime_error("ywrite trouble writing file");
+        ofs.close();
+    }catch(std::exception const& e){
+        cerr<<" ywrite trouble writing "<<yFile<<" : unknown exception"<<e.what()<<endl;
+        ofs.close();
+        throw;
     }
 }
 std::string MCxyData::shortMsg() const {

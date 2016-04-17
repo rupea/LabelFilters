@@ -207,38 +207,10 @@ namespace opt {
         }
     }
     void MCsolveProgram::savex( std::string fname ) const {
-        ofstream ofs;
-        try{
-            if( !xy->sparseOk && !xy->denseOk )
-                throw std::runtime_error("savex no Eigen x data yet");
-            ofs.open(fname);
-            if( ! ofs.good() ) throw std::runtime_error("savex trouble opening fname");
-            if( xy->sparseOk ){
-                detail::eigen_io_bin(ofs, xy->xSparse);
-            }else{ assert(xy->denseOk);
-                detail::eigen_io_bin(ofs, xy->xDense);
-            }
-            if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
-            ofs.close();
-        }catch(std::exception const& e){
-            cerr<<" trouble writing "<<A::outFile<<" : unknown exception"<<endl;
-            ofs.close();
-            throw;
-        }
+        xy-> xwrite( fname ); // handles "current" x format (sparse/dense)
     }
     void MCsolveProgram::savey( std::string fname ) const {
-        ofstream ofs;
-        try{
-            ofs.open(fname);
-            if( ! ofs.good() ) throw std::runtime_error("savex trouble opening fname");
-            detail::eigen_io_binbool(ofs, xy->y);
-            if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
-            ofs.close();
-        }catch(std::exception const& e){
-            cerr<<" trouble writing "<<A::outFile<<" : unknown exception"<<endl;
-            ofs.close();
-            throw;
-        }
+        xy-> ywrite( fname ); // only binary save here, inefficient :(
     }
     
     /** transform EVERY row of x by adding the "quadratic dimensions".

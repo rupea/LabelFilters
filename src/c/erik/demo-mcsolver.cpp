@@ -537,6 +537,7 @@ int main(int argc,char** argv)
         DenseM const& lower_bounds = soln.lower_bounds; \
         DenseM const& upper_bounds = soln.upper_bounds; \
         cout<<"upper_bounds = "<<upper_bounds<<endl; \
+        cout<<"Final params (did no_projections change?):\n"<<params<<endl; \
         check_solution( weights, lower_bounds, upper_bounds );/*throw on error*/ \
     } \
     mcSave(saveBasename, soln); \
