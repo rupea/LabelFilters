@@ -347,22 +347,32 @@ namespace opt {
 
     void MCsolveProgram::tryDisplay( int const verb/*=0*/ ){
         int const verbose = A::verbose + verb;
-        if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
+        if(verbose>=1) cout<<"MCsolveProgram::tryDisplay()"<<endl;
         MCsoln const& soln = S::getSoln();
         // NOTE: for normalization make a COPY (can be avoided) FIXME
-        DenseM const& w = soln.weights_avg;
         DenseM const& ww = soln.weights;
-        vector<double> wwNorms(ww.cols()); for(uint32_t c=0U; c<ww.cols(); ++c) wwNorms[c]= ww.col(c).norm();
-        vector<double>  wNorms(ww.cols()); for(uint32_t c=0U; c< w.cols(); ++c)  wNorms[c]=  w.col(c).norm();
-        cout<<" weights     norms: "; for(uint32_t c=0U; c<ww.cols(); ++c){cout<<" "<<wwNorms[c];} cout<<endl;
-        cout<<" weights_avg norms: "; for(uint32_t c=0U; c< w.cols(); ++c){cout<<" "<< wNorms[c];} cout<<endl;
+        DenseM const& w = soln.weights_avg;
         DenseM const& l = soln.lower_bounds_avg;
         DenseM const& u = soln.upper_bounds_avg;
         if(verbose>=1){ // really want to find a nicer, compact display here XXX
             cout<<"normalized     weights"<<prettyDims(ww)<<":\n";
-            if( ww.size() < 500U ) for(uint32_t c=0; c<<ww.cols(); ++c) cout<<ww.col(c)*(wwNorms[c]>1.e-8?1.0/wwNorms[c]:1.0)<<endl;
+            if( ww.size() > 0U && ww.size() < 500U ){
+                vector<double> wwNorms(ww.cols());
+                for(uint32_t c=0U; c<ww.cols(); ++c)
+                    wwNorms[c]= ww.col(c).norm();
+                cout<<" weights     norms: ";for(uint32_t c=0U; c<ww.cols(); ++c){cout<<" "<<wwNorms[c];} cout<<endl;
+                for(uint32_t c=0; c<<ww.cols(); ++c)
+                    cout<<ww.col(c)*(wwNorms[c]>1.e-8?1.0/wwNorms[c]:1.0)<<endl;
+            }
             cout<<"normalized weights_avg"<<prettyDims(w)<<":\n";
-            if( w.size() < 500U ) for(uint32_t c=0U; c<w.cols(); ++c) cout<<w.col(c)*(wNorms[c]>1.e-8?1.0/wwNorms[c]:1.0)<<endl;
+            if( w.size() > 0U && w.size() < 500U ){
+                vector<double>  wNorms(w.cols());
+                for(uint32_t c=0U; c< w.cols(); ++c)
+                    wNorms[c]=  w.col(c).norm();
+                cout<<" weights_avg norms: ";for(uint32_t c=0U; c<w.cols(); ++c){cout<<" "<<wNorms[c];}cout<<endl;
+                for(uint32_t c=0U; c<w.cols(); ++c)
+                    cout<<w.col(c)*(wNorms[c]>1.e-8?1.0/wNorms[c]:1.0)<<endl;
+            }
             cout<<"      lower_bounds_avg"<<prettyDims(l)<<":\n";
             if( l.size() < 500U ) cout<<l<<endl;
             cout<<"      upper_bounds_avg"<<prettyDims(u)<<":\n";

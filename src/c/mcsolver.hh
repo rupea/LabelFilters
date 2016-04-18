@@ -453,6 +453,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     cout<<"  ... begin with weights"<<prettyDims(weights)<<" weights_avg"<<prettyDims(weights_avg)
         <<" lower_bounds_avg"<<prettyDims(lower_bounds_avg)<<" upper_bounds_avg"<<prettyDims(upper_bounds_avg)
         <<endl;
+    if (params.reoptimize_LU && params.reorder_type == REORDER_RANGE_MIDPOINTS )
+        throw std::runtime_error("Error, reordering REORDER_RANGE_MIDPOINTS should "
+                                 "not be used when reoptimizing the LU parameters");
     if (params.resume || params.reoptimize_LU) {
         if (params.reoptimize_LU) {
             lower_bounds.setZero(nClass, reuse_dim);
@@ -472,12 +475,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 xwProj.w_changed();  // projections of 'x' onto 'w' no longer valid
                 if (params.reoptimize_LU) {
                     luPerm.init( xwProj.std(), y, nc );     // try to appease valgrind?
-                    if( params.reorder_type == REORDER_RANGE_MIDPOINTS ){
-                        throw std::runtime_error("Error, reordering REORDER_RANGE_MIDPOINTS should "
-                                                 "not be used when reoptimizing the LU parameters");
-                    }
                     luPerm.rank( GetMeans(params.reorder_type) );
-                    OPTIMIZE_LU(" OPTLU-Init"); // w,projection,sort_order ----> luPerm.{l,u}
+                    PROFILER_STOP_START("optimizeLU.profile");
+                    OPTIMIZE_LU(" OPTLU-Init"); // w,projection,sort_order ----> luPerm.l,u
+                    PROFILER_STOP;
                     weights_avg.col(prjax) = w.getVec();
                     lower_bounds_avg.col(prjax) = luPerm.l;
                     upper_bounds_avg.col(prjax) = luPerm.u;
@@ -496,7 +497,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 if (params.remove_constraints && prjax < (int)nProj-1) {
                     update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
                     no_filtered = filtered.count(); // <--- OUCH
-                    cout << "Filtered " << no_filtered << " out of " << total_constraints;
+                    cout << "Filtered " << no_filtered << " out of " << total_constraints<<endl;
                 }
 
                 // work on this. This is just a crude approximation.
@@ -504,13 +505,28 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 // if weighting is done, the number is different
                 // eliminating one example -class pair removes nclass(exmple) potential
                 // if the class not among the classes of the example
-                if( params.reweight_lambda != REWEIGHT_NONE ){
+                if( params.reweight_lambda != REWEIGHT_NONE ){ // XXX code duplication here
                     long int no_remaining = (long)total_constraints - no_filtered;
                     lambda = no_remaining*1.0/(total_constraints*params.C2);
                     if( params.reweight_lambda == REWEIGHT_ALL ){
                         C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                     }
-                    cout<<" initial reweighting: lambda="<<lambda<<" C1="<<C1<<" C2="<<C2;
+                    // New: test for early exit ...
+                    cout<<setw(20)<<tostring(params.reweight_lambda)<<": total_constraints="
+                        <<total_constraints<<" minus no_filtered="<<no_filtered<<"\n"<<setw(20)
+                        <<""<<"  leaving no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
+                    if( no_filtered > total_constraints )
+                        throw std::runtime_error(" programmer error: removed more constraints than exist?");
+                    if( no_remaining == 0 ){
+                        cout<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left\n"
+                            "  nProj "<<nProj<<" becomes "<<prjax+1U<<endl;
+                        nProj = prjax+1U;
+                        reuse_dim = nProj;
+                        const_cast<param_struct*>(params_arg)->no_projections = nProj; // <-- NB
+                        const_cast<param_struct&>(params).no_projections = nProj; // <-- NB
+                        chopProjections( nProj );
+                        break;
+                    }
                 }
                 cout<<endl;
             }
@@ -526,6 +542,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         cout<<"  ... starting with weights_avg"<<prettyDims(weights_avg)<<":\n"<<weights_avg<<endl;
         cout<<"  ... beginning at prjax="<<prjax<<" reuse_dim="<<reuse_dim<<endl;
         cout<<"  ... sc_chunks="<<updateSettings.sc_chunks<<" MCTHREADS="<<MCTHREADS<<endl;
+    }
+    if( params.reoptimize_LU && !params.resume ){
+        cout<<"  ... --reoptlu with no --resume --> early solver exit"<<endl;
+        return;
     }
     // XXX make more robust to continued runs?
     weights             .conservativeResize(d, nProj);
@@ -752,7 +772,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                                 , y, params.remove_class_constraints);
             }else{
                 if(ITER_TRACE){ std::cout<<" proj_FILTER_std "; std::cout.flush(); }
-                luPerm.mkok_lu();      //-- *just* finished doing this
+                luPerm.mkok_lu();
                 update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
             }
 
@@ -780,7 +800,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                     const_cast<param_struct*>(params_arg)->no_projections = prjax+1U; // <-- NB
                     const_cast<param_struct&>(params).no_projections = prjax+1U; // <-- NB
                     chopProjections( prjax+1U );
-                    PROFILER_STOP;
                     break;
                 }
             }
@@ -791,5 +810,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         if(ITER_TRACE || PRINT_O)
             cout<<endl;
     } // end for prjax
+    PROFILER_STOP;
 }
 #endif //MCSOLVER_HH

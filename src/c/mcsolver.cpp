@@ -22,17 +22,21 @@ std::array<char,4> MCxyData::magic_yBin    = {0,'Y','s','b'};
  *    of projections (and zero-initializing all) ??
  */
 void MCsolver::chopProjections(size_t const nProj){
-    if (weights.cols() > nProj) { // <--- weights_avg would be better ?
-        std::cerr<<" Reducing from "<<weights.cols()<<" to "<<nProj<<" projections."
-            "\n\tDropping the extra filters"<<std::endl;
+    cerr<<" chopProjections("<<nProj<<")"<<endl;
+    if(weights.cols() > nProj){
+        cerr<<"Reducing weights from "<<weights.cols()<<" to "<<nProj<<" projections"<<endl;
         weights.conservativeResize(/*d*/weights.rows(), nProj);
-        weights_avg.conservativeResize(/*d*/weights_avg.rows(), nProj);
         lower_bounds.conservativeResize(/*nClass*/lower_bounds.rows(), nProj);
         upper_bounds.conservativeResize(/*nClass*/upper_bounds.rows(), nProj);
+    }
+    if(weights_avg.cols() > nProj){
+        cerr<<"Reducing weights_avg from "<<weights_avg.cols()<<" to "<<nProj<<" projections"<<endl;
+        weights_avg.conservativeResize(/*d*/weights_avg.rows(), nProj);
         lower_bounds_avg.conservativeResize(/*nClass*/lower_bounds_avg.rows(), nProj);
         upper_bounds_avg.conservativeResize(/*nClass*/upper_bounds_avg.rows(), nProj);
     }
 }
+
     MCpermState::MCpermState( size_t nClass )
     : Perm(nClass)
     , ok_lu(false)
