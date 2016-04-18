@@ -46,8 +46,8 @@ namespace opt {
             ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
             ("seed", value<uint32_t>()->default_value(p.seed), "random number seed")
             ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
-            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "resume existing soln?")
-            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize existing [l,u]?")
+            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "recalculate directions")
+            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "existing dims get [l,u] update without direction change")
             ("sample", value<uint32_t>()->default_value(p.class_samples)
              , "Cap -ve classes for chunked gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all")
             ;

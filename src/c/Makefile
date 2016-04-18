@@ -380,6 +380,50 @@ mcproj.log: mcgenx mcproj mcsolve erik/mcsolve0
 	@echo ""
 	@echo mcproj.log valgrind summary:
 	@grep '\(ERROR SUMMARY\)\|\(== run :\)' mcproj.log
+mcproj1.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in \
+		"./mcproj --solnfile=mcgen-a3-bin.soln -xmcgen-a3-x-D.bin -ymcgen-a3-slc-y.bin -v" \
+		"./mcsolve --solnfile=mcgen-a3-bin.soln -xmcgen-a3-x-D.bin -ymcgen-a3-slc-y.bin -oxx --reoptlu --treport=500" \
+		"./mcproj --solnfile=xx.soln -xmcgen-a3-x-D.bin -ymcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
+mcproj2.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in \
+		"./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin" \
+		"./mcsolve --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin -o xx --reoptlu" \
+		"./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
+mcproj3.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in "./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \
+		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
+		"./mcsolve --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -o xx --reoptlu --resume" \
+		"./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
+mcproj4.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in \
+		"./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin" \
+		"./mcsolve --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin -o xx --reoptlu --resume" \
+		"./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.

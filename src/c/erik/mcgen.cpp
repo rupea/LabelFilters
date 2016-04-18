@@ -1995,6 +1995,11 @@ int main(int argc, char** argv)
         mcs.nProj       = p.axes;
         mcs.nClass      = p.nClass;     // NO class remap
         //mcs.fname       =
+        // wnorm is the 'length' of each projection vector (= col of weights_avg)
+        // wnorm is important because MCsolver is unable to correctly set an initial
+        //       scale for the weights.
+        double wnorm = 1.0; // (p.axes + 1U); // <-- NEW (multiplier for weight, l AND u)
+        if( p.margin > 0 ) wnorm = 1/p.fmargin;
         { // copy vector<vector<float>> weights ---> Eigen DenseM MCsoln::weights_avg
             mcs.parms.no_projections = mcs.nProj;
             // TODO XXX The following can be played with until something that stays at
@@ -2009,7 +2014,6 @@ int main(int argc, char** argv)
             //mcs.parms.reoptimize_LU = true;
 
             mcs.weights_avg.conservativeResize( mcs.d, mcs.nProj );     // soln, as col. vectors
-            double wnorm = 1.0; // (p.axes + 1U);                                 // <-- NEW
             for(uint32_t d=0U; d<mcs.d; ++d){
                 for(uint32_t s=0U; s<mcs.nProj; ++s){
                     mcs.weights_avg.coeffRef(d,s) = soln[s][d] * wnorm;
@@ -2047,7 +2051,7 @@ int main(int argc, char** argv)
                         assert( cls < mcs.nClass );
                         for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
                             //cout<<" cls,p = "<<cls<<","<<p;
-                            float const vdots = dot( v, soln[p] );
+                            float const vdots = dot( v, soln[p] ) * wnorm;      // NEW: scaled by wnorm
                             l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
                             u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
                         }
@@ -2058,7 +2062,7 @@ int main(int argc, char** argv)
                             assert( cls < mcs.nClass );
                             for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
                                 //cout<<" cls,p = "<<cls<<","<<p;
-                                float const vdots = dot( v, soln[p] );
+                                float const vdots = dot( v, soln[p] ) * wnorm;
                                 l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
                                 u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
                             }
@@ -2069,8 +2073,8 @@ int main(int argc, char** argv)
             //cout<<endl;
             // Now push apart the {l,u} bounds by a slight bit (non-zero margin)
             //    see comments in Filter.h about bad things with zero-margin {l,u} !
-            l.array() -= 1.1111e-4;
-            u.array() += 1.1111e-4;
+            l.array() -= 1.1111e-4 * wnorm;
+            u.array() += 1.1111e-4 * wnorm;
             if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
                 cout<<" {l,u} projection bounds from Eigen col(p).transpose() ...:";
                 for(uint32_t p=0U; p<soln.size(); ++p){

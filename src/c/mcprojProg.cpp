@@ -125,7 +125,7 @@ namespace opt {
                 VectorXd xmean;
                 VectorXd xstdev;
                 if(verbose>=1){
-                    cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
+                    if( xy->xDense.size() < 50U ) cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
                     cout<<" xnorm!"<<endl;
                 }
 #if 1
@@ -146,7 +146,7 @@ namespace opt {
             xy-> xscale( A::xscale );
         }
 
-        if(verbose>=2){
+        if(verbose>=1){
             if( xy->denseOk ){
                 cout<<"--------- xy->xDense"<<prettyDims(xy->xDense)<<":\n";
                 if(xy->xDense.size()<1000||verbose>=3) cout<<xy->xDense<<endl;

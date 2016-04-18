@@ -369,14 +369,14 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     boolmatrix filtered(nTrain,nClass);
     //VectorXd difference(d);
     VectorXd tmp(d);
-    unsigned long total_constraints = nTrain*nClass
+    unsigned long const total_constraints = nTrain*nClass
         - (1-params.remove_class_constraints) * nc.sum();
     size_t no_filtered=0;
     // Possibly read in from save file:
     if( ! params.resume ){      // NEW --- needs checking
         if(  params.C1 >= 0.0 && params.C2 >= 0.0 ){
             this->t = 0U;
-#if 0 // original
+#if 1 // original
             /*double*/this-> lambda = 1.0/params.C2;
             /*double*/this-> C1 = params.C1/params.C2;
             /*double*/this-> C2 = 1.0;
@@ -447,6 +447,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                                           lambda, C1, C2, params); 
     };
 
+    // does resume mean "add new dims" or "recalc old"?
+    bool const resume_newdims = (params.resume && nProj > weights_avg.cols()
+                                 ? true : false );
     chopProjections(nProj);
     int prjax = 0;
     int reuse_dim = weights_avg.cols();
@@ -456,7 +459,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     if (params.reoptimize_LU && params.reorder_type == REORDER_RANGE_MIDPOINTS )
         throw std::runtime_error("Error, reordering REORDER_RANGE_MIDPOINTS should "
                                  "not be used when reoptimizing the LU parameters");
-    if (params.resume || params.reoptimize_LU) {
+    if (resume_newdims || params.reoptimize_LU) {
         if (params.reoptimize_LU) {
             lower_bounds.setZero(nClass, reuse_dim);
             upper_bounds.setZero(nClass, reuse_dim);
@@ -531,11 +534,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 cout<<endl;
             }
         }
-        // Note: if soln NOT stored in LONG format, we will redo all projections
-        //       if soln IS  stored in LONG format, we will never re-iterate over previous projections
-        prjax = weights.cols();
         obj_idx = objective_val.size();
         obj_idx_avg = objective_val_avg.size();
+        // Note: if soln NOT stored in LONG format, we will redo all projections
+        //       if soln IS  stored in LONG format, we will never re-iterate over previous projections
+        //prjax = weights.cols();
     }
     if(1){
         cout<<"  ... starting with     weights"<<prettyDims(weights)<<":\n"<<weights<<endl;
@@ -543,11 +546,27 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         cout<<"  ... beginning at prjax="<<prjax<<" reuse_dim="<<reuse_dim<<endl;
         cout<<"  ... sc_chunks="<<updateSettings.sc_chunks<<" MCTHREADS="<<MCTHREADS<<endl;
     }
-    if( params.reoptimize_LU && !params.resume ){
-        cout<<"  ... --reoptlu with no --resume --> early solver exit"<<endl;
-        return;
+    if( params.reoptimize_LU ){
+        cout<<" ... optlu : reoptimized projections 0.."<<reuse_dim<<endl;
+        if ( !params.resume ){
+            cout<<"  ... --reoptlu with no --resume --> early solver exit"<<endl;
+            return;
+        }
     }
-    // XXX make more robust to continued runs?
+    if( params.resume ){
+        if( !resume_newdims && reuse_dim > 0U){ // recalc beginning with axis 0
+            prjax = 0U;
+            filtered.reset();
+            // XXX should really agree with above initial settings
+            lambda = params.C1;
+            C1 = params.C1/params.C2;
+            C2 = 1.0;
+        }
+        weights = weights_avg;
+        lower_bounds = lower_bounds_avg;
+        upper_bounds = upper_bounds_avg;
+    }
+    // XXX make more robust to continued runs (zero-initalize new projections) ?
     weights             .conservativeResize(d, nProj);
     weights_avg         .conservativeResize(d, nProj);
     lower_bounds        .conservativeResize(nClass, nProj);

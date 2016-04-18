@@ -114,7 +114,7 @@ namespace opt {
                 VectorXd xmean;
                 VectorXd xstdev;
                 if(verbose>=1){
-                    cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
+                    if( xy->xDense.size() < 50U ) cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
                     cout<<" xnorm!"<<endl;
                 }
 #if 1
@@ -135,15 +135,21 @@ namespace opt {
             xy -> xscale( A::xscale );
         }
 
-        if(verbose>=1 && xy->y.rows() < 50 ){       // print only for small tests
+        if(verbose>=1){
             if( xy->denseOk ){
-                cout<<"xy->xDense:\n"<<xy->xDense<<endl;
-                cout<<"xy->y:\n"<<xy->y<<endl;
-                cout<<"parms:\n"<<A::parms<<endl;
+                cout<<"--------- xy->xDense"<<prettyDims(xy->xDense)<<":\n";
+                if(xy->xDense.size()<1000||verbose>=3) cout<<xy->xDense<<endl;
             }else{ //xy->sparseOk
-                cout<<"xy->xSparse:\n"<<xy->xSparse<<endl;
-                cout<<"xy->y:\n"<<xy->y<<endl;
-                cout<<"parms:\n"<<A::parms<<endl;
+                cout<<"--------- xy->xSparse"<<prettyDims(xy->xSparse)<<":\n";
+                if(xy->xSparse.size()<1000||verbose>=3) cout<<xy->xSparse<<endl;
+                //if( xnorm ){ cout<<" xnorm!"<<endl; col_normalize(xy->xSparse,xmean,xstdev); }
+                // col-norm DISALLOWED
+                if( xnorm ) throw std::runtime_error("sparse --xfile does not support --xnorm");
+            }
+            if( xy->y.size() <= 0 ) cout<<"xy->y: (no validation data)"<<endl;
+            else{
+                cout<<"--------- xy->y"<<prettyDims(xy->y)<<":\n";
+                if(xy->y.size()<1000||verbose>=3) cout<<xy->y<<endl;
             }
         }
     }
@@ -399,7 +405,7 @@ namespace opt {
         if(1) { // NEW TEST CODE XXX
             cout<<"\n********* NEW TEST CODE **********"<<endl;
             this->pretty(cout);
-            auto proj = projector("");
+            auto proj = projector("-v");
             if( ! proj ) throw std::runtime_error(" Failed to construct projector associated with this solver");
 
             //proj->tryRead(7/*verbose*/);
@@ -416,7 +422,8 @@ namespace opt {
         if( ! projProg ){
             std::ostringstream cmd;            // default command string
             // Potential difficulty -- embedded whitespace will be treated INCORRECTLY
-            cmd<<" INTERNAL --solnfile="<<solnFile<<" --xfile="<<xFile<<" --yfile="<<yFile
+            cmd<<" INTERNAL --solnfile="<<(A::outFile.size()?A::outFile:A::solnFile)
+                <<" --xfile="<<xFile<<" --yfile="<<yFile
                 <<" "<<args;
             //projProg = std::make_shared<MCprojProgram>( this, cmd.str() );
             projProg = new MCprojProgram( this, cmd.str() );
