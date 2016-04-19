@@ -499,8 +499,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 // examples belonging to multiple classes
                 if (params.remove_constraints && prjax < (int)nProj-1) {
                     update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
-                    no_filtered = filtered.count(); // <--- OUCH
-                    cout << "Filtered " << no_filtered << " out of " << total_constraints<<endl;
+                    no_filtered = filtered.count();
+                    cout<<"Filter["<<filtered.rows()<<"x"<<filtered.cols()<<"] removed "<<no_filtered
+                        <<" of "<<total_constraints<<" constraints"<<endl;
                 }
 
                 // work on this. This is just a crude approximation.
@@ -795,8 +796,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
             }
 
-            no_filtered = filtered.count();             // XXX ouch?
-            cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
+            no_filtered = filtered.count();
+            cout<<"Filter["<<filtered.rows()<<"x"<<filtered.cols()<<"] removed "<<no_filtered
+                <<" of "<<total_constraints<<" constraints"<<endl;
             // work on this. This is just a crude approximation.
             // now every example - class pair introduces nclass(example) constraints
             // if weighting is done, the number is different

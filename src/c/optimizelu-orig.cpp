@@ -833,7 +833,7 @@ void optimizeLU(VectorXd& l, VectorXd& u,
   //allproj.setZero();            // valgrind issues ???
   allproj << (projection.array() - 1), (projection.array() + 1);
 
-  bool none_filtered = filtered.count()==0;             // XXX ouch ???
+  bool none_filtered = filtered.count()==0;
   std::vector<size_t> indices(allproj.size());
   if(1){
       sort_index(allproj, indices);  // valgrind complaints ??? XXX

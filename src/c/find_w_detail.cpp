@@ -204,6 +204,7 @@ void update_filtered(boolmatrix& filtered, const VectorXd& projection,
 		  filtered.set(i,cp);
 		}
 	      //no_filtered += filtered[i][cp] = filtered[i][cp] || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+              //assert( 
 	    }
 	  if ( cp == c )
 	    {
@@ -1212,7 +1213,7 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
   //const int noClasses = y.cols();
   double obj_val = 0;
   //  size_t no_filtered = filtered.count();
-  bool none_filtered = filtered.count()==0;     // OUCH ! slow operation
+  bool none_filtered = filtered.count()==0;
   //int maxclasses = nclasses.maxCoeff();
 #if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:obj_val)

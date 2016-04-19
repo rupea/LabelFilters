@@ -45,6 +45,7 @@ inline boolmatrix::~boolmatrix()
 
 inline void boolmatrix::reset(){
     _data->reset();
+    _count=0U;
 }
 inline bool boolmatrix::get(size_t i, size_t j) const
 {
@@ -59,8 +60,13 @@ inline void boolmatrix::set(size_t i, size_t j)
 inline void boolmatrix::set(size_t i, size_t j, bool val)
 {
   bool prev = _data->test_set(i*_ncol + j, val);
-  _count += val?(!prev):-(prev);        // XXX signedness, then consider _count += (int)val - (int)prev
-  // unary-minus of a bool -- is this really -1 ???
+  // val  prev
+  //  0    0        0
+  //  0    1       -1
+  //  1    0       +1
+  //  1    1        0
+  //_count += val?(!prev):-(prev); // unary minus of bool is -1
+  _count += (int)val - (int)prev;  // perhaps clearer
 }
 inline void boolmatrix::findFirst(size_t& i, size_t& j) const
 {
