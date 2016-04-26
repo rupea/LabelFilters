@@ -15,6 +15,7 @@ using namespace std;
 // Normalize data : centers and makes sure the variance is one
 void normalize_col(SparseM& mat)
 {
+  using std::isnan;     // perhaps more efficient (constexpr)
   if (mat.rows() < 2)
     return;
 

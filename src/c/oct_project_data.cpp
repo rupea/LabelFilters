@@ -1,13 +1,16 @@
+#include "filter.h"
+#include "boolmatrix.h"
+#include "EigenOctave.h"
+#include "Eigen/Dense"
+#include "Eigen/Sparse"
 #include <octave/oct.h>
 #include <octave/ov-struct.h>
 #include <octave/Cell.h>
 #include <iostream>
 #include <typeinfo>
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
-#include "EigenOctave.h"
-#include "boolmatrix.h"
-#include "filter.h"
+
+using namespace std;
+using boost::dynamic_bitset;
 
 void print_usage()
 {

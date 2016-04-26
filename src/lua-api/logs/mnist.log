@@ -1,0 +1,2468 @@
+|| loaded module 'milde_gui'	
+ Function:   Solve for Multi-Class Label Filter projection lines
+    Determine a number (--proj) of projection lines. Any example whose projection
+    lies outside bounds for that class is 'filtered'.  With many projecting lines,
+    potentially many classes can be filtered out, leaving few potential classes
+    for each example.
+ Usage:
+    <mcsolve> --xfile=... --yfile=... [--solnfile=...] [--output=...] [ARGS...]
+ where ARGS guide the optimization procedure
+ - Without solnfile[.soln], use random initial conditions.
+ - xfile is a plain eigen DenseM or SparseM (always stored as float)
+ - yfile is an Eigen SparseMb matrix of bool storing only the true values,
+         read/written via 'eigen_io_binbool'
+Allowed options:
+
+mcsolve options:
+  -x [ --xfile ] arg                    x data (row-wise nExamples x dim)
+  -y [ --yfile ] arg                    y data (if absent, try reading as 
+                                        libsvm format)
+  -s [ --solnfile ] arg                 solnfile[.soln] starting solver state
+  -o [ --output ] arg (=mc)             output[.soln] file base name
+  -B [=arg(=1)] (=1)                    B|T output BINARY
+  -T [=arg(=1)] (=0)                    B|T output TEXT
+  -S [=arg(=1)] (=1)                    S|L output SHORT
+  -L [=arg(=1)] (=0)                    S|L output LONG
+  --xnorm [=arg(=1)] (=0)               col-normalize x dimensions 
+                                        (mean=stdev=1)
+                                        (forces Dense x)
+  -t [ --threads ] arg (=1)             TBD: threads
+  -v [ --verbose ] [=arg(=1)] (=0)      --verbosity=-1 may reduce output
+
+solver args:
+  -h [ --help ] 
+  --proj arg (=5)                       # of projections
+  --C1 arg (=10)                        ~ label in correct [l,u]
+  --C2 arg (=1)                         ~ label outside other [l,u]
+  --maxiter arg (=1000000)              max iterations per projection
+  -b [ --batchsize ] arg (=100)         batch size
+  -u [ --update ] arg (=MINIBATCH_SGD)  BATCH | SAFE : gradient update type
+  --eps arg (=0.0001)                   unused cvgce threshold
+  --eta0 arg (=0.10000000000000001)     initial learning rate
+  --etatype arg (=ETA_LIN)              CONST | SQRT | LIN | 3_4 : learning 
+                                        rate schedule
+  --etamin arg (=0)                     learning rate limit
+  --optlu arg (=10000)                  expensive exact {l,u} soln period
+  --treorder arg (=1000)                reorder iteration period
+  --reorder arg (=REORDER_AVG_PROJ_MEANS)
+                                        Permutation re-ordering: AVG projected 
+                                        means | PROJ projected means | MID 
+                                        range midpoints. If --avg=0, default is
+                                        PROJ
+  --treport arg (=1000)                 period for reports about latest iter
+  --avg arg (=0)                        averaging start iteration
+  --tavg arg (=0)                       period for reports about avg, expensive
+  --reweight arg (=REWEIGHT_LAMBDA)     NONE | LAMBDA | ALL lambda reweighting 
+                                        method
+  --wt_by_nclasses [=arg(=1)] (=0)      ?
+  --wt_class_by_nclasses [=arg(=1)] (=0)
+                                        ?
+  --negclass arg (=0)                   # of negative classes used at each 
+                                        iter, 0 ~ all classes
+  --remove_constraints [=arg(=1)] (=0)  after each projection, remove 
+                                        constraints
+  --remove_class [=arg(=1)] (=0)        after each projection, remove 
+                                        already-separated classes(?)
+  --threads arg (=0)                    # threads, 0 ~ use OMP_NUM_THREADS
+  --seed arg (=0)                       random number seed
+  --tgrad arg (=0)                      iter period for finite difference 
+                                        gradient test
+  --ngrad arg (=1000)                   directions per gradient test
+  --grad arg (=0.0001)                  step size per gradient test
+  --resume [=arg(=1)] (=0)              resume an existing soln?
+  --reoptlu [=arg(=1)] (=0)             reoptimize {l,u} bounds of existing 
+                                        soln?
+
+lua constructors:
+    - <mcsolve>.new("--xfile=... --yfile=... --solnfile=... etc")
+    - <mcsolve>.new(<explicit_defaults:xparm>, "--xfile=... etc")
+ Program default settings can come from:
+   1. lua <explicit_defaults:xparm>
+   2. else parameters from previous --solnfile
+   3. else library default settings
+	
+ parse( argc=11, argv, ... )
+    argv[0] = foo
+    argv[1] = --xfile=../../data/mnist.svm
+    argv[2] = --output=mnist.soln
+    argv[3] = -B
+    argv[4] = -S
+    argv[5] = --C1=10
+    argv[6] = --C2=1
+    argv[7] = --maxiter=20000000
+    argv[8] = --optlu=5000
+    argv[9] = --treport=100000
+    argv[10] = --proj=10
+msolve args...
+opt::extract...
+ reparse cmdline, this time with .soln parms as defaults
+ parse( argc=11, argv, ... )
+    argv[0] = foo
+    argv[1] = --xfile=../../data/mnist.svm
+    argv[2] = --output=mnist.soln
+    argv[3] = -B
+    argv[4] = -S
+    argv[5] = --C1=10
+    argv[6] = --C2=1
+    argv[7] = --maxiter=20000000
+    argv[8] = --optlu=5000
+    argv[9] = --treport=100000
+    argv[10] = --proj=10
+msolve args...
+opt::extract...
+MCsolveProgram::tryRead()
+ GOOD libsvm-like text input, minClass=0 maxClass=9 minXidx=13 maxXidx=784 row=60000
+	 y.setFromTriplets...
+Assuming 1-based x indices: minXidx = 13, not zero
+	 x.setFromTriplets...
+MCsolveProgram::trySolve() sparse
+ mcsolver.hh, solve_optimization: nProj: 10
+size x: 60000 rows and 784 columns.
+size y: 60000 rows and 10 columns.
+ +MCpermState(nClass=10)
+ solve_ with _OPENMP and params.num_threads set to 1, nThreads is 1, and omp_max_threads is now 1
+ batch_size = 100
+ idx_chunks=1
+ initial lambda=1 C1=10 C2=1
+  ... begin with weights[0x0] weights_avg[0x0] lower_bounds_avg[0x0] upper_bounds_avg[0x0]
+  ... starting with     weights[0x0]:
+
+  ... starting with weights_avg[0x0]:
+
+  ... beginning at projection_dim=0 reuse_dim=0
+ init_w : weights.cols()=10 projection_dim=0 random + vector-between-2-classes orthogonalized
+ start projection 0 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 0, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     8.51472e+07 4.39395
+objective_val[200000]:      2.9767e+07 2.3296
+objective_val[300000]:     8.80817e+06 0.951029
+objective_val[400000]:     3.99892e+06 0.443807
+objective_val[500000]:     5.18966e+06 0.402762
+objective_val[600000]:     3.51706e+06 0.311859
+objective_val[700000]:     3.48108e+06 0.313083
+objective_val[800000]:     1.84758e+06 0.248678
+objective_val[900000]:     2.08175e+06 0.248291
+objective_val[1000000]:     1.55002e+06 0.2145
+objective_val[1100000]:     2.43917e+06 0.269272
+objective_val[1200000]:     1.40106e+06 0.223368
+objective_val[1300000]:     2.14566e+06 0.192103
+objective_val[1400000]:     1.55257e+06 0.171229
+objective_val[1500000]:     1.63796e+06 0.159614
+objective_val[1600000]:     1.22935e+06 0.15165
+objective_val[1700000]:      1.2747e+06 0.153142
+objective_val[1800000]:          982716 0.145005
+objective_val[1900000]:     1.23916e+06 0.1452
+objective_val[2000000]:     1.28971e+06 0.148594
+objective_val[2100000]:     1.17319e+06 0.150065
+objective_val[2200000]:     1.17052e+06 0.130048
+objective_val[2300000]:          942867 0.132348
+objective_val[2400000]:          921795 0.123499
+objective_val[2500000]:     1.02721e+06 0.123095
+objective_val[2600000]:          848340 0.122442
+objective_val[2700000]:     1.14533e+06 0.117768
+objective_val[2800000]:          938960 0.117017
+objective_val[2900000]:     1.14345e+06 0.117302
+objective_val[3000000]:          891093 0.113926
+objective_val[3100000]:          771403 0.112259
+objective_val[3200000]:          723090 0.108854
+objective_val[3300000]:          737480 0.109177
+objective_val[3400000]:          807783 0.11155
+objective_val[3500000]:     1.11114e+06 0.112781
+objective_val[3600000]:          836427 0.112551
+objective_val[3700000]:          868685 0.113135
+objective_val[3800000]:          864578 0.106054
+objective_val[3900000]:          891798 0.108696
+objective_val[4000000]:          879423 0.10853
+objective_val[4100000]:          851489 0.109512
+objective_val[4200000]:          919424 0.10938
+objective_val[4300000]:          787938 0.105804
+objective_val[4400000]:          692634 0.099167
+objective_val[4500000]:          743338 0.0935781
+objective_val[4600000]:          694602 0.0912442
+objective_val[4700000]:          693807 0.090819
+objective_val[4800000]:          846671 0.0909123
+objective_val[4900000]:          775534 0.0899074
+objective_val[5000000]:          768989 0.0896444
+objective_val[5100000]:          754593 0.0903081
+objective_val[5200000]:          737946 0.0900419
+objective_val[5300000]:          678238 0.0886334
+objective_val[5400000]:          766800 0.0893969
+objective_val[5500000]:          679477 0.0876652
+objective_val[5600000]:          651242 0.089362
+objective_val[5700000]:          783505 0.0903689
+objective_val[5800000]:          630742 0.0889807
+objective_val[5900000]:          637841 0.0880736
+objective_val[6000000]:          633733 0.0857079
+objective_val[6100000]:          637954 0.0866018
+objective_val[6200000]:          708597 0.0827128
+objective_val[6300000]:          678527 0.0823367
+objective_val[6400000]:          748092 0.0830424
+objective_val[6500000]:          650801 0.0817796
+objective_val[6600000]:          620502 0.0812739
+objective_val[6700000]:          587674 0.0806228
+objective_val[6800000]:          592207 0.081643
+objective_val[6900000]:          581238 0.0799387
+objective_val[7000000]:          621589 0.0791384
+objective_val[7100000]:          600339 0.0801399
+objective_val[7200000]:          577685 0.07889
+objective_val[7300000]:          623315 0.078912
+objective_val[7400000]:          625462 0.0807264
+objective_val[7500000]:          676166 0.0814522
+objective_val[7600000]:          630390 0.0780467
+objective_val[7700000]:          600675 0.0771851
+objective_val[7800000]:          575314 0.0769584
+objective_val[7900000]:          598070 0.0764437
+objective_val[8000000]:          570814 0.0762616
+objective_val[8100000]:          583924 0.0761117
+objective_val[8200000]:          599559 0.0762329
+objective_val[8300000]:          737943 0.0809033
+objective_val[8400000]:          597869 0.0785299
+objective_val[8500000]:          569626 0.0763498
+objective_val[8600000]:          629496 0.0769483
+objective_val[8700000]:          568963 0.0753003
+objective_val[8800000]:          578795 0.0745394
+objective_val[8900000]:          567393 0.0739777
+objective_val[9000000]:          567526 0.074499
+objective_val[9100000]:          572309 0.0736804
+objective_val[9200000]:          563786 0.073396
+objective_val[9300000]:          580318 0.074253
+objective_val[9400000]:          571700 0.0731959
+objective_val[9500000]:          567220 0.0728348
+objective_val[9600000]:          575767 0.0736411
+objective_val[9700000]:          571327 0.0731631
+objective_val[9800000]:          571153 0.0731367
+objective_val[9900000]:          565079 0.0724661
+objective_val[10000000]:          573547 0.0727166
+objective_val[10100000]:          566661 0.0725337
+objective_val[10200000]:          622648 0.0720559
+objective_val[10300000]:          628021 0.0722613
+objective_val[10400000]:          572280 0.0722435
+objective_val[10500000]:          572911 0.0719693
+objective_val[10600000]:          567968 0.0719576
+objective_val[10700000]:          566014 0.0717508
+objective_val[10800000]:          572743 0.0723978
+objective_val[10900000]:          564975 0.0717582
+objective_val[11000000]:          564876 0.0718599
+objective_val[11100000]:          566087 0.0720223
+objective_val[11200000]:          577334 0.0721643
+objective_val[11300000]:          586412 0.0727678
+objective_val[11400000]:          574676 0.0722043
+objective_val[11500000]:          583944 0.072269
+objective_val[11600000]:          565278 0.0721366
+objective_val[11700000]:          600788 0.0715342
+objective_val[11800000]:          571416 0.0709866
+objective_val[11900000]:          572544 0.0709907
+objective_val[12000000]:          571504 0.0708012
+objective_val[12100000]:          564489 0.0708782
+objective_val[12200000]:          564176 0.0707691
+objective_val[12300000]:          565070 0.0710094
+objective_val[12400000]:          568170 0.07086
+objective_val[12500000]:          564431 0.0706249
+objective_val[12600000]:          561928 0.0706969
+objective_val[12700000]:          562869 0.0709977
+objective_val[12800000]:          564590 0.0706844
+objective_val[12900000]:          579878 0.0713601
+objective_val[13000000]:          569493 0.0705736
+objective_val[13100000]:          563986 0.0706892
+objective_val[13200000]:          563845 0.0707204
+objective_val[13300000]:          567791 0.0704532
+objective_val[13400000]:          563402 0.0707405
+objective_val[13500000]:          566289 0.0706478
+objective_val[13600000]:          561364 0.0705185
+objective_val[13700000]:          574511 0.0704892
+objective_val[13800000]:          564347 0.0705323
+objective_val[13900000]:          564642 0.070496
+objective_val[14000000]:          562039 0.0703276
+objective_val[14100000]:          563889 0.0703939
+objective_val[14200000]:          562025 0.0706804
+objective_val[14300000]:          562725 0.070309
+objective_val[14400000]:          567206 0.0700953
+objective_val[14500000]:          564682 0.0700506
+objective_val[14600000]:          571203 0.0701054
+objective_val[14700000]:          564888 0.0702131
+objective_val[14800000]:          562137 0.0702604
+objective_val[14900000]:          561221 0.0704789
+objective_val[15000000]:          563850 0.0708342
+objective_val[15100000]:          563721 0.0708665
+objective_val[15200000]:          563936 0.0709861
+objective_val[15300000]:          564194 0.070856
+objective_val[15400000]:          566454 0.0703392
+objective_val[15500000]:          561880 0.0702679
+objective_val[15600000]:          561254 0.0700358
+objective_val[15700000]:          561910 0.0702239
+objective_val[15800000]:          560651 0.0702661
+objective_val[15900000]:          562557 0.0701014
+objective_val[16000000]:          561970 0.0702626
+objective_val[16100000]:          569391 0.0699236
+objective_val[16200000]:          562025 0.0700974
+objective_val[16300000]:          561424 0.0701754
+objective_val[16400000]:          561368 0.0701663
+objective_val[16500000]:          563917 0.0703058
+objective_val[16600000]:          563397 0.0704292
+objective_val[16700000]:          560981 0.0705221
+objective_val[16800000]:          574772 0.0705988
+objective_val[16900000]:          561164 0.0706238
+objective_val[17000000]:          562251 0.0702042
+objective_val[17100000]:          564195 0.0700638
+objective_val[17200000]:          562123 0.0699841
+objective_val[17300000]:          561322 0.0699403
+objective_val[17400000]:          561520 0.0701494
+objective_val[17500000]:          560491 0.0698904
+objective_val[17600000]:          562749 0.0698127
+objective_val[17700000]:          560590 0.0698986
+objective_val[17800000]:          563482 0.0701406
+objective_val[17900000]:          562066 0.0702288
+objective_val[18000000]:          562927 0.0699797
+objective_val[18100000]:          560406 0.0700414
+objective_val[18200000]:          564288 0.0699048
+objective_val[18300000]:          567129 0.0698308
+objective_val[18400000]:          560680 0.0698839
+objective_val[18500000]:          562936 0.0698909
+objective_val[18600000]:          562255 0.0699463
+objective_val[18700000]:          560932 0.0699574
+objective_val[18800000]:          563179 0.0699803
+objective_val[18900000]:          563384 0.0701408
+objective_val[19000000]:          563091 0.0701268
+objective_val[19100000]:          569710 0.0703216
+objective_val[19200000]:          560329 0.0699774
+objective_val[19300000]:          560832 0.0701127
+objective_val[19400000]:          561425 0.0702616
+objective_val[19500000]:          560310 0.0701375
+objective_val[19600000]:          561478 0.0703046
+objective_val[19700000]:          561717 0.070179
+objective_val[19800000]:          560500 0.0701135
+objective_val[19900000]:          561599 0.0701344
+objective_val[20000000]:          560972 0.0701608
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 560972 0.0701608 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=1 random + vector-between-2-classes orthogonalized
+ start projection 1 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 1, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     9.00324e+07 5.04071
+objective_val[200000]:     3.84242e+07 2.87012
+objective_val[300000]:     1.70807e+07 1.76285
+objective_val[400000]:     7.48601e+06 1.07348
+objective_val[500000]:     4.34131e+06 0.571843
+objective_val[600000]:     2.17452e+06 0.397449
+objective_val[700000]:     2.73455e+06 0.378711
+objective_val[800000]:     2.31808e+06 0.29938
+objective_val[900000]:     2.00126e+06 0.273459
+objective_val[1000000]:     2.57557e+06 0.264546
+objective_val[1100000]:     1.53261e+06 0.26557
+objective_val[1200000]:     2.58414e+06 0.255228
+objective_val[1300000]:     1.91358e+06 0.236103
+objective_val[1400000]:     1.12608e+06 0.21445
+objective_val[1500000]:      1.1067e+06 0.196918
+objective_val[1600000]:     1.10714e+06 0.183532
+objective_val[1700000]:     1.64835e+06 0.187269
+objective_val[1800000]:     1.58962e+06 0.185044
+objective_val[1900000]:     1.20391e+06 0.17213
+objective_val[2000000]:          896983 0.158393
+objective_val[2100000]:          928970 0.152421
+objective_val[2200000]:     1.31275e+06 0.153163
+objective_val[2300000]:          885046 0.151903
+objective_val[2400000]:      1.1042e+06 0.144198
+objective_val[2500000]:     1.15697e+06 0.147763
+objective_val[2600000]:     1.15469e+06 0.146645
+objective_val[2700000]:     1.33613e+06 0.145636
+objective_val[2800000]:      1.3348e+06 0.15976
+objective_val[2900000]:          955093 0.149472
+objective_val[3000000]:          909879 0.142039
+objective_val[3100000]:          821374 0.13484
+objective_val[3200000]:     1.12399e+06 0.139955
+objective_val[3300000]:     1.03182e+06 0.137808
+objective_val[3400000]:          819015 0.127559
+objective_val[3500000]:          797280 0.120726
+objective_val[3600000]:          935591 0.126634
+objective_val[3700000]:          910284 0.121188
+objective_val[3800000]:          866001 0.120627
+objective_val[3900000]:          844505 0.119277
+objective_val[4000000]:          718373 0.116145
+objective_val[4100000]:          926934 0.122817
+objective_val[4200000]:          822097 0.11809
+objective_val[4300000]:          752522 0.111137
+objective_val[4400000]:          749944 0.110164
+objective_val[4500000]:          646039 0.107702
+objective_val[4600000]:          674271 0.106386
+objective_val[4700000]:          778599 0.107992
+objective_val[4800000]:          739932 0.106338
+objective_val[4900000]:          680471 0.104252
+objective_val[5000000]:          796709 0.106688
+objective_val[5100000]:          783241 0.106983
+objective_val[5200000]:          783356 0.103638
+objective_val[5300000]:          734730 0.103902
+objective_val[5400000]:          847593 0.106324
+objective_val[5500000]:          775831 0.105357
+objective_val[5600000]:          663890 0.0998005
+objective_val[5700000]:          595617 0.0973421
+objective_val[5800000]:          783341 0.101024
+objective_val[5900000]:          652283 0.098399
+objective_val[6000000]:          697197 0.0982356
+objective_val[6100000]:          747121 0.0995186
+objective_val[6200000]:          735276 0.100076
+objective_val[6300000]:          766247 0.100994
+objective_val[6400000]:          619430 0.0947187
+objective_val[6500000]:          594258 0.0935131
+objective_val[6600000]:          622479 0.0921138
+objective_val[6700000]:          598217 0.0910418
+objective_val[6800000]:          695948 0.0926891
+objective_val[6900000]:          673278 0.0916667
+objective_val[7000000]:          654866 0.0909951
+objective_val[7100000]:          581754 0.0898927
+objective_val[7200000]:          680952 0.0908339
+objective_val[7300000]:          714577 0.0932925
+objective_val[7400000]:          670237 0.0928268
+objective_val[7500000]:          619161 0.0905178
+objective_val[7600000]:          681941 0.0920605
+objective_val[7700000]:          599601 0.0899173
+objective_val[7800000]:          576389 0.0887875
+objective_val[7900000]:          603024 0.0889922
+objective_val[8000000]:          579508 0.0883191
+objective_val[8100000]:          580174 0.0874526
+objective_val[8200000]:          578140 0.0873979
+objective_val[8300000]:          572505 0.0870325
+objective_val[8400000]:          641380 0.0875302
+objective_val[8500000]:          575053 0.08706
+objective_val[8600000]:          570008 0.0862313
+objective_val[8700000]:          571251 0.0861327
+objective_val[8800000]:          574545 0.0854762
+objective_val[8900000]:          569839 0.0851658
+objective_val[9000000]:          588605 0.0861666
+objective_val[9100000]:          572043 0.0854852
+objective_val[9200000]:          608181 0.0851714
+objective_val[9300000]:          612261 0.0854328
+objective_val[9400000]:          571317 0.0841493
+objective_val[9500000]:          579533 0.0842724
+objective_val[9600000]:          573040 0.0838136
+objective_val[9700000]:          597954 0.0843174
+objective_val[9800000]:          605105 0.0847413
+objective_val[9900000]:          595322 0.0843787
+objective_val[10000000]:          571684 0.0836521
+objective_val[10100000]:          587795 0.0832272
+objective_val[10200000]:          572318 0.0826256
+objective_val[10300000]:          565830 0.0823115
+objective_val[10400000]:          573676 0.0823133
+objective_val[10500000]:          581341 0.0822014
+objective_val[10600000]:          576433 0.0821458
+objective_val[10700000]:          570256 0.0816229
+objective_val[10800000]:          567401 0.0817992
+objective_val[10900000]:          568189 0.0816417
+objective_val[11000000]:          566323 0.0815636
+objective_val[11100000]:          576332 0.0817599
+objective_val[11200000]:          566036 0.0812598
+objective_val[11300000]:          564150 0.0811682
+objective_val[11400000]:          566245 0.0810372
+objective_val[11500000]:          575376 0.0809161
+objective_val[11600000]:          603844 0.0809183
+objective_val[11700000]:          565556 0.0807577
+objective_val[11800000]:          567806 0.0808465
+objective_val[11900000]:          563263 0.080358
+objective_val[12000000]:          584353 0.0807461
+objective_val[12100000]:          562881 0.0804787
+objective_val[12200000]:          574618 0.0808354
+objective_val[12300000]:          564904 0.0803165
+objective_val[12400000]:          562318 0.0803322
+objective_val[12500000]:          562334 0.0800795
+objective_val[12600000]:          563415 0.0798056
+objective_val[12700000]:          564106 0.0799937
+objective_val[12800000]:          562035 0.0800399
+objective_val[12900000]:          574552 0.0801277
+objective_val[13000000]:          582389 0.0804075
+objective_val[13100000]:          568695 0.0799961
+objective_val[13200000]:          563090 0.0797971
+objective_val[13300000]:          562678 0.0795022
+objective_val[13400000]:          573832 0.0796728
+objective_val[13500000]:          565942 0.0796233
+objective_val[13600000]:          568927 0.0795364
+objective_val[13700000]:          564438 0.0794709
+objective_val[13800000]:          575438 0.0795673
+objective_val[13900000]:          564977 0.0795513
+objective_val[14000000]:          570561 0.0794196
+objective_val[14100000]:          563991 0.0794124
+objective_val[14200000]:          573196 0.0793547
+objective_val[14300000]:          561618 0.0793384
+objective_val[14400000]:          562758 0.0793051
+objective_val[14500000]:          565430 0.0791475
+objective_val[14600000]:          570083 0.0792573
+objective_val[14700000]:          562890 0.0791542
+objective_val[14800000]:          562461 0.0790008
+objective_val[14900000]:          563656 0.0790823
+objective_val[15000000]:          561988 0.0791586
+objective_val[15100000]:          565517 0.0792193
+objective_val[15200000]:          562208 0.0791021
+objective_val[15300000]:          562197 0.0791147
+objective_val[15400000]:          561348 0.0791726
+objective_val[15500000]:          565043 0.0790109
+objective_val[15600000]:          568738 0.0791052
+objective_val[15700000]:          575888 0.0792425
+objective_val[15800000]:          562450 0.0793169
+objective_val[15900000]:          562393 0.0793035
+objective_val[16000000]:          561732 0.0792879
+objective_val[16100000]:          563247 0.079143
+objective_val[16200000]:          565164 0.0792212
+objective_val[16300000]:          562354 0.0790912
+objective_val[16400000]:          563497 0.0790854
+objective_val[16500000]:          562239 0.0791174
+objective_val[16600000]:          565380 0.0792671
+objective_val[16700000]:          561392 0.0792081
+objective_val[16800000]:          563146 0.0789636
+objective_val[16900000]:          561504 0.0791465
+objective_val[17000000]:          565338 0.0790501
+objective_val[17100000]:          562251 0.0790426
+objective_val[17200000]:          562144 0.0789426
+objective_val[17300000]:          563702 0.0790377
+objective_val[17400000]:          568847 0.0789402
+objective_val[17500000]:          561445 0.0789649
+objective_val[17600000]:          561152 0.0788378
+objective_val[17700000]:          561886 0.0788728
+objective_val[17800000]:          561494 0.078885
+objective_val[17900000]:          563733 0.0788034
+objective_val[18000000]:          566912 0.0788158
+objective_val[18100000]:          567347 0.0788463
+objective_val[18200000]:          564097 0.078974
+objective_val[18300000]:          561791 0.0788681
+objective_val[18400000]:          563985 0.0787508
+objective_val[18500000]:          561244 0.0787345
+objective_val[18600000]:          562009 0.0788667
+objective_val[18700000]:          561596 0.0787166
+objective_val[18800000]:          561213 0.0787183
+objective_val[18900000]:          561887 0.0787466
+objective_val[19000000]:          562120 0.0787249
+objective_val[19100000]:          563017 0.0787595
+objective_val[19200000]:          565456 0.0787966
+objective_val[19300000]:          565105 0.0788715
+objective_val[19400000]:          565419 0.0787957
+objective_val[19500000]:          563048 0.0788428
+objective_val[19600000]:          573905 0.0791053
+objective_val[19700000]:          562380 0.0790344
+objective_val[19800000]:          563477 0.079095
+objective_val[19900000]:          562313 0.0788942
+objective_val[20000000]:          561732 0.0789691
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 561732 0.0789691 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=2 random + vector-between-2-classes orthogonalized
+ start projection 2 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 2, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:      6.4981e+07 3.37976
+objective_val[200000]:     2.79012e+07 1.95391
+objective_val[300000]:     1.18463e+07 1.18117
+objective_val[400000]:      5.0034e+06 0.682264
+objective_val[500000]:     5.05625e+06 0.524146
+objective_val[600000]:     2.27146e+06 0.420218
+objective_val[700000]:     3.09848e+06 0.337698
+objective_val[800000]:     2.28735e+06 0.323837
+objective_val[900000]:     2.32079e+06 0.317058
+objective_val[1000000]:     2.58973e+06 0.253366
+objective_val[1100000]:     2.62697e+06 0.249315
+objective_val[1200000]:     1.71541e+06 0.249755
+objective_val[1300000]:     1.25598e+06 0.200916
+objective_val[1400000]:     1.32244e+06 0.179902
+objective_val[1500000]:     1.93326e+06 0.184173
+objective_val[1600000]:     1.65993e+06 0.177776
+objective_val[1700000]:     1.21211e+06 0.170169
+objective_val[1800000]:     1.23254e+06 0.157467
+objective_val[1900000]:     1.27251e+06 0.154835
+objective_val[2000000]:     1.08941e+06 0.146836
+objective_val[2100000]:     1.40035e+06 0.156481
+objective_val[2200000]:     1.41319e+06 0.149657
+objective_val[2300000]:          999422 0.14578
+objective_val[2400000]:          819414 0.140739
+objective_val[2500000]:     1.33184e+06 0.148995
+objective_val[2600000]:     1.20072e+06 0.131758
+objective_val[2700000]:          886984 0.12688
+objective_val[2800000]:          789527 0.124501
+objective_val[2900000]:     1.15152e+06 0.127005
+objective_val[3000000]:     1.00297e+06 0.125441
+objective_val[3100000]:          748242 0.12442
+objective_val[3200000]:          735603 0.121313
+objective_val[3300000]:          695170 0.113782
+objective_val[3400000]:          982128 0.11567
+objective_val[3500000]:          833180 0.109683
+objective_val[3600000]:          851210 0.106384
+objective_val[3700000]:          851240 0.107742
+objective_val[3800000]:          701191 0.104808
+objective_val[3900000]:          773827 0.104903
+objective_val[4000000]:          977665 0.108893
+objective_val[4100000]:          861158 0.108344
+objective_val[4200000]:          664753 0.100443
+objective_val[4300000]:          700683 0.0975368
+objective_val[4400000]:          723082 0.0961238
+objective_val[4500000]:          734923 0.0960587
+objective_val[4600000]:          798999 0.0954238
+objective_val[4700000]:          755546 0.0950876
+objective_val[4800000]:          752213 0.0959348
+objective_val[4900000]:          745449 0.0950656
+objective_val[5000000]:          790966 0.0954892
+objective_val[5100000]:          707229 0.0947777
+objective_val[5200000]:          611123 0.0937188
+objective_val[5300000]:          686945 0.092912
+objective_val[5400000]:          677999 0.0921426
+objective_val[5500000]:          636393 0.0906001
+objective_val[5600000]:          611716 0.0897089
+objective_val[5700000]:          620450 0.0884712
+objective_val[5800000]:          638071 0.0880901
+objective_val[5900000]:          650617 0.0873573
+objective_val[6000000]:          800227 0.0881648
+objective_val[6100000]:          668505 0.08738
+objective_val[6200000]:          748165 0.0896243
+objective_val[6300000]:          593100 0.0865721
+objective_val[6400000]:          769384 0.0913457
+objective_val[6500000]:          646822 0.0898562
+objective_val[6600000]:          595724 0.0842817
+objective_val[6700000]:          642931 0.0842097
+objective_val[6800000]:          630542 0.0834355
+objective_val[6900000]:          685545 0.0816794
+objective_val[7000000]:          660307 0.0815424
+objective_val[7100000]:          580065 0.0814664
+objective_val[7200000]:          631324 0.0799484
+objective_val[7300000]:          582470 0.0793801
+objective_val[7400000]:          578522 0.0793143
+objective_val[7500000]:          653865 0.0820603
+objective_val[7600000]:          584696 0.0801687
+objective_val[7700000]:          583108 0.0787015
+objective_val[7800000]:          588859 0.078188
+objective_val[7900000]:          614147 0.0789681
+objective_val[8000000]:          579209 0.0783584
+objective_val[8100000]:          640656 0.0793638
+objective_val[8200000]:          598222 0.0770902
+objective_val[8300000]:          581682 0.0758365
+objective_val[8400000]:          636083 0.0762527
+objective_val[8500000]:          597330 0.0772368
+objective_val[8600000]:          603489 0.0776298
+objective_val[8700000]:          616560 0.0788816
+objective_val[8800000]:          603621 0.0779135
+objective_val[8900000]:          584355 0.0772523
+objective_val[9000000]:          568394 0.0751594
+objective_val[9100000]:          612659 0.0744233
+objective_val[9200000]:          614150 0.0740532
+objective_val[9300000]:          569324 0.0738801
+objective_val[9400000]:          566596 0.0739032
+objective_val[9500000]:          567581 0.0734538
+objective_val[9600000]:          576037 0.0737067
+objective_val[9700000]:          566306 0.0732693
+objective_val[9800000]:          595998 0.0733937
+objective_val[9900000]:          566523 0.0739544
+objective_val[10000000]:          587789 0.0744736
+objective_val[10100000]:          570387 0.0741339
+objective_val[10200000]:          565290 0.0736113
+objective_val[10300000]:          566015 0.073463
+objective_val[10400000]:          565351 0.0725551
+objective_val[10500000]:          572047 0.0733126
+objective_val[10600000]:          565014 0.0725932
+objective_val[10700000]:          574202 0.0722249
+objective_val[10800000]:          563259 0.0723519
+objective_val[10900000]:          575809 0.0726585
+objective_val[11000000]:          563606 0.0721533
+objective_val[11100000]:          565571 0.0718658
+objective_val[11200000]:          568175 0.0714473
+objective_val[11300000]:          578901 0.0721358
+objective_val[11400000]:          564983 0.0720653
+objective_val[11500000]:          573755 0.0718483
+objective_val[11600000]:          564756 0.0712233
+objective_val[11700000]:          562426 0.0709555
+objective_val[11800000]:          575123 0.0719962
+objective_val[11900000]:          562049 0.0712278
+objective_val[12000000]:          568772 0.0715139
+objective_val[12100000]:          562272 0.0710766
+objective_val[12200000]:          563019 0.0707277
+objective_val[12300000]:          590020 0.0705741
+objective_val[12400000]:          562137 0.070623
+objective_val[12500000]:          563657 0.0705737
+objective_val[12600000]:          570641 0.0709247
+objective_val[12700000]:          565482 0.0709612
+objective_val[12800000]:          577541 0.0712139
+objective_val[12900000]:          579364 0.0717922
+objective_val[13000000]:          563101 0.0707051
+objective_val[13100000]:          560526 0.0707611
+objective_val[13200000]:          570736 0.070418
+objective_val[13300000]:          563424 0.0705506
+objective_val[13400000]:          560471 0.0705068
+objective_val[13500000]:          561715 0.0702653
+objective_val[13600000]:          563614 0.0707564
+objective_val[13700000]:          567838 0.0708419
+objective_val[13800000]:          563117 0.0710189
+objective_val[13900000]:          564956 0.0711395
+objective_val[14000000]:          567654 0.0714405
+objective_val[14100000]:          572863 0.0716612
+objective_val[14200000]:          567500 0.0714597
+objective_val[14300000]:          562332 0.0711151
+objective_val[14400000]:          564267 0.0704568
+objective_val[14500000]:          560608 0.0705714
+objective_val[14600000]:          563237 0.0703392
+objective_val[14700000]:          566620 0.0702614
+objective_val[14800000]:          563135 0.0703932
+objective_val[14900000]:          573769 0.0706008
+objective_val[15000000]:          563653 0.0706887
+objective_val[15100000]:          561900 0.0705069
+objective_val[15200000]:          563315 0.0703617
+objective_val[15300000]:          560961 0.0704623
+objective_val[15400000]:          565172 0.070324
+objective_val[15500000]:          561342 0.070126
+objective_val[15600000]:          560983 0.0701678
+objective_val[15700000]:          561468 0.0701755
+objective_val[15800000]:          581495 0.0710188
+objective_val[15900000]:          578413 0.0712034
+objective_val[16000000]:          568958 0.070939
+objective_val[16100000]:          562707 0.0709424
+objective_val[16200000]:          561742 0.0704257
+objective_val[16300000]:          565021 0.0703988
+objective_val[16400000]:          568798 0.0704959
+objective_val[16500000]:          560766 0.0704599
+objective_val[16600000]:          562075 0.0702327
+objective_val[16700000]:          563677 0.0705409
+objective_val[16800000]:          560655 0.0704341
+objective_val[16900000]:          561325 0.070285
+objective_val[17000000]:          564585 0.0704755
+objective_val[17100000]:          561055 0.0703846
+objective_val[17200000]:          570916 0.0699982
+objective_val[17300000]:          566151 0.070071
+objective_val[17400000]:          560545 0.0700935
+objective_val[17500000]:          564445 0.070395
+objective_val[17600000]:          567920 0.0706621
+objective_val[17700000]:          561018 0.070294
+objective_val[17800000]:          565673 0.0699915
+objective_val[17900000]:          561725 0.0700983
+objective_val[18000000]:          561041 0.0702861
+objective_val[18100000]:          561344 0.0703477
+objective_val[18200000]:          561352 0.0704456
+objective_val[18300000]:          562298 0.0705253
+objective_val[18400000]:          560930 0.0700909
+objective_val[18500000]:          562173 0.0700745
+objective_val[18600000]:          561990 0.0701554
+objective_val[18700000]:          569250 0.0704659
+objective_val[18800000]:          562817 0.070575
+objective_val[18900000]:          560716 0.0705305
+objective_val[19000000]:          562082 0.0703869
+objective_val[19100000]:          561124 0.0704062
+objective_val[19200000]:          567356 0.070585
+objective_val[19300000]:          562786 0.0706184
+objective_val[19400000]:          562414 0.0707954
+objective_val[19500000]:          560626 0.0705818
+objective_val[19600000]:          563099 0.0707059
+objective_val[19700000]:          564456 0.0708077
+objective_val[19800000]:          560081 0.0704203
+objective_val[19900000]:          561984 0.0703418
+objective_val[20000000]:          561241 0.0705497
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 561241 0.0705497 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=3 random + vector-between-2-classes orthogonalized
+ start projection 3 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 3, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     1.31497e+08 4.65176
+objective_val[200000]:     5.64521e+07 2.56638
+objective_val[300000]:     2.25451e+07 1.44424
+objective_val[400000]:     9.43642e+06 0.851291
+objective_val[500000]:      3.9619e+06 0.540446
+objective_val[600000]:     5.05967e+06 0.492668
+objective_val[700000]:     4.56287e+06 0.400794
+objective_val[800000]:     2.76229e+06 0.378884
+objective_val[900000]:     1.83487e+06 0.325192
+objective_val[1000000]:     1.61376e+06 0.29081
+objective_val[1100000]:     1.41832e+06 0.226287
+objective_val[1200000]:     2.18245e+06 0.208468
+objective_val[1300000]:     2.13504e+06 0.186608
+objective_val[1400000]:     1.31572e+06 0.164893
+objective_val[1500000]:     1.67059e+06 0.161951
+objective_val[1600000]:     1.46402e+06 0.154562
+objective_val[1700000]:     1.48083e+06 0.146483
+objective_val[1800000]:     1.11127e+06 0.137892
+objective_val[1900000]:     1.15999e+06 0.140074
+objective_val[2000000]:          980862 0.130144
+objective_val[2100000]:          882053 0.126998
+objective_val[2200000]:     1.47455e+06 0.139473
+objective_val[2300000]:          975083 0.136235
+objective_val[2400000]:          853121 0.127971
+objective_val[2500000]:          849005 0.118676
+objective_val[2600000]:          879876 0.109649
+objective_val[2700000]:          979574 0.122309
+objective_val[2800000]:     1.05036e+06 0.125385
+objective_val[2900000]:          802796 0.112106
+objective_val[3000000]:          944978 0.106489
+objective_val[3100000]:          732091 0.102732
+objective_val[3200000]:          968777 0.102045
+objective_val[3300000]:          820768 0.102022
+objective_val[3400000]:          692758 0.100332
+objective_val[3500000]:          966467 0.100899
+objective_val[3600000]:          759051 0.0981502
+objective_val[3700000]:          936465 0.097999
+objective_val[3800000]:          743360 0.102396
+objective_val[3900000]:          968709 0.106776
+objective_val[4000000]:          695203 0.101222
+objective_val[4100000]:          636826 0.0939151
+objective_val[4200000]:          711912 0.0998764
+objective_val[4300000]:          765422 0.099134
+objective_val[4400000]:          817482 0.0956246
+objective_val[4500000]:          802846 0.0962615
+objective_val[4600000]:          757958 0.0951285
+objective_val[4700000]:          786180 0.0944177
+objective_val[4800000]:          734632 0.0946012
+objective_val[4900000]:          643304 0.0963038
+objective_val[5000000]:          727030 0.0877431
+objective_val[5100000]:          637446 0.0858892
+objective_val[5200000]:          699168 0.0849265
+objective_val[5300000]:          644172 0.0841233
+objective_val[5400000]:          640148 0.0834926
+objective_val[5500000]:          687927 0.0854122
+objective_val[5600000]:          714635 0.0831694
+objective_val[5700000]:          710018 0.0823564
+objective_val[5800000]:          626421 0.0821375
+objective_val[5900000]:          692518 0.0811969
+objective_val[6000000]:          646574 0.0814193
+objective_val[6100000]:          705377 0.0846132
+objective_val[6200000]:          593297 0.0809283
+objective_val[6300000]:          677176 0.0801776
+objective_val[6400000]:          749402 0.0821243
+objective_val[6500000]:          597944 0.0801778
+objective_val[6600000]:          592942 0.0795522
+objective_val[6700000]:          653006 0.0789206
+objective_val[6800000]:          598518 0.0785466
+objective_val[6900000]:          586560 0.0782922
+objective_val[7000000]:          579506 0.0785387
+objective_val[7100000]:          660849 0.0803102
+objective_val[7200000]:          726606 0.0837892
+objective_val[7300000]:          723447 0.0854317
+objective_val[7400000]:          626839 0.0822455
+objective_val[7500000]:          602996 0.0780518
+objective_val[7600000]:          657662 0.0804006
+objective_val[7700000]:          628818 0.0785573
+objective_val[7800000]:          598441 0.078526
+objective_val[7900000]:          575301 0.0762089
+objective_val[8000000]:          590189 0.0758145
+objective_val[8100000]:          576212 0.0758155
+objective_val[8200000]:          641202 0.0776866
+objective_val[8300000]:          578253 0.0758087
+objective_val[8400000]:          569185 0.0744804
+objective_val[8500000]:          572035 0.0743449
+objective_val[8600000]:          582945 0.073764
+objective_val[8700000]:          730907 0.0778229
+objective_val[8800000]:          635381 0.0778603
+objective_val[8900000]:          623704 0.0774216
+objective_val[9000000]:          621624 0.0771337
+objective_val[9100000]:          600249 0.0765791
+objective_val[9200000]:          566294 0.0746646
+objective_val[9300000]:          570909 0.0736705
+objective_val[9400000]:          565976 0.073136
+objective_val[9500000]:          606018 0.0724013
+objective_val[9600000]:          576456 0.0720704
+objective_val[9700000]:          576503 0.07213
+objective_val[9800000]:          570526 0.071786
+objective_val[9900000]:          565297 0.0716052
+objective_val[10000000]:          565532 0.0715328
+objective_val[10100000]:          583529 0.0712201
+objective_val[10200000]:          582315 0.0712778
+objective_val[10300000]:          564160 0.0712227
+objective_val[10400000]:          569848 0.0711311
+objective_val[10500000]:          570224 0.0713797
+objective_val[10600000]:          564396 0.0718167
+objective_val[10700000]:          565004 0.0709997
+objective_val[10800000]:          586451 0.0726057
+objective_val[10900000]:          564564 0.0722303
+objective_val[11000000]:          566031 0.0714843
+objective_val[11100000]:          562289 0.0713783
+objective_val[11200000]:          583115 0.0715399
+objective_val[11300000]:          568274 0.071571
+objective_val[11400000]:          563270 0.0717212
+objective_val[11500000]:          566605 0.0711161
+objective_val[11600000]:          562208 0.0709038
+objective_val[11700000]:          565853 0.0710163
+objective_val[11800000]:          562012 0.0708317
+objective_val[11900000]:          575916 0.0704795
+objective_val[12000000]:          577684 0.0701886
+objective_val[12100000]:          565099 0.070343
+objective_val[12200000]:          571247 0.0703275
+objective_val[12300000]:          583248 0.0702032
+objective_val[12400000]:          572484 0.0703952
+objective_val[12500000]:          563220 0.0705068
+objective_val[12600000]:          563082 0.0702698
+objective_val[12700000]:          562744 0.0702133
+objective_val[12800000]:          564026 0.0701901
+objective_val[12900000]:          562028 0.0702327
+objective_val[13000000]:          562263 0.0702745
+objective_val[13100000]:          562423 0.0701122
+objective_val[13200000]:          570275 0.0702278
+objective_val[13300000]:          563304 0.0703123
+objective_val[13400000]:          563966 0.0700067
+objective_val[13500000]:          576713 0.0700192
+objective_val[13600000]:          572255 0.069998
+objective_val[13700000]:          562591 0.0700458
+objective_val[13800000]:          579075 0.0700772
+objective_val[13900000]:          562229 0.0701783
+objective_val[14000000]:          563629 0.0701365
+objective_val[14100000]:          572973 0.0700693
+objective_val[14200000]:          561991 0.070125
+objective_val[14300000]:          563060 0.0702399
+objective_val[14400000]:          563503 0.0703601
+objective_val[14500000]:          565079 0.0705526
+objective_val[14600000]:          562623 0.0701866
+objective_val[14700000]:          562280 0.0705636
+objective_val[14800000]:          562358 0.0703775
+objective_val[14900000]:          561828 0.0701332
+objective_val[15000000]:          562957 0.0702541
+objective_val[15100000]:          563514 0.070328
+objective_val[15200000]:          563513 0.0704903
+objective_val[15300000]:          567890 0.0706284
+objective_val[15400000]:          576637 0.0709608
+objective_val[15500000]:          568845 0.071309
+objective_val[15600000]:          569069 0.071285
+objective_val[15700000]:          564086 0.0709953
+objective_val[15800000]:          562029 0.0705621
+objective_val[15900000]:          563417 0.070319
+objective_val[16000000]:          562006 0.0703763
+objective_val[16100000]:          567474 0.0706348
+objective_val[16200000]:          563599 0.0706955
+objective_val[16300000]:          562968 0.0706754
+objective_val[16400000]:          565575 0.0708586
+objective_val[16500000]:          562791 0.0706483
+objective_val[16600000]:          560830 0.0704826
+objective_val[16700000]:          563236 0.0702114
+objective_val[16800000]:          562993 0.0702677
+objective_val[16900000]:          562474 0.0703946
+objective_val[17000000]:          565155 0.0701152
+objective_val[17100000]:          568268 0.0703326
+objective_val[17200000]:          562893 0.0705367
+objective_val[17300000]:          565939 0.0704702
+objective_val[17400000]:          561532 0.0704973
+objective_val[17500000]:          571156 0.0701296
+objective_val[17600000]:          565953 0.0700077
+objective_val[17700000]:          562786 0.0700723
+objective_val[17800000]:          561159 0.0701035
+objective_val[17900000]:          564050 0.0698805
+objective_val[18000000]:          561287 0.069976
+objective_val[18100000]:          562066 0.0701865
+objective_val[18200000]:          565384 0.0700578
+objective_val[18300000]:          563473 0.0700325
+objective_val[18400000]:          567559 0.0702789
+objective_val[18500000]:          561440 0.070279
+objective_val[18600000]:          563880 0.0702714
+objective_val[18700000]:          562297 0.0702735
+objective_val[18800000]:          562034 0.0701789
+objective_val[18900000]:          561930 0.0702399
+objective_val[19000000]:          561061 0.0704079
+objective_val[19100000]:          561725 0.0703408
+objective_val[19200000]:          561997 0.0702384
+objective_val[19300000]:          560906 0.0702729
+objective_val[19400000]:          560890 0.0701745
+objective_val[19500000]:          563347 0.0703837
+objective_val[19600000]:          561362 0.0703801
+objective_val[19700000]:          562418 0.070334
+objective_val[19800000]:          563978 0.0701224
+objective_val[19900000]:          562217 0.0700496
+objective_val[20000000]:          565274 0.0701188
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 565274 0.0701188 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=4 random + vector-between-2-classes orthogonalized
+ start projection 4 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 4, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:      3.4121e+07 2.88821
+objective_val[200000]:     1.58866e+07 1.7169
+objective_val[300000]:     8.04462e+06 0.940854
+objective_val[400000]:     4.04827e+06 0.651214
+objective_val[500000]:     3.39127e+06 0.476922
+objective_val[600000]:     3.89063e+06 0.330844
+objective_val[700000]:     3.79369e+06 0.304252
+objective_val[800000]:     3.43038e+06 0.312305
+objective_val[900000]:     2.03531e+06 0.265484
+objective_val[1000000]:     2.54624e+06 0.256378
+objective_val[1100000]:     1.35076e+06 0.223392
+objective_val[1200000]:     1.73274e+06 0.200075
+objective_val[1300000]:     1.56774e+06 0.190292
+objective_val[1400000]:     1.72006e+06 0.185116
+objective_val[1500000]:     2.07878e+06 0.196876
+objective_val[1600000]:     1.30108e+06 0.172236
+objective_val[1700000]:     1.01774e+06 0.159381
+objective_val[1800000]:     1.61309e+06 0.16389
+objective_val[1900000]:     1.29246e+06 0.165318
+objective_val[2000000]:     1.21655e+06 0.152526
+objective_val[2100000]:     1.22746e+06 0.151713
+objective_val[2200000]:     1.14026e+06 0.144527
+objective_val[2300000]:     1.03994e+06 0.14836
+objective_val[2400000]:          928866 0.142457
+objective_val[2500000]:          986183 0.141322
+objective_val[2600000]:          850172 0.132569
+objective_val[2700000]:          946776 0.122965
+objective_val[2800000]:          807879 0.120905
+objective_val[2900000]:          981194 0.130159
+objective_val[3000000]:          739203 0.123419
+objective_val[3100000]:     1.02027e+06 0.127981
+objective_val[3200000]:     1.00217e+06 0.111735
+objective_val[3300000]:          761962 0.111143
+objective_val[3400000]:          997298 0.114236
+objective_val[3500000]:          941931 0.121801
+objective_val[3600000]:          859519 0.115927
+objective_val[3700000]:          795987 0.103804
+objective_val[3800000]:          705284 0.10229
+objective_val[3900000]:          686581 0.098773
+objective_val[4000000]:          688466 0.100657
+objective_val[4100000]:          959894 0.108083
+objective_val[4200000]:          815075 0.101067
+objective_val[4300000]:          651820 0.0952121
+objective_val[4400000]:          647197 0.096014
+objective_val[4500000]:          670638 0.0957475
+objective_val[4600000]:          844567 0.102754
+objective_val[4700000]:          653049 0.0934919
+objective_val[4800000]:          826008 0.0911666
+objective_val[4900000]:          661343 0.0908063
+objective_val[5000000]:          645817 0.0899657
+objective_val[5100000]:          711058 0.0897314
+objective_val[5200000]:          730356 0.0910611
+objective_val[5300000]:          644139 0.0893278
+objective_val[5400000]:          666084 0.0918154
+objective_val[5500000]:          617025 0.087444
+objective_val[5600000]:          732620 0.0898116
+objective_val[5700000]:          639500 0.0859069
+objective_val[5800000]:          617803 0.0849448
+objective_val[5900000]:          758945 0.0846817
+objective_val[6000000]:          806531 0.0874313
+objective_val[6100000]:          695595 0.0855462
+objective_val[6200000]:          742221 0.0863163
+objective_val[6300000]:          684749 0.0854026
+objective_val[6400000]:          693383 0.0849413
+objective_val[6500000]:          654003 0.0871713
+objective_val[6600000]:          629299 0.0820054
+objective_val[6700000]:          674189 0.0809163
+objective_val[6800000]:          610207 0.0805625
+objective_val[6900000]:          583968 0.08057
+objective_val[7000000]:          631961 0.0802196
+objective_val[7100000]:          680841 0.0805708
+objective_val[7200000]:          582926 0.0798641
+objective_val[7300000]:          596246 0.0790926
+objective_val[7400000]:          580652 0.078579
+objective_val[7500000]:          627982 0.0782203
+objective_val[7600000]:          586918 0.0781548
+objective_val[7700000]:          599594 0.0779646
+objective_val[7800000]:          576046 0.0777944
+objective_val[7900000]:          588055 0.0775343
+objective_val[8000000]:          575016 0.0773692
+objective_val[8100000]:          574556 0.0767538
+objective_val[8200000]:          577139 0.0764937
+objective_val[8300000]:          630010 0.0763801
+objective_val[8400000]:          577417 0.076178
+objective_val[8500000]:          572496 0.0758649
+objective_val[8600000]:          587220 0.0756193
+objective_val[8700000]:          573694 0.0757006
+objective_val[8800000]:          611076 0.0753007
+objective_val[8900000]:          617257 0.0755698
+objective_val[9000000]:          609082 0.07563
+objective_val[9100000]:          626454 0.0755983
+objective_val[9200000]:          622039 0.0761794
+objective_val[9300000]:          602367 0.075756
+objective_val[9400000]:          587551 0.0756664
+objective_val[9500000]:          569889 0.0749425
+objective_val[9600000]:          581441 0.0760162
+objective_val[9700000]:          596308 0.074596
+objective_val[9800000]:          584203 0.0743848
+objective_val[9900000]:          579874 0.0740648
+objective_val[10000000]:          566475 0.07392
+objective_val[10100000]:          566450 0.0737995
+objective_val[10200000]:          566481 0.073613
+objective_val[10300000]:          563586 0.0735411
+objective_val[10400000]:          565685 0.0735372
+objective_val[10500000]:          571879 0.0734516
+objective_val[10600000]:          562832 0.0730643
+objective_val[10700000]:          563831 0.072713
+objective_val[10800000]:          593936 0.0720833
+objective_val[10900000]:          574249 0.0720862
+objective_val[11000000]:          563854 0.0721666
+objective_val[11100000]:          571596 0.0718492
+objective_val[11200000]:          572768 0.0719007
+objective_val[11300000]:          568766 0.0719665
+objective_val[11400000]:          565186 0.0721313
+objective_val[11500000]:          563279 0.0717177
+objective_val[11600000]:          570090 0.0716101
+objective_val[11700000]:          569741 0.071494
+objective_val[11800000]:          572826 0.0722321
+objective_val[11900000]:          561565 0.0716184
+objective_val[12000000]:          564419 0.0711412
+objective_val[12100000]:          569584 0.0707948
+objective_val[12200000]:          563834 0.0705081
+objective_val[12300000]:          561424 0.0706914
+objective_val[12400000]:          562335 0.0706133
+objective_val[12500000]:          566201 0.0707768
+objective_val[12600000]:          562029 0.0708757
+objective_val[12700000]:          566566 0.0704107
+objective_val[12800000]:          570019 0.0704716
+objective_val[12900000]:          573119 0.0703165
+objective_val[13000000]:          571506 0.070395
+objective_val[13100000]:          561746 0.0703697
+objective_val[13200000]:          562375 0.0705544
+objective_val[13300000]:          563612 0.0705134
+objective_val[13400000]:          566244 0.0703786
+objective_val[13500000]:          569382 0.0701355
+objective_val[13600000]:          564533 0.0701705
+objective_val[13700000]:          566209 0.0701343
+objective_val[13800000]:          560847 0.0702238
+objective_val[13900000]:          561372 0.0703641
+objective_val[14000000]:          581109 0.0707511
+objective_val[14100000]:          562789 0.0710622
+objective_val[14200000]:          566264 0.0709771
+objective_val[14300000]:          565934 0.0708577
+objective_val[14400000]:          561290 0.0706495
+objective_val[14500000]:          562620 0.0705717
+objective_val[14600000]:          572977 0.0707409
+objective_val[14700000]:          575178 0.0709862
+objective_val[14800000]:          571908 0.071408
+objective_val[14900000]:          569492 0.0714488
+objective_val[15000000]:          562234 0.0708006
+objective_val[15100000]:          562689 0.0705383
+objective_val[15200000]:          563612 0.0702139
+objective_val[15300000]:          570162 0.0700589
+objective_val[15400000]:          565435 0.0699995
+objective_val[15500000]:          561717 0.0699883
+objective_val[15600000]:          564239 0.0701874
+objective_val[15700000]:          560781 0.070361
+objective_val[15800000]:          562470 0.0701593
+objective_val[15900000]:          565024 0.0701292
+objective_val[16000000]:          562169 0.0699411
+objective_val[16100000]:          561193 0.0702815
+objective_val[16200000]:          562290 0.0702726
+objective_val[16300000]:          562371 0.0705396
+objective_val[16400000]:          565826 0.0708407
+objective_val[16500000]:          561917 0.0706637
+objective_val[16600000]:          560823 0.0703846
+objective_val[16700000]:          560883 0.0704082
+objective_val[16800000]:          560543 0.0702261
+objective_val[16900000]:          567382 0.0706002
+objective_val[17000000]:          564371 0.070592
+objective_val[17100000]:          563201 0.0705521
+objective_val[17200000]:          569904 0.070736
+objective_val[17300000]:          576825 0.0710174
+objective_val[17400000]:          566453 0.0708405
+objective_val[17500000]:          562361 0.0704852
+objective_val[17600000]:          560729 0.0705568
+objective_val[17700000]:          561067 0.0703065
+objective_val[17800000]:          565865 0.0700216
+objective_val[17900000]:          563465 0.0700355
+objective_val[18000000]:          560029 0.0698754
+objective_val[18100000]:          563351 0.0701337
+objective_val[18200000]:          565411 0.0703841
+objective_val[18300000]:          560971 0.0706176
+objective_val[18400000]:          562510 0.0701969
+objective_val[18500000]:          560914 0.0701182
+objective_val[18600000]:          562629 0.0699944
+objective_val[18700000]:          567935 0.0698832
+objective_val[18800000]:          560935 0.070123
+objective_val[18900000]:          561695 0.0700707
+objective_val[19000000]:          563104 0.0700695
+objective_val[19100000]:          578244 0.0698354
+objective_val[19200000]:          565130 0.0698074
+objective_val[19300000]:          560567 0.0698617
+objective_val[19400000]:          560567 0.0699101
+objective_val[19500000]:          560063 0.0699896
+objective_val[19600000]:          561099 0.0699698
+objective_val[19700000]:          560152 0.0699146
+objective_val[19800000]:          562320 0.0700013
+objective_val[19900000]:          561545 0.0699839
+objective_val[20000000]:          561511 0.0699236
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 561511 0.0699236 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=5 random + vector-between-2-classes orthogonalized
+ start projection 5 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 5, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     1.06114e+08 4.60861
+objective_val[200000]:     4.00639e+07 2.53176
+objective_val[300000]:     1.65736e+07 1.41551
+objective_val[400000]:     7.30357e+06 0.788596
+objective_val[500000]:     2.81294e+06 0.500495
+objective_val[600000]:     4.38637e+06 0.390314
+objective_val[700000]:     3.87903e+06 0.341857
+objective_val[800000]:     2.78079e+06 0.314767
+objective_val[900000]:     1.90523e+06 0.283222
+objective_val[1000000]:     3.02668e+06 0.268781
+objective_val[1100000]:     2.61197e+06 0.251004
+objective_val[1200000]:     1.45181e+06 0.233539
+objective_val[1300000]:      1.4622e+06 0.200487
+objective_val[1400000]:     1.29238e+06 0.179114
+objective_val[1500000]:     1.97267e+06 0.18005
+objective_val[1600000]:     1.62849e+06 0.172932
+objective_val[1700000]:     1.81508e+06 0.181182
+objective_val[1800000]:      1.4566e+06 0.172666
+objective_val[1900000]:     1.61006e+06 0.163428
+objective_val[2000000]:     1.44951e+06 0.160981
+objective_val[2100000]:     1.18149e+06 0.153231
+objective_val[2200000]:     1.55376e+06 0.151465
+objective_val[2300000]:          942358 0.14534
+objective_val[2400000]:          961659 0.140042
+objective_val[2500000]:     1.39676e+06 0.136666
+objective_val[2600000]:          921215 0.121059
+objective_val[2700000]:          888998 0.118637
+objective_val[2800000]:          846358 0.120157
+objective_val[2900000]:          863653 0.116072
+objective_val[3000000]:      1.3041e+06 0.119104
+objective_val[3100000]:     1.09482e+06 0.122481
+objective_val[3200000]:          941281 0.113108
+objective_val[3300000]:          856225 0.105528
+objective_val[3400000]:     1.14263e+06 0.1093
+objective_val[3500000]:          783357 0.104377
+objective_val[3600000]:          775807 0.101304
+objective_val[3700000]:          802361 0.0979161
+objective_val[3800000]:          750822 0.096468
+objective_val[3900000]:          922910 0.0985936
+objective_val[4000000]:     1.04326e+06 0.0935898
+objective_val[4100000]:          955960 0.0941605
+objective_val[4200000]:      1.0513e+06 0.0959341
+objective_val[4300000]:          900158 0.0979453
+objective_val[4400000]:          772133 0.0938565
+objective_val[4500000]:          807596 0.0920303
+objective_val[4600000]:          814752 0.0910895
+objective_val[4700000]:          805789 0.0896558
+objective_val[4800000]:          941649 0.0907179
+objective_val[4900000]:          779332 0.0852925
+objective_val[5000000]:          847050 0.0872819
+objective_val[5100000]:          778868 0.0826928
+objective_val[5200000]:          781465 0.0843366
+objective_val[5300000]:          861904 0.0862413
+objective_val[5400000]:          661686 0.080981
+objective_val[5500000]:          739414 0.0812862
+objective_val[5600000]:          781250 0.0823266
+objective_val[5700000]:          887409 0.0779891
+objective_val[5800000]:          774698 0.0767821
+objective_val[5900000]:          747348 0.0761666
+objective_val[6000000]:          654556 0.0745101
+objective_val[6100000]:          746225 0.0755697
+objective_val[6200000]:          787618 0.0750396
+objective_val[6300000]:          732331 0.074432
+objective_val[6400000]:          791512 0.0727525
+objective_val[6500000]:          724616 0.0731812
+objective_val[6600000]:          651335 0.0703012
+objective_val[6700000]:          715663 0.0696223
+objective_val[6800000]:          701881 0.0691457
+objective_val[6900000]:          630627 0.0679536
+objective_val[7000000]:          722151 0.0690684
+objective_val[7100000]:          706019 0.0689292
+objective_val[7200000]:          645364 0.0676547
+objective_val[7300000]:          729845 0.0681615
+objective_val[7400000]:          664485 0.0686256
+objective_val[7500000]:          757317 0.0684195
+objective_val[7600000]:          657868 0.0673482
+objective_val[7700000]:          665345 0.0674127
+objective_val[7800000]:          658503 0.0664787
+objective_val[7900000]:          723908 0.0672004
+objective_val[8000000]:          622838 0.0642605
+objective_val[8100000]:          628132 0.0635409
+objective_val[8200000]:          616334 0.0632277
+objective_val[8300000]:          698848 0.0626621
+objective_val[8400000]:          662924 0.0636178
+objective_val[8500000]:          637956 0.0626484
+objective_val[8600000]:          700480 0.0637345
+objective_val[8700000]:          658301 0.0638233
+objective_val[8800000]:          613159 0.0626408
+objective_val[8900000]:          722739 0.0628637
+objective_val[9000000]:          666222 0.0631924
+objective_val[9100000]:          638777 0.061926
+objective_val[9200000]:          644535 0.0616952
+objective_val[9300000]:          619486 0.0602537
+objective_val[9400000]:          679053 0.061517
+objective_val[9500000]:          647910 0.0608603
+objective_val[9600000]:          615147 0.0607681
+objective_val[9700000]:          648947 0.0605286
+objective_val[9800000]:          658487 0.0616213
+objective_val[9900000]:          670176 0.062325
+objective_val[10000000]:          654073 0.0619422
+objective_val[10100000]:          622233 0.0607791
+objective_val[10200000]:          613417 0.0606693
+objective_val[10300000]:          615294 0.060189
+objective_val[10400000]:          605722 0.0601155
+objective_val[10500000]:          615208 0.0602657
+objective_val[10600000]:          664821 0.0616576
+objective_val[10700000]:          609969 0.0606845
+objective_val[10800000]:          607509 0.0603108
+objective_val[10900000]:          629506 0.0599987
+objective_val[11000000]:          609642 0.0592922
+objective_val[11100000]:          606337 0.0590663
+objective_val[11200000]:          622416 0.0594802
+objective_val[11300000]:          621317 0.0592166
+objective_val[11400000]:          605277 0.0584883
+objective_val[11500000]:          607021 0.0584266
+objective_val[11600000]:          623394 0.0583158
+objective_val[11700000]:          637905 0.0591675
+objective_val[11800000]:          650789 0.0590056
+objective_val[11900000]:          606135 0.059009
+objective_val[12000000]:          605611 0.0586172
+objective_val[12100000]:          629978 0.0589937
+objective_val[12200000]:          627819 0.0591655
+objective_val[12300000]:          605040 0.0587644
+objective_val[12400000]:          611381 0.0583427
+objective_val[12500000]:          605623 0.0581361
+objective_val[12600000]:          608544 0.058414
+objective_val[12700000]:          612946 0.0578331
+objective_val[12800000]:          608418 0.0578774
+objective_val[12900000]:          606362 0.0580556
+objective_val[13000000]:          612315 0.0578254
+objective_val[13100000]:          605497 0.057443
+objective_val[13200000]:          603764 0.0574162
+objective_val[13300000]:          603242 0.0573928
+objective_val[13400000]:          604300 0.0573075
+objective_val[13500000]:          605614 0.0572661
+objective_val[13600000]:          606333 0.0569784
+objective_val[13700000]:          607361 0.0571117
+objective_val[13800000]:          606055 0.0571128
+objective_val[13900000]:          604090 0.0570593
+objective_val[14000000]:          611625 0.0571116
+objective_val[14100000]:          604330 0.0572071
+objective_val[14200000]:          613242 0.0574751
+objective_val[14300000]:          604805 0.0570871
+objective_val[14400000]:          605043 0.0569991
+objective_val[14500000]:          603439 0.0569993
+objective_val[14600000]:          610017 0.0570779
+objective_val[14700000]:          616156 0.0570477
+objective_val[14800000]:          627502 0.0573465
+objective_val[14900000]:          604094 0.0571605
+objective_val[15000000]:          606136 0.0573714
+objective_val[15100000]:          604434 0.0568872
+objective_val[15200000]:          604106 0.0569696
+objective_val[15300000]:          605611 0.0568661
+objective_val[15400000]:          609808 0.056887
+objective_val[15500000]:          612935 0.0569731
+objective_val[15600000]:          612433 0.0571792
+objective_val[15700000]:          617020 0.0571907
+objective_val[15800000]:          632386 0.0575536
+objective_val[15900000]:          609042 0.0575603
+objective_val[16000000]:          634117 0.0578385
+objective_val[16100000]:          602284 0.0576229
+objective_val[16200000]:          604298 0.0574235
+objective_val[16300000]:          607715 0.0572326
+objective_val[16400000]:          608224 0.0574357
+objective_val[16500000]:          603487 0.0572594
+objective_val[16600000]:          604113 0.0572468
+objective_val[16700000]:          602971 0.0570746
+objective_val[16800000]:          603615 0.0570111
+objective_val[16900000]:          602689 0.0569406
+objective_val[17000000]:          603731 0.0569493
+objective_val[17100000]:          604519 0.0569347
+objective_val[17200000]:          603861 0.0568428
+objective_val[17300000]:          606255 0.0567458
+objective_val[17400000]:          610495 0.0567865
+objective_val[17500000]:          604080 0.0569477
+objective_val[17600000]:          602486 0.056918
+objective_val[17700000]:          602809 0.0567425
+objective_val[17800000]:          602774 0.0567418
+objective_val[17900000]:          602694 0.0566055
+objective_val[18000000]:          605141 0.0566683
+objective_val[18100000]:          613989 0.056738
+objective_val[18200000]:          604578 0.0567279
+objective_val[18300000]:          603751 0.0565578
+objective_val[18400000]:          603093 0.0565495
+objective_val[18500000]:          603225 0.0565811
+objective_val[18600000]:          610677 0.0566798
+objective_val[18700000]:          606783 0.0566045
+objective_val[18800000]:          603094 0.0563923
+objective_val[18900000]:          606885 0.0562799
+objective_val[19000000]:          604465 0.0563768
+objective_val[19100000]:          605795 0.0564447
+objective_val[19200000]:          604538 0.0564137
+objective_val[19300000]:          602303 0.0563539
+objective_val[19400000]:          605838 0.0562
+objective_val[19500000]:          602771 0.0562706
+objective_val[19600000]:          606097 0.0562896
+objective_val[19700000]:          604235 0.0564736
+objective_val[19800000]:          602924 0.0563209
+objective_val[19900000]:          603349 0.0564047
+objective_val[20000000]:          604050 0.0561355
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 604050 0.0561355 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=6 random + vector-between-2-classes orthogonalized
+ start projection 6 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 6, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     1.15982e+08 6.94971
+objective_val[200000]:     4.62108e+07 3.79523
+objective_val[300000]:     1.93636e+07 2.03533
+objective_val[400000]:     8.92028e+06 1.16348
+objective_val[500000]:     5.83408e+06 0.731871
+objective_val[600000]:      4.6855e+06 0.57015
+objective_val[700000]:     3.13904e+06 0.485483
+objective_val[800000]:     3.05413e+06 0.404726
+objective_val[900000]:      3.0821e+06 0.375667
+objective_val[1000000]:       2.662e+06 0.350314
+objective_val[1100000]:       2.143e+06 0.324351
+objective_val[1200000]:     1.62866e+06 0.276433
+objective_val[1300000]:     1.59206e+06 0.230551
+objective_val[1400000]:     1.30027e+06 0.190946
+objective_val[1500000]:     1.24473e+06 0.170751
+objective_val[1600000]:     1.69225e+06 0.170016
+objective_val[1700000]:     1.98397e+06 0.177167
+objective_val[1800000]:     1.82927e+06 0.182537
+objective_val[1900000]:     1.47135e+06 0.176896
+objective_val[2000000]:     1.13035e+06 0.147342
+objective_val[2100000]:          963744 0.13338
+objective_val[2200000]:          943920 0.125619
+objective_val[2300000]:          942143 0.120635
+objective_val[2400000]:     1.43487e+06 0.120041
+objective_val[2500000]:     1.24356e+06 0.124217
+objective_val[2600000]:     1.39745e+06 0.126255
+objective_val[2700000]:     1.48891e+06 0.126079
+objective_val[2800000]:          908010 0.117709
+objective_val[2900000]:          854852 0.107389
+objective_val[3000000]:     1.04405e+06 0.102564
+objective_val[3100000]:          907698 0.102551
+objective_val[3200000]:     1.07986e+06 0.106082
+objective_val[3300000]:          844913 0.0982201
+objective_val[3400000]:          816283 0.0955907
+objective_val[3500000]:          817411 0.0937915
+objective_val[3600000]:          794266 0.0909448
+objective_val[3700000]:          969413 0.0966621
+objective_val[3800000]:          718412 0.0905713
+objective_val[3900000]:          916672 0.0877242
+objective_val[4000000]:          858695 0.0882087
+objective_val[4100000]:          905954 0.0866987
+objective_val[4200000]:          706902 0.0849768
+objective_val[4300000]:          724481 0.0833307
+objective_val[4400000]:          849405 0.0845144
+objective_val[4500000]:          898250 0.0855529
+objective_val[4600000]:          706616 0.0809109
+objective_val[4700000]:          919750 0.0805282
+objective_val[4800000]:          964191 0.0849118
+objective_val[4900000]:          825054 0.0845156
+objective_val[5000000]:          815069 0.0784234
+objective_val[5100000]:          841201 0.0780357
+objective_val[5200000]:          919296 0.0803264
+objective_val[5300000]:          934604 0.0812447
+objective_val[5400000]:          755359 0.0770429
+objective_val[5500000]:          713613 0.0762924
+objective_val[5600000]:          778289 0.0768526
+objective_val[5700000]:          717243 0.0759083
+objective_val[5800000]:          644230 0.0744925
+objective_val[5900000]:          787829 0.074493
+objective_val[6000000]:          734946 0.0745993
+objective_val[6100000]:          802519 0.0735986
+objective_val[6200000]:          633695 0.0715922
+objective_val[6300000]:          726827 0.0720359
+objective_val[6400000]:          649683 0.0707055
+objective_val[6500000]:          699284 0.0695886
+objective_val[6600000]:          780986 0.0704233
+objective_val[6700000]:          684933 0.0691908
+objective_val[6800000]:          798856 0.0717169
+objective_val[6900000]:          650580 0.0689932
+objective_val[7000000]:          680316 0.0695481
+objective_val[7100000]:          743267 0.069688
+objective_val[7200000]:          689048 0.0674887
+objective_val[7300000]:          732227 0.0696738
+objective_val[7400000]:          624668 0.0668966
+objective_val[7500000]:          665104 0.0652088
+objective_val[7600000]:          734558 0.0656912
+objective_val[7700000]:          614423 0.0652825
+objective_val[7800000]:          670388 0.0647333
+objective_val[7900000]:          721353 0.0660614
+objective_val[8000000]:          677751 0.064548
+objective_val[8100000]:          680449 0.0661061
+objective_val[8200000]:          707018 0.0643181
+objective_val[8300000]:          654692 0.0639291
+objective_val[8400000]:          622488 0.0636015
+objective_val[8500000]:          639193 0.0637162
+objective_val[8600000]:          617121 0.0637096
+objective_val[8700000]:          658419 0.0646128
+objective_val[8800000]:          648035 0.0649449
+objective_val[8900000]:          685516 0.0647068
+objective_val[9000000]:          756018 0.0668417
+objective_val[9100000]:          641521 0.0643651
+objective_val[9200000]:          672673 0.0639195
+objective_val[9300000]:          648156 0.0638707
+objective_val[9400000]:          614272 0.0614683
+objective_val[9500000]:          607153 0.0606761
+objective_val[9600000]:          620803 0.0612699
+objective_val[9700000]:          606325 0.0611774
+objective_val[9800000]:          618359 0.0609466
+objective_val[9900000]:          663647 0.0608143
+objective_val[10000000]:          608470 0.0603034
+objective_val[10100000]:          606197 0.0599283
+objective_val[10200000]:          633508 0.0600112
+objective_val[10300000]:          639525 0.0615457
+objective_val[10400000]:          612127 0.0607421
+objective_val[10500000]:          649836 0.0612711
+objective_val[10600000]:          612693 0.0605818
+objective_val[10700000]:          605381 0.060274
+objective_val[10800000]:          616855 0.0599613
+objective_val[10900000]:          676105 0.0606434
+objective_val[11000000]:          658053 0.0608036
+objective_val[11100000]:          612775 0.0602001
+objective_val[11200000]:          650394 0.0597944
+objective_val[11300000]:          647693 0.0600588
+objective_val[11400000]:          637103 0.0602416
+objective_val[11500000]:          636618 0.0597753
+objective_val[11600000]:          641800 0.0601357
+objective_val[11700000]:          614545 0.0599668
+objective_val[11800000]:          609185 0.0596206
+objective_val[11900000]:          606452 0.0595868
+objective_val[12000000]:          629979 0.0591037
+objective_val[12100000]:          634020 0.0590563
+objective_val[12200000]:          608435 0.058752
+objective_val[12300000]:          616085 0.0588139
+objective_val[12400000]:          615222 0.0583616
+objective_val[12500000]:          605966 0.0582781
+objective_val[12600000]:          603834 0.0583436
+objective_val[12700000]:          605202 0.0581923
+objective_val[12800000]:          608155 0.0579702
+objective_val[12900000]:          607022 0.0582137
+objective_val[13000000]:          605584 0.0575767
+objective_val[13100000]:          606243 0.0573355
+objective_val[13200000]:          606217 0.0573907
+objective_val[13300000]:          603579 0.057465
+objective_val[13400000]:          605506 0.0574334
+objective_val[13500000]:          608532 0.0572551
+objective_val[13600000]:          607843 0.0573907
+objective_val[13700000]:          616636 0.0574824
+objective_val[13800000]:          605441 0.0571626
+objective_val[13900000]:          607083 0.057046
+objective_val[14000000]:          607064 0.0571411
+objective_val[14100000]:          611152 0.0573007
+objective_val[14200000]:          605284 0.057076
+objective_val[14300000]:          603724 0.0570078
+objective_val[14400000]:          604258 0.0569284
+objective_val[14500000]:          614062 0.0572893
+objective_val[14600000]:          604135 0.0567951
+objective_val[14700000]:          604580 0.0567393
+objective_val[14800000]:          603999 0.0566829
+objective_val[14900000]:          602809 0.0566384
+objective_val[15000000]:          606458 0.0567857
+objective_val[15100000]:          606560 0.0564428
+objective_val[15200000]:          604390 0.056798
+objective_val[15300000]:          608569 0.0568325
+objective_val[15400000]:          605402 0.0565857
+objective_val[15500000]:          610517 0.0569798
+objective_val[15600000]:          603730 0.0565454
+objective_val[15700000]:          603051 0.0565016
+objective_val[15800000]:          614602 0.0565217
+objective_val[15900000]:          620419 0.0566338
+objective_val[16000000]:          604066 0.0567934
+objective_val[16100000]:          606419 0.0566408
+objective_val[16200000]:          606323 0.0568734
+objective_val[16300000]:          603651 0.0565212
+objective_val[16400000]:          609261 0.0564454
+objective_val[16500000]:          603804 0.0564671
+objective_val[16600000]:          603819 0.0565487
+objective_val[16700000]:          603368 0.0563637
+objective_val[16800000]:          608053 0.0568244
+objective_val[16900000]:          608117 0.0567746
+objective_val[17000000]:          605677 0.0567595
+objective_val[17100000]:          602583 0.05654
+objective_val[17200000]:          603112 0.0563686
+objective_val[17300000]:          605971 0.0562221
+objective_val[17400000]:          616072 0.0562107
+objective_val[17500000]:          606086 0.0564874
+objective_val[17600000]:          610608 0.0564274
+objective_val[17700000]:          604909 0.0563796
+objective_val[17800000]:          606944 0.0563469
+objective_val[17900000]:          607054 0.0562256
+objective_val[18000000]:          604906 0.0563003
+objective_val[18100000]:          604175 0.0563745
+objective_val[18200000]:          607508 0.0564656
+objective_val[18300000]:          605751 0.0564946
+objective_val[18400000]:          603610 0.0562791
+objective_val[18500000]:          603374 0.0563306
+objective_val[18600000]:          603855 0.0561378
+objective_val[18700000]:          606948 0.0561104
+objective_val[18800000]:          609147 0.056029
+objective_val[18900000]:          605693 0.0561366
+objective_val[19000000]:          604998 0.0561528
+objective_val[19100000]:          603252 0.0560681
+objective_val[19200000]:          618532 0.0561091
+objective_val[19300000]:          606547 0.0563104
+objective_val[19400000]:          603158 0.0562474
+objective_val[19500000]:          604497 0.0562251
+objective_val[19600000]:          602922 0.0562173
+objective_val[19700000]:          603600 0.0562789
+objective_val[19800000]:          604710 0.0561514
+objective_val[19900000]:          614177 0.0561893
+objective_val[20000000]:          611949 0.0564039
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 611949 0.0564039 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=7 random + vector-between-2-classes orthogonalized
+ start projection 7 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 7, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     7.93884e+07 4.11594
+objective_val[200000]:     3.19964e+07 2.09089
+objective_val[300000]:      1.4913e+07 1.13722
+objective_val[400000]:     5.73874e+06 0.702485
+objective_val[500000]:     4.99661e+06 0.454439
+objective_val[600000]:     3.77974e+06 0.338718
+objective_val[700000]:     3.11351e+06 0.286157
+objective_val[800000]:     2.28997e+06 0.255864
+objective_val[900000]:     1.84239e+06 0.241235
+objective_val[1000000]:     2.81359e+06 0.229194
+objective_val[1100000]:      1.8556e+06 0.220074
+objective_val[1200000]:     2.24802e+06 0.214986
+objective_val[1300000]:     1.80852e+06 0.211757
+objective_val[1400000]:     1.19983e+06 0.186315
+objective_val[1500000]:     1.15573e+06 0.182935
+objective_val[1600000]:     1.41649e+06 0.18994
+objective_val[1700000]:     1.16241e+06 0.179133
+objective_val[1800000]:     1.21644e+06 0.152201
+objective_val[1900000]:          957438 0.137922
+objective_val[2000000]:     1.03227e+06 0.138582
+objective_val[2100000]:     1.40916e+06 0.150548
+objective_val[2200000]:     1.23246e+06 0.154018
+objective_val[2300000]:     1.23161e+06 0.128281
+objective_val[2400000]:          821616 0.117818
+objective_val[2500000]:          924316 0.116907
+objective_val[2600000]:     1.11984e+06 0.129536
+objective_val[2700000]:          812689 0.121851
+objective_val[2800000]:     1.36027e+06 0.142775
+objective_val[2900000]:     1.19582e+06 0.135251
+objective_val[3000000]:          824102 0.120489
+objective_val[3100000]:     1.02718e+06 0.114116
+objective_val[3200000]:          754485 0.113271
+objective_val[3300000]:          700823 0.102401
+objective_val[3400000]:          998001 0.110635
+objective_val[3500000]:          809688 0.0990974
+objective_val[3600000]:          939711 0.0974669
+objective_val[3700000]:          881207 0.096708
+objective_val[3800000]:          702822 0.097332
+objective_val[3900000]:          760126 0.0941018
+objective_val[4000000]:          646550 0.0921597
+objective_val[4100000]:          685513 0.0915499
+objective_val[4200000]:          850194 0.0907267
+objective_val[4300000]:          758450 0.0916348
+objective_val[4400000]:          799215 0.0917416
+objective_val[4500000]:          686213 0.0903503
+objective_val[4600000]:          643985 0.0886762
+objective_val[4700000]:          675203 0.0880333
+objective_val[4800000]:          765717 0.090928
+objective_val[4900000]:          686481 0.0862929
+objective_val[5000000]:          725372 0.0863723
+objective_val[5100000]:          625894 0.0859192
+objective_val[5200000]:          700279 0.0851149
+objective_val[5300000]:          683528 0.0871957
+objective_val[5400000]:          739898 0.0901448
+objective_val[5500000]:          646602 0.0851362
+objective_val[5600000]:          607171 0.0827124
+objective_val[5700000]:          668765 0.0821854
+objective_val[5800000]:          747032 0.0828456
+objective_val[5900000]:          711241 0.0842832
+objective_val[6000000]:          700304 0.0837391
+objective_val[6100000]:          746212 0.0832098
+objective_val[6200000]:          605003 0.0826282
+objective_val[6300000]:          599411 0.0803875
+objective_val[6400000]:          617984 0.0833803
+objective_val[6500000]:          752225 0.0861538
+objective_val[6600000]:          585705 0.0815466
+objective_val[6700000]:          662335 0.0787705
+objective_val[6800000]:          692983 0.0789229
+objective_val[6900000]:          634755 0.0780638
+objective_val[7000000]:          606423 0.0776923
+objective_val[7100000]:          629671 0.0774994
+objective_val[7200000]:          624231 0.0775186
+objective_val[7300000]:          623678 0.0791123
+objective_val[7400000]:          587205 0.0770701
+objective_val[7500000]:          623008 0.0775742
+objective_val[7600000]:          627533 0.0785565
+objective_val[7700000]:          591892 0.0770408
+objective_val[7800000]:          575963 0.0760173
+objective_val[7900000]:          678581 0.0754844
+objective_val[8000000]:          647593 0.0754234
+objective_val[8100000]:          606218 0.0753515
+objective_val[8200000]:          574609 0.0760894
+objective_val[8300000]:          576177 0.0744923
+objective_val[8400000]:          631479 0.0743673
+objective_val[8500000]:          591350 0.074236
+objective_val[8600000]:          574059 0.0738859
+objective_val[8700000]:          566978 0.0739719
+objective_val[8800000]:          587843 0.0733736
+objective_val[8900000]:          567871 0.0734529
+objective_val[9000000]:          585580 0.0735119
+objective_val[9100000]:          635506 0.0751078
+objective_val[9200000]:          586578 0.0747465
+objective_val[9300000]:          572108 0.0740661
+objective_val[9400000]:          571428 0.0728086
+objective_val[9500000]:          590286 0.0724609
+objective_val[9600000]:          587492 0.0729479
+objective_val[9700000]:          610304 0.0740108
+objective_val[9800000]:          567174 0.0721684
+objective_val[9900000]:          591109 0.0722602
+objective_val[10000000]:          572559 0.0727194
+objective_val[10100000]:          575989 0.073088
+objective_val[10200000]:          571562 0.0716696
+objective_val[10300000]:          567104 0.0714047
+objective_val[10400000]:          569567 0.0714116
+objective_val[10500000]:          573322 0.0717145
+objective_val[10600000]:          567722 0.071816
+objective_val[10700000]:          564166 0.0709278
+objective_val[10800000]:          575043 0.0708232
+objective_val[10900000]:          564534 0.0709096
+objective_val[11000000]:          590546 0.0708034
+objective_val[11100000]:          580328 0.0709763
+objective_val[11200000]:          568067 0.0706137
+objective_val[11300000]:          596243 0.0710145
+objective_val[11400000]:          570603 0.070749
+objective_val[11500000]:          607023 0.0710419
+objective_val[11600000]:          563917 0.0708692
+objective_val[11700000]:          585563 0.0709402
+objective_val[11800000]:          563844 0.0709161
+objective_val[11900000]:          564006 0.0709405
+objective_val[12000000]:          563543 0.0706668
+objective_val[12100000]:          568490 0.0706965
+objective_val[12200000]:          565194 0.0706415
+objective_val[12300000]:          574038 0.0702647
+objective_val[12400000]:          581254 0.0706657
+objective_val[12500000]:          565528 0.0702464
+objective_val[12600000]:          569869 0.0701511
+objective_val[12700000]:          568751 0.070149
+objective_val[12800000]:          573646 0.0700753
+objective_val[12900000]:          563950 0.0700362
+objective_val[13000000]:          565995 0.0700245
+objective_val[13100000]:          571613 0.0701151
+objective_val[13200000]:          562942 0.0700695
+objective_val[13300000]:          561594 0.0700743
+objective_val[13400000]:          565343 0.0698651
+objective_val[13500000]:          561783 0.0701125
+objective_val[13600000]:          562819 0.0700925
+objective_val[13700000]:          563979 0.0700672
+objective_val[13800000]:          562090 0.0698117
+objective_val[13900000]:          579371 0.0708725
+objective_val[14000000]:          567606 0.0704501
+objective_val[14100000]:          562600 0.0703193
+objective_val[14200000]:          572183 0.0700089
+objective_val[14300000]:          561799 0.0698833
+objective_val[14400000]:          563563 0.0698363
+objective_val[14500000]:          569872 0.0702092
+objective_val[14600000]:          561117 0.0700304
+objective_val[14700000]:          563109 0.0700446
+objective_val[14800000]:          562955 0.0702807
+objective_val[14900000]:          564404 0.0705575
+objective_val[15000000]:          562547 0.0704118
+objective_val[15100000]:          569036 0.0697312
+objective_val[15200000]:          561768 0.0699321
+objective_val[15300000]:          562733 0.0702693
+objective_val[15400000]:          564604 0.0706135
+objective_val[15500000]:          561929 0.0700931
+objective_val[15600000]:          563887 0.0697335
+objective_val[15700000]:          564588 0.0696705
+objective_val[15800000]:          566503 0.0696652
+objective_val[15900000]:          562562 0.0695646
+objective_val[16000000]:          562185 0.0697125
+objective_val[16100000]:          561805 0.0697786
+objective_val[16200000]:          561699 0.0697905
+objective_val[16300000]:          564085 0.0697595
+objective_val[16400000]:          567980 0.0695634
+objective_val[16500000]:          562382 0.0696028
+objective_val[16600000]:          569608 0.0700441
+objective_val[16700000]:          565491 0.0701622
+objective_val[16800000]:          562217 0.0701377
+objective_val[16900000]:          563037 0.0701561
+objective_val[17000000]:          562300 0.0699836
+objective_val[17100000]:          571314 0.0701022
+objective_val[17200000]:          568885 0.0703673
+objective_val[17300000]:          585121 0.0709138
+objective_val[17400000]:          562150 0.0704242
+objective_val[17500000]:          562202 0.0702696
+objective_val[17600000]:          561531 0.0702826
+objective_val[17700000]:          563825 0.0702884
+objective_val[17800000]:          570084 0.0706103
+objective_val[17900000]:          563584 0.0706425
+objective_val[18000000]:          560815 0.0700524
+objective_val[18100000]:          563061 0.070177
+objective_val[18200000]:          560883 0.0699328
+objective_val[18300000]:          561823 0.069921
+objective_val[18400000]:          562364 0.0695468
+objective_val[18500000]:          561582 0.0696362
+objective_val[18600000]:          579536 0.0703743
+objective_val[18700000]:          568800 0.070849
+objective_val[18800000]:          561009 0.0700064
+objective_val[18900000]:          562489 0.0699444
+objective_val[19000000]:          562247 0.0697581
+objective_val[19100000]:          560799 0.0699116
+objective_val[19200000]:          562259 0.0697508
+objective_val[19300000]:          563559 0.0698197
+objective_val[19400000]:          561051 0.0699888
+objective_val[19500000]:          561045 0.0697476
+objective_val[19600000]:          562101 0.069811
+objective_val[19700000]:          564121 0.0695468
+objective_val[19800000]:          565324 0.0696151
+objective_val[19900000]:          563805 0.0694318
+objective_val[20000000]:          560121 0.0697085
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 560121 0.0697085 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=8 random + vector-between-2-classes orthogonalized
+ start projection 8 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 8, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     8.12678e+07 3.59878
+objective_val[200000]:     3.21805e+07 2.01699
+objective_val[300000]:     1.27384e+07 1.09177
+objective_val[400000]:     6.83833e+06 0.72776
+objective_val[500000]:     5.68359e+06 0.500062
+objective_val[600000]:      3.9733e+06 0.419862
+objective_val[700000]:     3.02191e+06 0.297321
+objective_val[800000]:     2.25736e+06 0.253532
+objective_val[900000]:     2.48427e+06 0.252923
+objective_val[1000000]:     2.69808e+06 0.261672
+objective_val[1100000]:     2.71855e+06 0.247042
+objective_val[1200000]:     1.34893e+06 0.230798
+objective_val[1300000]:     1.75234e+06 0.199768
+objective_val[1400000]:     1.13195e+06 0.181589
+objective_val[1500000]:     1.83546e+06 0.181228
+objective_val[1600000]:     1.69592e+06 0.177083
+objective_val[1700000]:     1.09514e+06 0.166878
+objective_val[1800000]:     1.42877e+06 0.163784
+objective_val[1900000]:     1.54947e+06 0.162399
+objective_val[2000000]:     1.19658e+06 0.157766
+objective_val[2100000]:     1.31701e+06 0.150481
+objective_val[2200000]:     1.39044e+06 0.149228
+objective_val[2300000]:      1.2288e+06 0.1459
+objective_val[2400000]:     1.04803e+06 0.147308
+objective_val[2500000]:       1.112e+06 0.144986
+objective_val[2600000]:     1.04514e+06 0.13492
+objective_val[2700000]:          823633 0.122896
+objective_val[2800000]:          870997 0.124964
+objective_val[2900000]:     1.11985e+06 0.131427
+objective_val[3000000]:          864843 0.126771
+objective_val[3100000]:          917929 0.116199
+objective_val[3200000]:          784261 0.118492
+objective_val[3300000]:          874433 0.118432
+objective_val[3400000]:          802131 0.118097
+objective_val[3500000]:          673715 0.105055
+objective_val[3600000]:          842122 0.103901
+objective_val[3700000]:          990805 0.110912
+objective_val[3800000]:          747455 0.105346
+objective_val[3900000]:          669506 0.102614
+objective_val[4000000]:          971585 0.10632
+objective_val[4100000]:          779887 0.0975434
+objective_val[4200000]:          641190 0.0927608
+objective_val[4300000]:          745511 0.096099
+objective_val[4400000]:          624694 0.0928951
+objective_val[4500000]:          648603 0.0894438
+objective_val[4600000]:          666943 0.0880358
+objective_val[4700000]:          746077 0.0881386
+objective_val[4800000]:          655529 0.0869298
+objective_val[4900000]:          792914 0.0870705
+objective_val[5000000]:          718057 0.0882366
+objective_val[5100000]:          803833 0.0912439
+objective_val[5200000]:          693089 0.0856744
+objective_val[5300000]:          742055 0.0844356
+objective_val[5400000]:          622315 0.0840058
+objective_val[5500000]:          738717 0.0832501
+objective_val[5600000]:          643459 0.0828696
+objective_val[5700000]:          707550 0.0858627
+objective_val[5800000]:          655282 0.0857266
+objective_val[5900000]:          624559 0.0821486
+objective_val[6000000]:          614987 0.0837296
+objective_val[6100000]:          607791 0.0825723
+objective_val[6200000]:          649032 0.0805294
+objective_val[6300000]:          625420 0.0792616
+objective_val[6400000]:          689299 0.0793037
+objective_val[6500000]:          650240 0.0792295
+objective_val[6600000]:          594929 0.0786281
+objective_val[6700000]:          619752 0.0784103
+objective_val[6800000]:          687489 0.0821271
+objective_val[6900000]:          732370 0.0841417
+objective_val[7000000]:          586751 0.0799846
+objective_val[7100000]:          606414 0.0772097
+objective_val[7200000]:          585669 0.0763066
+objective_val[7300000]:          634265 0.076768
+objective_val[7400000]:          653026 0.0769883
+objective_val[7500000]:          647287 0.0766658
+objective_val[7600000]:          582172 0.0761118
+objective_val[7700000]:          582301 0.076127
+objective_val[7800000]:          576571 0.0761174
+objective_val[7900000]:          597115 0.0749071
+objective_val[8000000]:          576913 0.0748737
+objective_val[8100000]:          661160 0.0745979
+objective_val[8200000]:          577976 0.0746025
+objective_val[8300000]:          615567 0.0759105
+objective_val[8400000]:          580433 0.0752764
+objective_val[8500000]:          610843 0.0741232
+objective_val[8600000]:          575430 0.0738054
+objective_val[8700000]:          567751 0.0738465
+objective_val[8800000]:          569859 0.0736832
+objective_val[8900000]:          580407 0.0743323
+objective_val[9000000]:          633753 0.0757012
+objective_val[9100000]:          597304 0.0749094
+objective_val[9200000]:          659309 0.0780454
+objective_val[9300000]:          573627 0.0746746
+objective_val[9400000]:          571848 0.0736235
+objective_val[9500000]:          653316 0.0750336
+objective_val[9600000]:          575795 0.0749197
+objective_val[9700000]:          570502 0.0736706
+objective_val[9800000]:          589247 0.0740535
+objective_val[9900000]:          631581 0.0766336
+objective_val[10000000]:          627705 0.0756293
+objective_val[10100000]:          574834 0.0741393
+objective_val[10200000]:          569666 0.074029
+objective_val[10300000]:          590346 0.0738841
+objective_val[10400000]:          568834 0.0734215
+objective_val[10500000]:          570679 0.0730111
+objective_val[10600000]:          572805 0.0716847
+objective_val[10700000]:          562789 0.0711267
+objective_val[10800000]:          567749 0.0718093
+objective_val[10900000]:          566637 0.0710915
+objective_val[11000000]:          563049 0.0708652
+objective_val[11100000]:          567718 0.0708971
+objective_val[11200000]:          585118 0.0706978
+objective_val[11300000]:          577098 0.0703566
+objective_val[11400000]:          578620 0.0706957
+objective_val[11500000]:          586853 0.0705981
+objective_val[11600000]:          566876 0.0703757
+objective_val[11700000]:          566148 0.0708843
+objective_val[11800000]:          563095 0.0709364
+objective_val[11900000]:          564733 0.0709813
+objective_val[12000000]:          571967 0.0703816
+objective_val[12100000]:          568200 0.0702157
+objective_val[12200000]:          563502 0.0701985
+objective_val[12300000]:          563118 0.0701732
+objective_val[12400000]:          567879 0.0705746
+objective_val[12500000]:          565022 0.0707375
+objective_val[12600000]:          587532 0.0716235
+objective_val[12700000]:          565482 0.0707119
+objective_val[12800000]:          563008 0.070477
+objective_val[12900000]:          564036 0.0704265
+objective_val[13000000]:          562386 0.0706955
+objective_val[13100000]:          564211 0.0703791
+objective_val[13200000]:          561482 0.070075
+objective_val[13300000]:          561662 0.0702392
+objective_val[13400000]:          564738 0.0705122
+objective_val[13500000]:          561768 0.0702894
+objective_val[13600000]:          563567 0.070295
+objective_val[13700000]:          561247 0.0701184
+objective_val[13800000]:          563110 0.0701792
+objective_val[13900000]:          567776 0.0699527
+objective_val[14000000]:          562113 0.0699054
+objective_val[14100000]:          565921 0.0702442
+objective_val[14200000]:          566513 0.0699726
+objective_val[14300000]:          561604 0.0698305
+objective_val[14400000]:          561504 0.0701444
+objective_val[14500000]:          571396 0.0705722
+objective_val[14600000]:          566785 0.0704038
+objective_val[14700000]:          562861 0.0705287
+objective_val[14800000]:          572787 0.0705196
+objective_val[14900000]:          565909 0.0709243
+objective_val[15000000]:          564288 0.0701338
+objective_val[15100000]:          571939 0.0702263
+objective_val[15200000]:          561996 0.0698974
+objective_val[15300000]:          564914 0.0698595
+objective_val[15400000]:          563979 0.0697002
+objective_val[15500000]:          566967 0.0695303
+objective_val[15600000]:          584437 0.0696421
+objective_val[15700000]:          563460 0.0698305
+objective_val[15800000]:          561055 0.0699501
+objective_val[15900000]:          570944 0.0695604
+objective_val[16000000]:          561530 0.0697702
+objective_val[16100000]:          563585 0.0696717
+objective_val[16200000]:          564089 0.0697779
+objective_val[16300000]:          560565 0.0698334
+objective_val[16400000]:          561708 0.0699848
+objective_val[16500000]:          563351 0.0695881
+objective_val[16600000]:          561779 0.0697778
+objective_val[16700000]:          564897 0.0696229
+objective_val[16800000]:          561332 0.0696346
+objective_val[16900000]:          561274 0.0695776
+objective_val[17000000]:          561611 0.0698332
+objective_val[17100000]:          561706 0.0699087
+objective_val[17200000]:          561984 0.0698293
+objective_val[17300000]:          561109 0.0697935
+objective_val[17400000]:          561399 0.0697255
+objective_val[17500000]:          564572 0.0700993
+objective_val[17600000]:          561391 0.069947
+objective_val[17700000]:          562710 0.0700128
+objective_val[17800000]:          562251 0.0699754
+objective_val[17900000]:          564356 0.0702406
+objective_val[18000000]:          561248 0.0700505
+objective_val[18100000]:          562867 0.0702063
+objective_val[18200000]:          560358 0.0702063
+objective_val[18300000]:          564478 0.0698125
+objective_val[18400000]:          562492 0.0697518
+objective_val[18500000]:          561984 0.0698792
+objective_val[18600000]:          561927 0.0698732
+objective_val[18700000]:          563256 0.0698516
+objective_val[18800000]:          561027 0.0696307
+objective_val[18900000]:          566602 0.0702768
+objective_val[19000000]:          560852 0.0702402
+objective_val[19100000]:          560324 0.0699931
+objective_val[19200000]:          560217 0.0700448
+objective_val[19300000]:          561046 0.0699075
+objective_val[19400000]:          561725 0.0699613
+objective_val[19500000]:          562649 0.0700401
+objective_val[19600000]:          560590 0.0700021
+objective_val[19700000]:          567179 0.0702254
+objective_val[19800000]:          560443 0.0702308
+objective_val[19900000]:          561494 0.0701395
+objective_val[20000000]:          560808 0.0699718
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 560808 0.0699718 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ init_w : weights.cols()=10 projection_dim=9 random + vector-between-2-classes orthogonalized
+ start projection 9 w.norm=1
+ MCpermState::init(projection[60000],y,nc) nClasses=10)
+projection_dim: 9, batch_size: 100, noClasses: 10, C1: 10, C2: 1, lambda: 1, size w: 784
+-----------------------------
+objective_val[  t   ]: value    w.norm (initially 1)
+--------------------- -------  -------
+objective_val[100000]:     9.44194e+07 5.88931
+objective_val[200000]:     4.48198e+07 3.44239
+objective_val[300000]:      1.7919e+07 1.93905
+objective_val[400000]:     7.09979e+06 1.03015
+objective_val[500000]:     4.42926e+06 0.664013
+objective_val[600000]:     2.50166e+06 0.452354
+objective_val[700000]:     4.32184e+06 0.327997
+objective_val[800000]:     3.49225e+06 0.258113
+objective_val[900000]:     2.73142e+06 0.243389
+objective_val[1000000]:     2.17361e+06 0.204394
+objective_val[1100000]:     2.23156e+06 0.200512
+objective_val[1200000]:     1.66362e+06 0.171575
+objective_val[1300000]:      2.0731e+06 0.163998
+objective_val[1400000]:     1.20313e+06 0.16412
+objective_val[1500000]:     1.74659e+06 0.152164
+objective_val[1600000]:     1.98364e+06 0.170033
+objective_val[1700000]:     2.14257e+06 0.180234
+objective_val[1800000]:     1.82948e+06 0.171499
+objective_val[1900000]:     1.56434e+06 0.13914
+objective_val[2000000]:     1.37684e+06 0.135367
+objective_val[2100000]:     1.03994e+06 0.124433
+objective_val[2200000]:     1.13244e+06 0.122372
+objective_val[2300000]:     1.43807e+06 0.119365
+objective_val[2400000]:     1.17276e+06 0.116951
+objective_val[2500000]:     1.15501e+06 0.114059
+objective_val[2600000]:          887726 0.108654
+objective_val[2700000]:          854595 0.106796
+objective_val[2800000]:     1.26385e+06 0.10987
+objective_val[2900000]:     1.13928e+06 0.104923
+objective_val[3000000]:     1.22165e+06 0.113236
+objective_val[3100000]:          969890 0.108778
+objective_val[3200000]:          843142 0.104919
+objective_val[3300000]:          816094 0.0953848
+objective_val[3400000]:          976394 0.0937602
+objective_val[3500000]:     1.03632e+06 0.0935534
+objective_val[3600000]:     1.09311e+06 0.0933567
+objective_val[3700000]:          836125 0.0910708
+objective_val[3800000]:          945706 0.0886638
+objective_val[3900000]:          982986 0.0883583
+objective_val[4000000]:          898645 0.0859853
+objective_val[4100000]:          723461 0.0851166
+objective_val[4200000]:          758096 0.086529
+objective_val[4300000]:          705749 0.0830796
+objective_val[4400000]:          788252 0.0840184
+objective_val[4500000]:          827122 0.08119
+objective_val[4600000]:          959601 0.0851773
+objective_val[4700000]:          886508 0.08584
+objective_val[4800000]:          691644 0.0819247
+objective_val[4900000]:          756894 0.0809172
+objective_val[5000000]:          792345 0.0826703
+objective_val[5100000]:          676034 0.0801524
+objective_val[5200000]:          773656 0.0797165
+objective_val[5300000]:          815689 0.080082
+objective_val[5400000]:          798965 0.0785287
+objective_val[5500000]:          660615 0.0767038
+objective_val[5600000]:          675351 0.0761996
+objective_val[5700000]:          653435 0.0758232
+objective_val[5800000]:          718400 0.0748861
+objective_val[5900000]:          789446 0.0766677
+objective_val[6000000]:          709150 0.0757091
+objective_val[6100000]:          751070 0.0785459
+objective_val[6200000]:          830246 0.0796594
+objective_val[6300000]:          743879 0.076836
+objective_val[6400000]:          655186 0.0742145
+objective_val[6500000]:          730702 0.073191
+objective_val[6600000]:          695931 0.0720557
+objective_val[6700000]:          721900 0.0717315
+objective_val[6800000]:          691647 0.0721737
+objective_val[6900000]:          798746 0.072665
+objective_val[7000000]:          701957 0.0687562
+objective_val[7100000]:          690858 0.0700499
+objective_val[7200000]:          641390 0.0684205
+objective_val[7300000]:          690503 0.0688587
+objective_val[7400000]:          676574 0.0676553
+objective_val[7500000]:          624618 0.0661292
+objective_val[7600000]:          680583 0.0673119
+objective_val[7700000]:          657860 0.067116
+objective_val[7800000]:          638531 0.0658951
+objective_val[7900000]:          624648 0.0645795
+objective_val[8000000]:          648888 0.0647843
+objective_val[8100000]:          634025 0.0637536
+objective_val[8200000]:          710070 0.0656438
+objective_val[8300000]:          667654 0.0652361
+objective_val[8400000]:          635853 0.0629619
+objective_val[8500000]:          633219 0.063247
+objective_val[8600000]:          654283 0.0633151
+objective_val[8700000]:          646877 0.0646236
+objective_val[8800000]:          607547 0.0619021
+objective_val[8900000]:          663704 0.0633569
+objective_val[9000000]:          641308 0.0614188
+objective_val[9100000]:          624498 0.0612208
+objective_val[9200000]:          637487 0.0617179
+objective_val[9300000]:          638727 0.0628339
+objective_val[9400000]:          643861 0.0610361
+objective_val[9500000]:          641725 0.0611053
+objective_val[9600000]:          628473 0.0610607
+objective_val[9700000]:          611101 0.0598515
+objective_val[9800000]:          609803 0.05939
+objective_val[9900000]:          616293 0.0596883
+objective_val[10000000]:          605766 0.0591694
+objective_val[10100000]:          628770 0.0595582
+objective_val[10200000]:          641121 0.0600843
+objective_val[10300000]:          660031 0.0603216
+objective_val[10400000]:          614855 0.0599464
+objective_val[10500000]:          609199 0.0599616
+objective_val[10600000]:          612853 0.059497
+objective_val[10700000]:          654946 0.0596218
+objective_val[10800000]:          606699 0.0592333
+objective_val[10900000]:          606666 0.0587299
+objective_val[11000000]:          638395 0.0587756
+objective_val[11100000]:          648693 0.0590484
+objective_val[11200000]:          614386 0.0592246
+objective_val[11300000]:          622760 0.0585603
+objective_val[11400000]:          618014 0.0590883
+objective_val[11500000]:          606671 0.0590771
+objective_val[11600000]:          605360 0.058656
+objective_val[11700000]:          605275 0.0582332
+objective_val[11800000]:          625287 0.0587078
+objective_val[11900000]:          606889 0.0579854
+objective_val[12000000]:          607294 0.0578646
+objective_val[12100000]:          609873 0.0577891
+objective_val[12200000]:          604707 0.0576959
+objective_val[12300000]:          623100 0.0579673
+objective_val[12400000]:          606153 0.0576695
+objective_val[12500000]:          604357 0.0574851
+objective_val[12600000]:          604191 0.0572638
+objective_val[12700000]:          613983 0.057626
+objective_val[12800000]:          625633 0.0579258
+objective_val[12900000]:          606853 0.0573432
+objective_val[13000000]:          614599 0.0574533
+objective_val[13100000]:          618682 0.0573259
+objective_val[13200000]:          616644 0.0577619
+objective_val[13300000]:          605614 0.0577606
+objective_val[13400000]:          607259 0.0580136
+objective_val[13500000]:          609380 0.0576923
+objective_val[13600000]:          606117 0.0577476
+objective_val[13700000]:          606885 0.0577404
+objective_val[13800000]:          604537 0.0579544
+objective_val[13900000]:          608730 0.0578244
+objective_val[14000000]:          602231 0.0579387
+objective_val[14100000]:          602398 0.0579816
+objective_val[14200000]:          607371 0.0582279
+objective_val[14300000]:          608023 0.0579687
+objective_val[14400000]:          620994 0.0581236
+objective_val[14500000]:          623769 0.0586314
+objective_val[14600000]:          602909 0.0585837
+objective_val[14700000]:          614000 0.058553
+objective_val[14800000]:          603086 0.0581698
+objective_val[14900000]:          610038 0.058561
+objective_val[15000000]:          605821 0.0586579
+objective_val[15100000]:          607060 0.0586215
+objective_val[15200000]:          602796 0.0582851
+objective_val[15300000]:          601770 0.0582974
+objective_val[15400000]:          607153 0.0582006
+objective_val[15500000]:          604630 0.0583368
+objective_val[15600000]:          606852 0.0584148
+objective_val[15700000]:          608586 0.0584301
+objective_val[15800000]:          607857 0.0585848
+objective_val[15900000]:          604692 0.058513
+objective_val[16000000]:          603067 0.0583048
+objective_val[16100000]:          603764 0.0582721
+objective_val[16200000]:          604353 0.0585013
+objective_val[16300000]:          602304 0.0581283
+objective_val[16400000]:          602422 0.0582133
+objective_val[16500000]:          604498 0.0582493
+objective_val[16600000]:          603978 0.0583936
+objective_val[16700000]:          605246 0.0585407
+objective_val[16800000]:          608174 0.0588529
+objective_val[16900000]:          606235 0.0584558
+objective_val[17000000]:          603894 0.0585901
+objective_val[17100000]:          602332 0.0583341
+objective_val[17200000]:          610019 0.0582853
+objective_val[17300000]:          603284 0.0582096
+objective_val[17400000]:          601812 0.0583575
+objective_val[17500000]:          603119 0.0583354
+objective_val[17600000]:          601628 0.0582644
+objective_val[17700000]:          609794 0.0583674
+objective_val[17800000]:          603080 0.0584565
+objective_val[17900000]:          601661 0.0584925
+objective_val[18000000]:          602151 0.0583097
+objective_val[18100000]:          602570 0.0581984
+objective_val[18200000]:          606685 0.0584539
+objective_val[18300000]:          610803 0.0586117
+objective_val[18400000]:          608198 0.0587618
+objective_val[18500000]:          602711 0.0584347
+objective_val[18600000]:          601445 0.0582591
+objective_val[18700000]:          607306 0.0582464
+objective_val[18800000]:          601587 0.0582384
+objective_val[18900000]:          605934 0.0581276
+objective_val[19000000]:          602481 0.0581966
+objective_val[19100000]:          601257 0.0581344
+objective_val[19200000]:          602079 0.0582164
+objective_val[19300000]:          602040 0.058266
+objective_val[19400000]:          603244 0.0582765
+objective_val[19500000]:          606165 0.0584147
+objective_val[19600000]:          601801 0.0581808
+objective_val[19700000]:          602728 0.0582907
+objective_val[19800000]:          601235 0.0582736
+objective_val[19900000]:          601214 0.0581227
+objective_val[20000000]:          602442 0.0582834
+ * end iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+objective_val[20000000]: 602442 0.0582834 * END iterations: * luPerm ok_lu=1 ok_sortlu=1 * luPerm ok_lu_avg=0 ok_sortlu_avg=1 nAccSortlu_avg=0
+
+ ~Proj{ngetSTD=242060,ngetAVG=0,nReuse=42050,nSwitch=0,nDemote=0}
+MCsolveProgram::trySave()
+ Writing MCsoln initially from .soln to mnist.soln
+	mcdumpsoln -p < mnist.soln | less    # to prettyprint the soln
+MCsolveProgram::tryRead()
+ weights     norms:  0.0701608 0.0789691 0.0705497 0.0701188 0.0699236 0.0561355 0.0564039 0.0697085 0.0699718 0.0582834
+ weights_avg norms:  0.0701608 0.0789691 0.0705497 0.0701188 0.0699236 0.0561355 0.0564039 0.0697085 0.0699718 0.0582834
+normalized     weights[784x10]:
+normalized weights_avg[784x10]:
+      lower_bounds_avg[10x10]:
+  1.95143  -5.51506   1.62422  -12.0316  -10.3224   2.34039   2.86706   1.83648  -10.3365   2.13595
+ -2.00183 -0.466105  -2.29083  -1.01934 -0.521834 -0.646517  -0.15955  -2.05317 -0.362187 -0.833188
+ 0.192556   -3.8994  -0.17105  -4.50665  -3.79617 -0.134049  0.297453  0.112663  -3.61019 0.0620874
+-0.812389  -1.50554  -1.14655  -2.17863  -2.15463   1.39218   1.89471 -0.864672  -1.87973   1.19104
+ -3.15905  0.160324  -3.52316 -0.368658 0.0757411  -3.14855  -2.81164  -3.30139  0.352768  -3.56056
+-0.209929  -2.42017 -0.535881  -3.20175  -2.56774  0.911336   1.34534 -0.317722  -2.36728  0.656799
+  1.23693  -13.0965  0.854466  -6.11678  -5.12492   -9.5736   -8.8213   1.15316  -4.97614  -10.3088
+  -13.288   1.52308  -14.0395  0.988417   1.29537   -1.4725  -1.07188  -13.1216   1.63876  -1.64208
+ -1.17012  -1.82281  -1.59409  -2.65599  -1.60672  0.237089  0.759582  -1.26733  -1.39642 -0.373366
+ -4.89261   0.91636  -5.44069  0.379407  0.744364  -2.33253   -1.9158  -5.04638   1.09019  -2.68575
+      upper_bounds_avg[10x10]:
+   10.7776     -1.282    10.0717    -2.5601   -1.98646    10.3152    11.1979     10.496   -1.79088    10.0757
+  0.437282     2.0102     0.1716    1.47502    1.87194    1.68849    2.22407   0.393317    2.13507    1.51301
+   3.83583  -0.158891    3.37358  -0.719223  -0.276607    2.87471    3.46025    3.72287 -0.0265346    3.31178
+   2.02649    1.26012    1.67965   0.711384   0.632911    5.45357    6.23271    1.96904   0.961755    5.31178
+ -0.176973    3.07996  -0.471412    2.60431    2.99932  -0.132296   0.233698  -0.281815    3.39499  -0.435863
+   2.56039   0.327247    2.18936  -0.324612   0.149872    4.16238    4.77323    2.43793    0.37379    3.83978
+   5.26754   -1.81195    4.74497   -1.86795   -1.26842  -0.644507  -0.306349    5.11294   -1.04496  -0.846987
+  -1.41328    12.7408   -1.79016    12.0133     12.675    1.07279    1.51489   -1.55696    13.2621   0.934742
+   1.51011   0.885154    1.08989    0.20407    1.03939    3.18285    3.85009    1.42661    1.31997    2.39165
+ -0.905844    4.85025   -1.28415    4.15534    4.66812   0.354871   0.767186   -1.00874    5.14556  0.0338954
+ Projection 0 weights[ 784] 
+ {l,u}:   0 {   1.95143,  10.7776} {  -2.00183, 0.437282} {  0.192556,  3.83583} { -0.812389,  2.02649} {  -3.15905,-0.176973} { -0.209929,  2.56039} {   1.23693,  5.26754} {   -13.288, -1.41328}
+ {l,u}:   8 {  -1.17012,  1.51011} {  -4.89261,-0.905844} ...
+ Some narrow non-zero intervals were:
+ class      1 {  -2.00183, 0.437282 } width 2.43911
+ class      8 {  -1.17012, 1.51011 } width 2.68023
+ class      5 { -0.209929, 2.56039 } width 2.77032
+ class      3 { -0.812389, 2.02649 } width 2.83888
+ class      4 {  -3.15905, -0.176973 } width 2.98207
+ class      2 {  0.192556, 3.83583 } width 3.64327
+ class      9 {  -4.89261, -0.905844 } width 3.98676
+ class      6 {   1.23693, 5.26754 } width 4.03061
+ class      0 {   1.95143, 10.7776 } width 8.82613
+ class      7 {   -13.288, -1.41328 } width 11.8747
+ Some wide non-zero intervals were:
+ class      9 {  -4.89261, -0.905844 } width 3.98676
+ class      6 {   1.23693, 5.26754 } width 4.03061
+ class      0 {   1.95143, 10.7776 } width 8.82613
+ class      7 {   -13.288, -1.41328 } width 11.8747
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 1 weights[ 784] 
+ {l,u}:   0 {  -5.51506,   -1.282} { -0.466105,   2.0102} {   -3.8994,-0.158891} {  -1.50554,  1.26012} {  0.160324,  3.07996} {  -2.42017, 0.327247} {  -13.0965, -1.81195} {   1.52308,  12.7408}
+ {l,u}:   8 {  -1.82281, 0.885154} {   0.91636,  4.85025} ...
+ Some narrow non-zero intervals were:
+ class      1 { -0.466105, 2.0102 } width 2.47631
+ class      8 {  -1.82281, 0.885154 } width 2.70797
+ class      5 {  -2.42017, 0.327247 } width 2.74742
+ class      3 {  -1.50554, 1.26012 } width 2.76567
+ class      4 {  0.160324, 3.07996 } width 2.91964
+ class      2 {   -3.8994, -0.158891 } width 3.74051
+ class      9 {   0.91636, 4.85025 } width 3.93389
+ class      0 {  -5.51506, -1.282 } width 4.23307
+ class      7 {   1.52308, 12.7408 } width 11.2177
+ class      6 {  -13.0965, -1.81195 } width 11.2846
+ Some wide non-zero intervals were:
+ class      9 {   0.91636, 4.85025 } width 3.93389
+ class      0 {  -5.51506, -1.282 } width 4.23307
+ class      7 {   1.52308, 12.7408 } width 11.2177
+ class      6 {  -13.0965, -1.81195 } width 11.2846
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 2 weights[ 784] 
+ {l,u}:   0 {   1.62422,  10.0717} {  -2.29083,   0.1716} {  -0.17105,  3.37358} {  -1.14655,  1.67965} {  -3.52316,-0.471412} { -0.535881,  2.18936} {  0.854466,  4.74497} {  -14.0395, -1.79016}
+ {l,u}:   8 {  -1.59409,  1.08989} {  -5.44069, -1.28415} ...
+ Some narrow non-zero intervals were:
+ class      1 {  -2.29083, 0.1716 } width 2.46243
+ class      8 {  -1.59409, 1.08989 } width 2.68398
+ class      5 { -0.535881, 2.18936 } width 2.72524
+ class      3 {  -1.14655, 1.67965 } width 2.8262
+ class      4 {  -3.52316, -0.471412 } width 3.05175
+ class      2 {  -0.17105, 3.37358 } width 3.54463
+ class      6 {  0.854466, 4.74497 } width 3.8905
+ class      9 {  -5.44069, -1.28415 } width 4.15655
+ class      0 {   1.62422, 10.0717 } width 8.44753
+ class      7 {  -14.0395, -1.79016 } width 12.2493
+ Some wide non-zero intervals were:
+ class      6 {  0.854466, 4.74497 } width 3.8905
+ class      9 {  -5.44069, -1.28415 } width 4.15655
+ class      0 {   1.62422, 10.0717 } width 8.44753
+ class      7 {  -14.0395, -1.79016 } width 12.2493
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 3 weights[ 784] 
+ {l,u}:   0 {  -12.0316,  -2.5601} {  -1.01934,  1.47502} {  -4.50665,-0.719223} {  -2.17863, 0.711384} { -0.368658,  2.60431} {  -3.20175,-0.324612} {  -6.11678, -1.86795} {  0.988417,  12.0133}
+ {l,u}:   8 {  -2.65599,  0.20407} {  0.379407,  4.15534} ...
+ Some narrow non-zero intervals were:
+ class      1 {  -1.01934, 1.47502 } width 2.49437
+ class      8 {  -2.65599, 0.20407 } width 2.86006
+ class      5 {  -3.20175, -0.324612 } width 2.87714
+ class      3 {  -2.17863, 0.711384 } width 2.89002
+ class      4 { -0.368658, 2.60431 } width 2.97297
+ class      9 {  0.379407, 4.15534 } width 3.77594
+ class      2 {  -4.50665, -0.719223 } width 3.78742
+ class      6 {  -6.11678, -1.86795 } width 4.24883
+ class      0 {  -12.0316, -2.5601 } width 9.47146
+ class      7 {  0.988417, 12.0133 } width 11.0249
+ Some wide non-zero intervals were:
+ class      2 {  -4.50665, -0.719223 } width 3.78742
+ class      6 {  -6.11678, -1.86795 } width 4.24883
+ class      0 {  -12.0316, -2.5601 } width 9.47146
+ class      7 {  0.988417, 12.0133 } width 11.0249
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 4 weights[ 784] 
+ {l,u}:   0 {  -10.3224, -1.98646} { -0.521834,  1.87194} {  -3.79617,-0.276607} {  -2.15463, 0.632911} { 0.0757411,  2.99932} {  -2.56774, 0.149872} {  -5.12492, -1.26842} {   1.29537,   12.675}
+ {l,u}:   8 {  -1.60672,  1.03939} {  0.744364,  4.66812} ...
+ Some narrow non-zero intervals were:
+ class      1 { -0.521834, 1.87194 } width 2.39377
+ class      8 {  -1.60672, 1.03939 } width 2.6461
+ class      5 {  -2.56774, 0.149872 } width 2.71761
+ class      3 {  -2.15463, 0.632911 } width 2.78754
+ class      4 { 0.0757411, 2.99932 } width 2.92358
+ class      2 {  -3.79617, -0.276607 } width 3.51956
+ class      6 {  -5.12492, -1.26842 } width 3.8565
+ class      9 {  0.744364, 4.66812 } width 3.92376
+ class      0 {  -10.3224, -1.98646 } width 8.33596
+ class      7 {   1.29537, 12.675 } width 11.3796
+ Some wide non-zero intervals were:
+ class      6 {  -5.12492, -1.26842 } width 3.8565
+ class      9 {  0.744364, 4.66812 } width 3.92376
+ class      0 {  -10.3224, -1.98646 } width 8.33596
+ class      7 {   1.29537, 12.675 } width 11.3796
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 5 weights[ 784] 
+ {l,u}:   0 {   2.34039,  10.3152} { -0.646517,  1.68849} { -0.134049,  2.87471} {   1.39218,  5.45357} {  -3.14855,-0.132296} {  0.911336,  4.16238} {   -9.5736,-0.644507} {   -1.4725,  1.07279}
+ {l,u}:   8 {  0.237089,  3.18285} {  -2.33253, 0.354871} ...
+ Some narrow non-zero intervals were:
+ class      1 { -0.646517, 1.68849 } width 2.33501
+ class      7 {   -1.4725, 1.07279 } width 2.54529
+ class      9 {  -2.33253, 0.354871 } width 2.6874
+ class      8 {  0.237089, 3.18285 } width 2.94576
+ class      2 { -0.134049, 2.87471 } width 3.00875
+ class      4 {  -3.14855, -0.132296 } width 3.01625
+ class      5 {  0.911336, 4.16238 } width 3.25105
+ class      3 {   1.39218, 5.45357 } width 4.06139
+ class      0 {   2.34039, 10.3152 } width 7.97476
+ class      6 {   -9.5736, -0.644507 } width 8.92909
+ Some wide non-zero intervals were:
+ class      5 {  0.911336, 4.16238 } width 3.25105
+ class      3 {   1.39218, 5.45357 } width 4.06139
+ class      0 {   2.34039, 10.3152 } width 7.97476
+ class      6 {   -9.5736, -0.644507 } width 8.92909
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 6 weights[ 784] 
+ {l,u}:   0 {   2.86706,  11.1979} {  -0.15955,  2.22407} {  0.297453,  3.46025} {   1.89471,  6.23271} {  -2.81164, 0.233698} {   1.34534,  4.77323} {   -8.8213,-0.306349} {  -1.07188,  1.51489}
+ {l,u}:   8 {  0.759582,  3.85009} {   -1.9158, 0.767186} ...
+ Some narrow non-zero intervals were:
+ class      1 {  -0.15955, 2.22407 } width 2.38362
+ class      7 {  -1.07188, 1.51489 } width 2.58677
+ class      9 {   -1.9158, 0.767186 } width 2.68299
+ class      4 {  -2.81164, 0.233698 } width 3.04534
+ class      8 {  0.759582, 3.85009 } width 3.09051
+ class      2 {  0.297453, 3.46025 } width 3.1628
+ class      5 {   1.34534, 4.77323 } width 3.42789
+ class      3 {   1.89471, 6.23271 } width 4.33799
+ class      0 {   2.86706, 11.1979 } width 8.33086
+ class      6 {   -8.8213, -0.306349 } width 8.51495
+ Some wide non-zero intervals were:
+ class      5 {   1.34534, 4.77323 } width 3.42789
+ class      3 {   1.89471, 6.23271 } width 4.33799
+ class      0 {   2.86706, 11.1979 } width 8.33086
+ class      6 {   -8.8213, -0.306349 } width 8.51495
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 7 weights[ 784] 
+ {l,u}:   0 {   1.83648,   10.496} {  -2.05317, 0.393317} {  0.112663,  3.72287} { -0.864672,  1.96904} {  -3.30139,-0.281815} { -0.317722,  2.43793} {   1.15316,  5.11294} {  -13.1216, -1.55696}
+ {l,u}:   8 {  -1.26733,  1.42661} {  -5.04638, -1.00874} ...
+ Some narrow non-zero intervals were:
+ class      1 {  -2.05317, 0.393317 } width 2.44649
+ class      8 {  -1.26733, 1.42661 } width 2.69394
+ class      5 { -0.317722, 2.43793 } width 2.75565
+ class      3 { -0.864672, 1.96904 } width 2.83372
+ class      4 {  -3.30139, -0.281815 } width 3.01958
+ class      2 {  0.112663, 3.72287 } width 3.61021
+ class      6 {   1.15316, 5.11294 } width 3.95978
+ class      9 {  -5.04638, -1.00874 } width 4.03764
+ class      0 {   1.83648, 10.496 } width 8.65953
+ class      7 {  -13.1216, -1.55696 } width 11.5647
+ Some wide non-zero intervals were:
+ class      6 {   1.15316, 5.11294 } width 3.95978
+ class      9 {  -5.04638, -1.00874 } width 4.03764
+ class      0 {   1.83648, 10.496 } width 8.65953
+ class      7 {  -13.1216, -1.55696 } width 11.5647
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 8 weights[ 784] 
+ {l,u}:   0 {  -10.3365, -1.79088} { -0.362187,  2.13507} {  -3.61019,-0.0265346} {  -1.87973, 0.961755} {  0.352768,  3.39499} {  -2.36728,  0.37379} {  -4.97614, -1.04496} {   1.63876,  13.2621}
+ {l,u}:   8 {  -1.39642,  1.31997} {   1.09019,  5.14556} ...
+ Some narrow non-zero intervals were:
+ class      1 { -0.362187, 2.13507 } width 2.49725
+ class      8 {  -1.39642, 1.31997 } width 2.71639
+ class      5 {  -2.36728, 0.37379 } width 2.74107
+ class      3 {  -1.87973, 0.961755 } width 2.84148
+ class      4 {  0.352768, 3.39499 } width 3.04222
+ class      2 {  -3.61019, -0.0265346 } width 3.58365
+ class      6 {  -4.97614, -1.04496 } width 3.93118
+ class      9 {   1.09019, 5.14556 } width 4.05537
+ class      0 {  -10.3365, -1.79088 } width 8.54559
+ class      7 {   1.63876, 13.2621 } width 11.6233
+ Some wide non-zero intervals were:
+ class      6 {  -4.97614, -1.04496 } width 3.93118
+ class      9 {   1.09019, 5.14556 } width 4.05537
+ class      0 {  -10.3365, -1.79088 } width 8.54559
+ class      7 {   1.63876, 13.2621 } width 11.6233
+ 0 classes had vanishing intervals, with lower > upper.
+ Projection 9 weights[ 784] 
+ {l,u}:   0 {   2.13595,  10.0757} { -0.833188,  1.51301} { 0.0620874,  3.31178} {   1.19104,  5.31178} {  -3.56056,-0.435863} {  0.656799,  3.83978} {  -10.3088,-0.846987} {  -1.64208, 0.934742}
+ {l,u}:   8 { -0.373366,  2.39165} {  -2.68575,0.0338954} ...
+ Some narrow non-zero intervals were:
+ class      1 { -0.833188, 1.51301 } width 2.3462
+ class      7 {  -1.64208, 0.934742 } width 2.57682
+ class      9 {  -2.68575, 0.0338954 } width 2.71964
+ class      8 { -0.373366, 2.39165 } width 2.76501
+ class      4 {  -3.56056, -0.435863 } width 3.1247
+ class      5 {  0.656799, 3.83978 } width 3.18298
+ class      2 { 0.0620874, 3.31178 } width 3.24969
+ class      3 {   1.19104, 5.31178 } width 4.12074
+ class      0 {   2.13595, 10.0757 } width 7.9397
+ class      6 {  -10.3088, -0.846987 } width 9.46183
+ Some wide non-zero intervals were:
+ class      2 { 0.0620874, 3.31178 } width 3.24969
+ class      3 {   1.19104, 5.31178 } width 4.12074
+ class      0 {   2.13595, 10.0757 } width 7.9397
+ class      6 {  -10.3088, -0.846987 } width 9.46183
+ 0 classes had vanishing intervals, with lower > upper.
+
+ Solved mnist.svm for 9 classes demo	
+ Used s=libmclua.mcsolve.new("--xfile=../../data/mnist.svm --output=mnist.soln -B -S --C1=10 --C2=1 --maxiter=20000000 --optlu=5000 --treport=100000 --proj=10")	
+ And then s:read():solve():save():display()	
+ mcdumpsoln < big.soln    to dump .soln file as text	

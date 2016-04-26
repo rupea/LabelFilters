@@ -75,7 +75,7 @@ DEFUN_DLD (oct_evaluate_model, args, nargout,
   DenseColM umat = umat1.topRows(ovaW.cols());
   cout << lmat.rows() << "   " <<  lmat.cols() << endl;
 
-  cout << "size of prediction " << sizeof(prediction) << endl;
+  cout << "size of prediction " << sizeof(Prediction) << endl;
   cout << "size of predvec " << sizeof(PredVec) << endl;
 
   assert(lmat.rows() == ovaW.cols());

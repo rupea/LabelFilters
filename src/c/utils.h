@@ -2,37 +2,47 @@
 #define __UTILS_H
 
 #include "typedefs.h"
+#include <exception>
+#include <iostream>
+
+//#include <sstream>
+//#include <iomanip>
+#define OUTWIDE( OSTREAM, WIDTH, STUFF ) do{ std::ostringstream oss; oss<<STUFF; OSTREAM<<setw(WIDTH)<<oss.str(); }while(0)
 
 using Eigen::VectorXd;
 
 
 // *********************************
-// functions and structures for sorting and keeping indeces
-// Should implement bound checking but it is faster this way.
-template<typename IntType>
-struct IndexComparator
-{
-  const VectorXd* v;
-  IndexComparator(const VectorXd* m)
-  {
-    v = m;
-  }
-  bool operator()(IntType i, IntType j)
-  {
-    return (v->coeff(i) < v->coeff(j));
-  }
-};
+// functions and structures for sorting and keeping indices
 
 template<typename IntType>
-void sort_index(const VectorXd& m, std::vector<IntType>& cranks)
+void sort_index( VectorXd const& m, std::vector<IntType>& cranks)
 {
-  for (IntType i = 0; i < m.size(); i++)
-    {
-      cranks[i] = i;
-    }
-  IndexComparator<IntType> cmp(&m);
-  std::sort(cranks.begin(), cranks.end(), cmp);
+  if( cranks.size() != static_cast<size_t>(m.size()) )
+      throw std::runtime_error("ERROR: sort_index(vec,ranks): vec and ranks sizes must match");
+  if( m.size() == 0U )
+      throw std::runtime_error("ERROR: sort_index( m, cranks ) with m.size==0 !");
+  std::iota(cranks.begin(), cranks.end(), IntType(0));
+  std::sort(cranks.begin(), cranks.end(), [&m](int const i, int const j)
+            {return m[i] < m[j];} );
 };
+#if 0 // plainer implementation
+  struct Cmp {
+      Cmp( VectorXd const& m ) : m(m) {}
+      bool operator()( int const i, int const j ){
+          //return m.coeff(i) < m.coeff(j);
+          return m(i) < m(j);   // with checking
+      }
+      VectorXd const& m;
+  };
+  for(size_t i=0U; i<cranks.size(); ++i)
+      cranks[i] = i;
+  std::cout<<" copy..."<<std::endl;
+  VectorXd n(m);
+  std::cout<<" std::sort ... "<<std::endl; std::cout.flush();
+  Cmp cmp(n);
+  std::sort(cranks.begin(), cranks.end(), cmp );
+#endif
 
 
 //**********************************
@@ -90,8 +100,7 @@ void DotProductInnerVector (Eigen::Ref<Eigen::VectorXd> result, const Eigen::Ref
 #ifndef NDEBUG
   assert(result.size() == mat1.cols());
 #endif
-  size_t i;
-  for (i=0;i<mat1.cols();++i)
+  for (size_t i=0;i<mat1.cols();++i)
     {
       result(i)=DotProductInnerVector(mat1.col(i),mat2,outerIndex);
     }
@@ -110,8 +119,7 @@ SparseMb labelVec2Mat (const VectorXd& yVec);
 
 bool fexists(const char *filename);
 
-// delete and ActiveDataSet to free up memory
-
+/** delete an ActiveDataSet to free up memory. \post \c active==nullptr. */
 void free_ActiveDataSet(ActiveDataSet*& active);
 
 #endif

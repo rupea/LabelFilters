@@ -26,6 +26,7 @@
 #include "KMeans.h"
 #include "LPSR.h"
 #include "normalize.h"
+#include "evaluate.hh"  // template impls
 
 using Eigen::VectorXd;
 using Eigen::VectorXi;
@@ -406,9 +407,6 @@ int main(int argc, char * argv[])
       outf.close();
     }
   
-  if (active_classes)
-    {
-      free_ActiveDataSet(active_classes);
-    }
+  free_ActiveDataSet(active_classes);
   clean_up_and_exit(0);  
 }

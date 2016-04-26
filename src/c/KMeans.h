@@ -1,18 +1,19 @@
 #ifndef __KMEANS_H
 #define __KMEANS_H
 
-#include "utils.h"
-#include <omp.h>
 #include "typedefs.h"
+#include "utils.h"
+#include <iostream>
+#include <omp.h>
 
 #ifdef PROFILE
 #include <gperftools/profiler.h>
 #endif
 
 
-using Eigen::VectorXi;
-using Eigen::RowVectorXd;
-using namespace std;
+//using Eigen::VectorXi;
+//using Eigen::RowVectorXd;
+//using namespace std;
 
 
 template<typename EigenType>
@@ -28,9 +29,10 @@ void init_centers_random(DenseColM& centers, const EigenType& x)
 }
 
 template<typename EigenType>
-double cluster_test_kmeans(VectorXi& assignments, const DenseColM& centers,
+double cluster_test_kmeans(Eigen::VectorXi& assignments, const DenseColM& centers,
 			   const EigenType& x, bool spherical, bool verbose=false)
 {
+  using namespace std;
   size_t i;
   int k = centers.cols();
   size_t n = x.rows();
@@ -60,9 +62,10 @@ double cluster_test_kmeans(VectorXi& assignments, const DenseColM& centers,
 }
 
 template<typename EigenType>
-double run_kmeans(DenseColM& centers, VectorXi& assignments,
+double run_kmeans(DenseColM& centers, Eigen::VectorXi& assignments,
 		  const EigenType& x, int iterations, bool spherical, bool verbose=false)
 {
+  using namespace std;
   #ifdef PROFILE
   ProfilerStart("kmeans.profile");
   #endif
@@ -71,7 +74,7 @@ double run_kmeans(DenseColM& centers, VectorXi& assignments,
   int k = centers.cols();
   size_t n = x.rows();
   double obj,old_obj=0.0;
-  RowVectorXd sizes(k);
+  Eigen::RowVectorXd sizes(k);
   Eigen::RowVectorXd sims(k);
 
   init_centers_random(centers,x);

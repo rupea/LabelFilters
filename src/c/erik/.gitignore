@@ -1,0 +1,5 @@
+log*.log
+log-[om]*.vg
+mk-long.log
+mcsolve0
+hdr-stamp

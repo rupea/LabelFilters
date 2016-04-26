@@ -10,7 +10,7 @@ struct MutexType
   ~MutexType() { omp_destroy_lock(&lock); }
   void Lock() { omp_set_lock(&lock); }
   void Unlock() { omp_unset_lock(&lock); }
-  bool TestLock() { omp_test_lock(&lock); }
+  bool TestLock() { return omp_test_lock(&lock); }
   void YieldLock() 
   {
     //cout << "YieldLock:" << &lock << endl;fflush(stdout);

@@ -1,3 +1,10 @@
+#include "constants.h"
+#include "typedefs.h"
+#include "EigenOctave.h"
+#include "EigenIO.h"
+#include "evaluate.h"
+#include "utils.h"
+
 #include <octave/oct.h> 
 #include <octave/parse.h> 
 #include <octave/oct-map.h>
@@ -17,13 +24,6 @@
 #include <boost/numeric/conversion/bounds.hpp>
 #include <boost/limits.hpp>
 #include <boost/program_options.hpp>
-#include "Eigen/Dense"
-#include "Eigen/Sparse"
-#include "constants.h"
-#include "typedefs.h"
-#include "EigenOctave.h"
-#include "EigenIO.h"
-#include "evaluate.h"
 
 using Eigen::VectorXd;
 using Eigen::VectorXi;
@@ -217,10 +217,10 @@ int main(int argc, char * argv[])
   args(0)=vm["data_file"].as<string>();
   args(1)="x_te"; 
   args(2)="y_te"; 
-  
+
   if (verbose)
     {
-      cout << "Loading test set from " << args(0).string_value() << " ... " <<endl;
+      cout << "Loading data file " << args(0).string_value() << " ... " <<endl;
     }
   octave_value_list loaded = Fload(args, 1);
   //feval("load", args, 0); // no arguments returned 
@@ -232,7 +232,7 @@ int main(int argc, char * argv[])
   y_te = loaded(0).scalar_map_value().getfield(args(2).string_value());
   args.clear();
   loaded.clear();
-
+  
   if(validation)
     {
       args(0)=vm["data_file"].as<string>();
@@ -263,7 +263,6 @@ int main(int argc, char * argv[])
 	{
 	  y.push_back(new SparseMb(toEigenMat(y_va.sparse_bool_matrix_value())));
 	}
-      //      y = toEigenMat(y_te.sparse_bool_matrix_value());
       // multilabel problems. Use a threshold of 0 for classification 
       // if no prediction is above 0, return the class with the highest predictions
       // should get this info in the parameters
@@ -414,7 +413,7 @@ int main(int argc, char * argv[])
 	{
 	  x.push_back(new DenseM(toEigenMat<DenseM>(x_va.array_value())));
 	}
-      
+
       for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
 	  cerr << "***********" << *pit << "************" << endl;
@@ -454,8 +453,5 @@ int main(int argc, char * argv[])
     {
       outf.close();
     }
-
-  
-
   clean_up_and_exit(0);  
 }

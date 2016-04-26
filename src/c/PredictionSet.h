@@ -1,215 +1,183 @@
 #ifndef __PREDICTIONSET_H
 #define __PREDICTIONSET_H
 
-#include "Eigen/Sparse"
+#include "typedefs.h"
 #include <vector>
 #include <iostream>
 #include <boost/numeric/conversion/bounds.hpp>
 #include <boost/limits.hpp>
-#include "typedefs.h"
 
 using namespace std;
 
 typedef float predtype;
 
-struct prediction
+struct Prediction
 {
   predtype out;
-  int cls;
+  size_t cls;
 };
 
-inline bool pred_comp (const prediction* a, const prediction* b) {return a->out > b->out;};
-
-class PredVec 
+/** A vector<Prediction> wrapper, with \c sort, \c prune, \c predict. */
+class PredVec : private std::vector<Prediction>
 {
- private:
-  std::vector<prediction*>* _predvec;
-  size_t _npreds;
-  bool _sorted; 
-  size_t _keep_size;
-  predtype _keep_thresh;
-  static bool TopWarned;
-  static bool ThreshWarned;
-  static bool AddWarned;
-  void init();
- public:
-  PredVec();
-  PredVec(size_t n=0);
-  ~PredVec();
-  std::vector<prediction*>* predvec();
-  void add_pred(predtype out, int cls);
-  void sort();
-  bool is_sorted() const {return _sorted;};
-  size_t npreds() const {return _npreds;};
-  size_t getSize() const {return _predvec->size();};
-  void reserve_extra(size_t n) {_predvec->reserve(n+_predvec->size());};
-  void reserve(size_t n) {_predvec->reserve(n);};
-  void prune (size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
-  void predict(std::vector<int>& pred_class, double thresh, size_t k=0);
+public:
+    typedef std::vector<Prediction> Base;
+    PredVec();
+    PredVec(size_t n);                          ///< init with reserve(n) memory
+    ~PredVec();
+    /** const base vector access */
+    Base const& predvec() const {return *this;}
+    void add_pred(predtype out, size_t cls);       ///< push back new \c Prediction item
+    void sort();                                ///< if nec, sort highest \c Prediction::out first
+    /** keep highest \c Prediction::out items (at least k, with value > \c keep_thresh) */
+    void prune (size_t k, predtype keep_thresh = boost::numeric::bounds<predtype>::highest());
+    /** retrieve sorted list of \c Prediction::cls.
+     * - thresh = double_max, k > 0 --> return top k classes
+     * - thresh = t, k = 0  --> retrun all classes with pred > t
+     * - thresh = t and k > 0  --> return all classes with pred > t, but at least k
+     */
+    void predict(std::vector<int>& pred_class, double thresh, size_t k=0);
+    size_t getSize() const       {return Base::size();};
+    void reserve(size_t n)       {Base::reserve(n);};
+    void reserve_extra(size_t n) {Base::reserve(n+Base::size());};
+private: // utility / unused
+    static bool cmp (Prediction const& a, Prediction const& b) {return a.out > b.out;};
+    bool is_sorted() const {return _sorted;};
+private: // data
+    bool _sorted;
+    size_t _keep_size;
+    predtype _keep_thresh;
+private:
+    static bool TopWarned;
+    static bool ThreshWarned;
+    static bool AddWarned;
 };
-
 
 class PredictionSet
 {
- private:
-  std::vector<PredVec*>* _preddata;
- public:
-  PredictionSet();
-  PredictionSet(size_t n);
-  template <typename EigenType> PredictionSet(const EigenType& preds);
-  ~PredictionSet();
-  // generate new predicton vector for a new example.
-  // maybe the entire prediction set should e generated at once. 
-  PredVec* NewPredVec(size_t n = 0);
-  // generates a new prediction vector and puts it at position i
-  PredVec* NewPredVecAt(size_t i, size_t n=0); 
-  // generates a new prediction vector and puts it at position i
-  // does not delete previous vector at position i and does not
-  // do bounds checking
-  PredVec* NewPredVecAt_fast(size_t i, size_t n = 0);
-  // return the prediction vector of example i
-  PredVec* GetPredVec(size_t i) const;
-  // sort all predictions sets.
-  void sort();
-  size_t size(){return _preddata->size();};
-  // prune all the prediction vectors.
-  // keep only predictions higher than keep_thresh, but at least k predictions 
-  void prune(size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
-  double PrecK(const SparseMb& y, int k);
-  double TopK(const SparseMb& y, int k);
-  void TopMetrics(double& Prec1, double& Top1,
-		  double& Prec5, double& Top5, 
-		  double& Prec10, double& Top10,
-		  const SparseMb& y);    
-  double MicroF1(const SparseMb& y, double thresh, size_t k);
-  double MacroF1(const SparseMb& y, double thresh, size_t k);
-  double MacroF1_2(const SparseMb& y, double thresh, size_t k);
-  double MacroRecall(const SparseMb& y, double thresh, size_t k);
-  void ThreshMetrics(double& MicroF1, double& MacroF1, 
-		     double& MacroF1_2, 
-		     double& MicroPrecision, double& MacroPrecision,
-		     double& MicroRecall, double& MacroRecall, 
-		     const SparseMb& y, double thresh, size_t k);    
+public:
+    PredictionSet();
+    PredictionSet(size_t n);
+    template <typename EigenType> PredictionSet(const EigenType& preds);
+    ~PredictionSet();
+
+    /** generate new predicton vector for a new example.
+     * maybe the entire Prediction set should e generated at once. */
+    PredVec* NewPredVec(size_t n = 0);
+
+    /** generates a new Prediction vector and puts it at position i */
+    PredVec* NewPredVecAt(size_t i, size_t n=0);
+
+    /** generates a new Prediction vector and puts it at position i.
+     * does not delete previous vector at position i and does not
+     * do bounds checking */
+    PredVec* NewPredVecAt_fast(size_t i, size_t n = 0);
+
+    /// return the Prediction vector of example i.
+    PredVec* GetPredVec(size_t i) const;
+
+    /// sort all predictions sets, in order of the output.
+    void sort();
+    size_t size() const{return _preddata->size();};
+
+    /// prune all the Prediction vectors.
+    /// keep only predictions higher than keep_thresh, but at least k predictions
+    void prune(size_t k, predtype keep_thresh=boost::numeric::bounds<predtype>::highest());
+    double PrecK(const SparseMb& y, int k);
+    double TopK(const SparseMb& y, int k);
+    void TopMetrics(double& Prec1, double& Top1,
+                    double& Prec5, double& Top5,
+                    double& Prec10, double& Top10,
+                    const SparseMb& y);
+    double MicroF1(const SparseMb& y, double thresh, size_t k);
+    double MacroF1(const SparseMb& y, double thresh, size_t k);
+    double MacroF1_2(const SparseMb& y, double thresh, size_t k);
+    double MacroRecall(const SparseMb& y, double thresh, size_t k);
+    void ThreshMetrics(double& MicroF1, double& MacroF1,
+                       double& MacroF1_2,
+                       double& MicroPrecision, double& MacroPrecision,
+                       double& MicroRecall, double& MacroRecall,
+                       const SparseMb& y, double thresh, size_t k);
 
 
-  size_t npreds() const;
-  SparseM* toSparseM() const;
+    size_t npreds() const;
+    SparseM* toSparseM() const;
+private:
+    std::vector<PredVec*>* _preddata;
 };
 
-
-inline void PredVec::init()
-{
-  _predvec = new std::vector<prediction*>;
-  _npreds = 0;
-  _keep_size = boost::numeric::bounds<size_t>::highest();
-  _keep_thresh = boost::numeric::bounds<predtype>::lowest();
-  _sorted=false;
-}
+// -------- inline definitions --------
 
 inline PredVec::PredVec()
-{
-  init();
-}
+    : std::vector<Prediction>()
+      , _sorted( false )
+      , _keep_size( boost::numeric::bounds<size_t>::highest() )
+      , _keep_thresh( boost::numeric::bounds<predtype>::lowest() )
+{}
 
 inline PredVec::PredVec(size_t n)
-{
-  init();
-  _predvec->reserve(n);
-}  
+    : std::vector<Prediction>( n )
+      , _sorted( false )
+      , _keep_size( boost::numeric::bounds<size_t>::highest() )
+      , _keep_thresh( boost::numeric::bounds<predtype>::lowest() )
+{}
 
 inline PredVec::~PredVec()
+{}
+
+// sort predictions in order of the output
+inline void PredVec::sort()
 {
-  for (std::vector<prediction*>::iterator it = _predvec->begin(); it != _predvec->end(); it++)
-    {
-      delete *it;
+    if (!_sorted){
+        std::sort( begin(), end(), cmp );
+        _sorted=true;
     }
-  delete _predvec;
-}
+};
 
-inline std::vector<prediction*>* PredVec::predvec()
-{
-  return _predvec;
-}
-
-inline void PredVec::add_pred(predtype out, int cls)
+inline void PredVec::add_pred(predtype out, size_t cls)
 {
   /* if (!AddWarned && (_keep_thresh > boost::numeric::bounds<predtype>::lowest() || _keep_size < boost::numeric::bounds<size_t>::highest())) */
   /*   { */
   /*     cerr << "Warning: addind a new prediction to an already prunned vector" << endl; */
   /*     AddWarned = true; */
   /*   }     */
-  prediction* pred = new prediction;
-  pred->out = out; 
-  pred->cls = cls; 
-  _predvec->push_back(pred);
+  Base::push_back( Prediction{out,cls} );
   _sorted=false;
-  _npreds++;
-}  
+}
 
-// sort predictions in order of the output
-inline void PredVec::sort() 
-{
-  if (!_sorted)
-    {
-      std::sort(_predvec->begin(),_predvec->end(),pred_comp);
-    }
-  _sorted=true;
-};
-
-// keep only preds with out > keep_thresh, but at least k predictions
 inline void PredVec::prune (size_t k, predtype keep_thresh)
 {
-  this->sort();
-  //keep the largest threshold
-  _keep_thresh = _keep_thresh < keep_thresh ? keep_thresh : _keep_thresh;
-  //keep the smallest k
-  _keep_size = _keep_size < k ? _keep_size : k;
-  std::vector<prediction*>::iterator it = _predvec->begin();
-  size_t new_size = 0;
-  // could do this through binary search
-  while (it!=_predvec->end() && (*(it++))->out > keep_thresh) new_size++;
-  if (new_size < k)
-    {
-      new_size = k;
-    }
-  if (new_size < _predvec->size())
-    {
-      for (it = _predvec->begin() + new_size; it!=_predvec->end(); it++)
-	{
-	  delete *it;
-	}      
-      _predvec->resize(new_size);
-      vector<prediction*>(*_predvec).swap(*_predvec);
+    this->sort();
+    _keep_thresh = std::max( _keep_thresh, keep_thresh);  // remember max val
+    _keep_size   = std::min( _keep_size,   k );           // remember min val
+    size_t new_size = std::distance( cbegin(),
+                                     std::lower_bound( cbegin(), cend(), Prediction{keep_thresh,0}, cmp ));
+    new_size = std::min( Base::size(), std::max( new_size, k ));
+    if (new_size < Base::size()) {
+        resize(new_size);
+        Base().swap(*this);
     }
 }
 
-// thresh = double_max, k > 0 --> return top k classes
-// thresh = t, k = 0  --> retrun all classes with pred > t
-// thresh = t and k > 0  --> return all classes with pred > t, but at least k 
 inline void PredVec::predict(std::vector<int>& pred_class, double thresh, size_t k)
 {
-  if (thresh < _keep_thresh && !ThreshWarned)
-    {
-      cerr << "Warning: Asking for prediction threshold " << thresh << " but predictions have already been pruned using threshold " << _keep_thresh << endl;
-      ThreshWarned = true;
+    if (thresh < _keep_thresh && !ThreshWarned) {
+        cerr<<"Warning: Asking for prediction threshold "<<thresh<<
+            " but predictions have already been pruned using threshold "<<_keep_thresh<<endl;
+        ThreshWarned = true;
     }
-  if ( k > _keep_size && !TopWarned)
-    {	
-      cerr << "Warning: Asking for top " << k << " but predictions have already been pruned to keep only top " << _keep_size << endl;
-      TopWarned = true;
+    if ( k > _keep_size && !TopWarned) {	
+        cerr<<"Warning: Asking for top "<<k<<" but predictions have already been pruned"
+            " to keep only top "<<_keep_size<<endl;
+        TopWarned = true;
     }
-  
-  this->sort();
-  
-  pred_class.clear();
-  std::vector<prediction*>::iterator it = _predvec->begin();
-  // could do this through binary search
-  size_t npreds = 0;
-  while (it!=_predvec->end() && ( (*it)->out > thresh || npreds < k))
-    {
-      pred_class.push_back((*(it++))->cls);
-      npreds++;
-    }
+    this->sort();
+    size_t new_size = std::distance( cbegin(),
+                                     std::lower_bound( cbegin(), cend(), Prediction{(predtype)thresh,0}, cmp ));
+    new_size = std::min( Base::size(), std::max( new_size, k ));
+    pred_class.clear();
+    pred_class.reserve(new_size);
+    for(size_t i=0U; i<new_size; ++i) pred_class.push_back( (*this)[i].cls );
 }
 
 
@@ -221,7 +189,7 @@ inline PredictionSet::PredictionSet()
 
 inline PredictionSet::PredictionSet(size_t n)
 {
-  _preddata = new std::vector<PredVec*>(n);  
+  _preddata = new std::vector<PredVec*>(n);
 }
 
 template <typename EigenType>
@@ -249,28 +217,28 @@ inline PredictionSet::~PredictionSet()
   delete _preddata;
 }
 
-// appends new prediction vector
+// appends new Prediction vector
 inline PredVec* PredictionSet::NewPredVec(size_t n)
-{ 
+{
   PredVec* newpredvec = new PredVec(n);
   _preddata->push_back(newpredvec);
   return newpredvec;
 }
 
-// puts a new prediction vector at position i. Deletes old vector if exists
+// puts a new Prediction vector at position i. Deletes old vector if exists
 inline PredVec* PredictionSet::NewPredVecAt(size_t i, size_t n)
 {
   if ( _preddata->at(i) != NULL)
     {
       delete (*_preddata)[i];
-    }  
+    }
   PredVec* newpredvec = new PredVec(n);
   (*_preddata)[i]=newpredvec;
   return newpredvec;
 }
 
 
-// puts a new prediction vector at position i.
+// puts a new Prediction vector at position i.
 // assumes the pointer at position i is NULL so does not delete it
 // no bound checking
 inline PredVec* PredictionSet::NewPredVecAt_fast(size_t i, size_t n)
@@ -286,7 +254,7 @@ inline PredVec* PredictionSet::GetPredVec(size_t i) const
 }
 
 
-inline void PredictionSet::sort() 
+inline void PredictionSet::sort()
 {
   for (std::vector<PredVec*>::iterator it = _preddata->begin(); it != _preddata->end(); it++)
     {
@@ -294,8 +262,8 @@ inline void PredictionSet::sort()
     }
 }
 
-inline void PredictionSet::prune(size_t k, predtype keep_thresh) 
-{    
+inline void PredictionSet::prune(size_t k, predtype keep_thresh)
+{
   for (std::vector<PredVec*>::iterator it = _preddata->begin(); it != _preddata->end(); it++)
     {
       (*it)->prune(k, keep_thresh);
