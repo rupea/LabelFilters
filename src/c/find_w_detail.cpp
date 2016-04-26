@@ -138,17 +138,17 @@ void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
     // E.g. many places may divide by nc[i] or ...
     int nclassesZero = 0;
     for (int i=0;i<n;i++) if( nclasses[i]==0 ) ++nclassesZero;
-    if(nclassesZero) err<<"\nERROR: it seems "<<nclassesZero<<" examples have been assigned to no class at all";
+    if(nclassesZero) err<<"\nWARNING: it seems "<<nclassesZero<<" examples have been assigned to no class at all";
 
     int ncZero = 0;
     int i0=0;
     for (int i=0;i<noClasses;i++) if( nc[i]==0 ) {++ncZero; if(i0==0) i0=i;}
-    if(ncZero) err<<"\nERROR: it seems "<<ncZero<<" classes have been assigned to NO training examples (nc["<<i0<<"]==0)";
+    if(ncZero) err<<"\nWARNING: it seems "<<ncZero<<" classes have been assigned to NO training examples (nc["<<i0<<"]==0)";
 
     if(err.str().size()){
         err<<"\n\tPlease check whether code should support this, since"
             <<"\n\tboth nc[class] and nclasses[example] may be used as divisors"<<endl;
-        throw runtime_error(err.str());
+        //throw runtime_error(err.str());
     }
 }
 
@@ -157,27 +157,26 @@ void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
 
 void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const param_struct& params)
 {
-    if( params.optimizeLU_epoch > 0 ){
-        double ml_wt_class = 1.0;
-        int noClasses = y.cols();
-        wc.setZero(noClasses);
-        int n = y.rows();
-        if (nclasses.size() != n) {
-            cerr << "init_wc has been called with vector nclasses of wrong size" << endl;
-            exit(-1);
-        }
-        for (int i=0;i<n;i++) {
-            if (params.ml_wt_class_by_nclasses) {
-                ml_wt_class = 1.0/nclasses.coeff(i);
-            }
-            for (SparseMb::InnerIterator it(y,i);it;++it) {
-                if (it.value()) {
-                    wc.coeffRef(it.col()) += ml_wt_class;
-                }
-            }
-        }
+  double ml_wt_class = 1.0;
+  int noClasses = y.cols();
+  wc.setZero(noClasses);
+  size_t n = y.rows();
+  if (nclasses.size() != n) {
+    cerr << "init_wc has been called with vector nclasses of wrong size" << endl;
+    exit(-1);
+  }
+  for (size_t i=0;i<n;i++) {
+    if (params.ml_wt_class_by_nclasses) {
+      ml_wt_class = 1.0/nclasses.coeff(i);
     }
+    for (SparseMb::InnerIterator it(y,i);it;++it) {
+      if (it.value()) {
+	wc.coeffRef(it.col()) += ml_wt_class;
+      }
+    }
+  }
 }
+
 
 //*****************************************
 // Update the filtered constraints
@@ -188,7 +187,7 @@ void update_filtered(boolmatrix& filtered, const VectorXd& projection,
 {
   int noClasses = y.cols();
   int c;
-  for (int i = 0; i < projection.size(); i++)
+  for (size_t i = 0; i < projection.size(); i++)
     {
       double proj = projection.coeff(i);
       SparseMb::InnerIterator it(y,i);
@@ -278,7 +277,6 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
 			const param_struct& params )
 {
   int sc, cp;
-  //int noClasses = y.cols();
   size_t idx, i;
   double class_weight, other_weight, left_update, right_update;
   double tmp;
@@ -304,10 +302,9 @@ void compute_gradients (VectorXd& multipliers , VectorXd& sortedLU_gradient,
       #endif
 
       class_weight = C1;
-      if (params.ml_wt_by_nclasses) other_weight /= nclasses.coeff(i);
-      other_weight = C2;
       if (params.ml_wt_class_by_nclasses) class_weight /= nclasses.coeff(i);
-
+      other_weight = C2;
+      if (params.ml_wt_by_nclasses) other_weight /= nclasses.coeff(i);
 
       init_ordered_class_list(left_classes, left_update,
 			      right_classes, right_update,
@@ -434,12 +431,11 @@ double compute_single_w_gradient_size (const int sc_start, const int sc_end,
 {
   double multiplier = 0.0;
   int sc, cp;
-  //int noClasses = y.cols();
   double class_weight, other_weight, left_update, right_update;
   vector<int> classes;
   vector<int>::iterator class_iter;
   int left_classes, right_classes;
-  const double *sortedLU_iter;
+  double const *sortedLU_iter;
 
 
   double pp1 = proj + 1;
@@ -473,32 +469,11 @@ double compute_single_w_gradient_size (const int sc_start, const int sc_end,
 	  cp = sorted_class[sc];
 	  if (!params.remove_class_constraints || !(filtered.get(i,cp)))
 	    {
-	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
-	      if (*(sortedLU_iter++) > pm1)// I1 Condition  w*x < l(c)+1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I1 : " << i<< endl;
-		  }
-#endif
-		  multiplier -= class_weight;
-		} // end if
+	      // I1 Condition  w*x < l(c)+1 and I2 Condition  w*x > u(c)-1
 
-	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
-	      if (pp1 > *(sortedLU_iter++))//  I2 Condition  w*x > u(c)-1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I2 : " << i << endl;
-		  }
-#endif
-		  multiplier += class_weight;
-		} // end if
+	      multiplier -= class_weight*((*(sortedLU_iter) > pm1) - (pp1 > *(sortedLU_iter + 1)));
 	    }
-	  else
-	    {
-	      sortedLU_iter +=2; //the iterator needs to be incremeted even if the class is filtered
-	    }
+	  sortedLU_iter +=2; //the iterator needs to be incremeted even if the class is filtered
 	  //update the left and right classes;
 	  ++left_classes;
 	  left_update += other_weight;
@@ -515,33 +490,10 @@ double compute_single_w_gradient_size (const int sc_start, const int sc_end,
       cp = sorted_class[sc];
       if (!(filtered.get(i,cp)))
 	{
-	  //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
-	  if (left_classes && (pp1 > *sortedLU_iter)) // I3 Condition w*x > l(cp) - 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I3 : " << i << endl;
-	      }
-#endif
-	      multiplier += left_update;
-	    }
-	  ++sortedLU_iter;
-	  //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
-	  if (right_classes && (*sortedLU_iter > pm1)) //  I4 Condition  w*x < u(cp) + 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I4 : " << i<< endl;
-	      }
-#endif
-	      multiplier -= right_update;
-	    }
-	  ++sortedLU_iter;
+	  // I3 Condition w*x > l(cp) - 1 and I4 Condition  w*x < u(cp) + 1
+	  multiplier += (pp1 > *(sortedLU_iter))*left_update - (*(sortedLU_iter + 1) > pm1)*right_update; 
 	}
-      else
-	{
-	  sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
-	}
+      sortedLU_iter += 2; //the iterator needs to be incremeted even if the class is filtered
       ++sc;
     } // while(1)
   return multiplier;
@@ -564,7 +516,6 @@ void update_single_sortedLU( VectorXd& sortedLU,
 {
 
   int sc, cp;
-  //int noClasses = y.cols();
   double class_weight, other_weight, left_update, right_update;
   vector<int> classes;
   vector<int>::iterator class_iter;
@@ -797,27 +748,9 @@ double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
 	  cp = sorted_class[cls];
 	  if (!params.remove_class_constraints || !(filtered.get(i,cp)))
 	    {
-	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
-	      if (sortedLU[2*cls] > pm1)// I1 Condition  w*x < l(c)+1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I1 : " << i<< endl;
-		  }
-#endif
-		  multiplier -= class_weight;
-		} // end if
+ 	      // I1 Condition  w*x < l(c)+1 and  I2 Condition  w*x > u(c)-1
 
-	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
-	      if (pp1 > sortedLU[2*cls+1])//  I2 Condition  w*x > u(c)-1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I2 : " << i << endl;
-		  }
-#endif
-		  multiplier += class_weight;
-		} // end if
+	      multiplier -= class_weight*((sortedLU[2*cls] > pm1) - (pp1 > sortedLU[2*cls+1]));
 	    }
 	  //update the left and right classes;
 	  ++left_classes;
@@ -839,26 +772,8 @@ double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
       cp = sorted_class[sc];
       if (!(filtered.get(i,cp)))
 	{
-	  //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
-	  if (left_classes && (pp1 > sortedLU[2*sc])) // I3 Condition w*x > l(cp) - 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I3 : " << i << endl;
-	      }
-#endif
-	      multiplier += left_update;
-	    }
-	  //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
-	  if (right_classes && (sortedLU[2*sc+1] > pm1)) //  I4 Condition  w*x < u(cp) + 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I4 : " << i<< endl;
-	      }
-#endif
-	      multiplier -= right_update;
-	    }
+ 	  // I3 Condition w*x > l(cp) - 1 and I4 Condition  w*x < u(cp) + 1
+	  multiplier += (pp1 > sortedLU[2*sc])*left_update - (sortedLU[2*sc+1] > pm1)*right_update;
 	}
       sc = sc_sample[++s];
     } // while(1)
@@ -1199,7 +1114,7 @@ double compute_objective(const VectorXd& projection, const SparseMb& y,
 
 // *******************************
 // Calculates the objective function
-#if 1
+#if 1 // smiple per instance paralelization 
 double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
 				 const VectorXi& nclasses,
                                  const std::vector<int>& sorted_class,
@@ -1209,15 +1124,12 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
 				 double lambda, double C1, double C2,
 				 const param_struct& params)
 {
-  //const int noClasses = y.cols();
   double obj_val = 0;
-  //  size_t no_filtered = filtered.count();
   bool none_filtered = filtered.count()==0;
-  //int maxclasses = nclasses.maxCoeff();
 #if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:obj_val)
 #endif
-  for (int i = 0; i < projection.size(); i++)
+  for (size_t i = 0; i < projection.size(); i++)
     {
       obj_val += calculate_ex_objective_hinge(i, projection.coeff(i),  y,
 					      nclasses,
@@ -1230,10 +1142,7 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
   return obj_val;
 }
 #endif
-
-
-
-#if 0
+#if 0 // more complex paralelization that does not seem ot be needed. 
 double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
 				 const VectorXi& nclasses,
                                  const std::vector<int>& sorted_class,
@@ -1287,7 +1196,7 @@ double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
   return obj_val;
 }
 
-#endif
+#endif  //end more complex paralelization for calculate objective
 
 double calculate_objective_hinge(const VectorXd& projection, const SparseMb& y,
 				 const VectorXi& nclasses,
@@ -1360,59 +1269,35 @@ void proj_means(VectorXd& means, VectorXi const& nc,
   }
   for (k = 0; k < noClasses; k++)
   {
-      means(k) /= nc(k);
+      nc(k)?means(k) /= nc(k):0.0;
   }
 }
 
-void init_lu( VectorXd& l, VectorXd& u, VectorXd& means,
-              enum Reorder_Type const reorder_type, VectorXd const& projection,
+void init_lu( VectorXd& l, VectorXd& u,
+	      VectorXd const& projection,
               SparseMb const& y, VectorXi const& nc )
 {
     size_t const noClasses = y.cols();
     size_t const n = y.rows();
     l.conservativeResize(noClasses);
     u.conservativeResize(noClasses);
-    means.conservativeResize(noClasses);
     for (size_t k = 0; k < noClasses; k++)
     {
-        // need /10 because octave gives an error when reading the saved file otherwise.
-        // this should not be a problem. If this is a problem then we have bigger issues
-        l(k)=boost::numeric::bounds<double>::highest()/10;
-        u(k)=boost::numeric::bounds<double>::lowest()/10;
+      // need /10 because octave gives an error when reading the saved file otherwise.
+      // this should not be a problem. If this is a problem then we have bigger issues
+      l(k)=boost::numeric::bounds<double>::highest()/10;
+      u(k)=boost::numeric::bounds<double>::lowest()/10;
     }
-    if( reorder_type == REORDER_AVG_PROJ_MEANS // have no avg'ing yet!
-        || reorder_type == REORDER_PROJ_MEANS ){
-        means.setZero();
-        // XXX if we iterate over CLASSES, then loop can be parallelized
-        for (size_t i=0; i<n; ++i) {
-            for (SparseMb::InnerIterator it(y,i); it; ++it) {
-                if (it.value()) {
-                    size_t const c = it.col();
-                    double const pr = projection.coeff(i);
-                    means.coeffRef(c) += pr;
-                    l.coeffRef(c) = std::min(pr,l.coeff(c));
-                    u.coeffRef(c) = std::max(pr,u.coeff(c));
-                }
-            }
-        }
-        for (size_t k = 0; k < noClasses; k++){
-            means.coeffRef(k) /= nc.coeff(k);
-        }
-    }else if( reorder_type == REORDER_RANGE_MIDPOINTS ){
-        // means = l+u, no need to scale since only order important
-        for (size_t i=0; i<n; ++i) {
-            for (SparseMb::InnerIterator it(y,i); it; ++it) {
-                if (it.value()) {
-                    size_t const c = it.col();
-                    double const pr = projection.coeff(i);
-                    l.coeffRef(c)=std::min(pr,l.coeff(c));
-                    u.coeffRef(c)=std::max(pr,u.coeff(c));
-                }
-            }
-        }
-        means = l + u;
-    }else{
-        throw std::runtime_error("Error - unsupported reorder_type in init_lu");
+    // XXX if we iterate over CLASSES, then loop can be parallelized
+    for (size_t i=0; i<n; ++i) {
+      for (SparseMb::InnerIterator it(y,i); it; ++it) {
+	if (it.value()) {
+	  size_t const c = it.col();
+	  double const pr = projection.coeff(i);
+	  l.coeffRef(c) = std::min(pr,l.coeff(c));
+	  u.coeffRef(c) = std::max(pr,u.coeff(c));
+	}
+      }
     }
 }
 

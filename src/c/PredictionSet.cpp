@@ -1,4 +1,7 @@
 #include "PredictionSet.h"
+//#include "Eigen/Dense"
+//#include "Eigen/Sparse"
+
 
 bool PredVec::AddWarned = false;
 bool PredVec::ThreshWarned = false;
@@ -6,7 +9,7 @@ bool PredVec::TopWarned = false;
 
 double PredictionSet::PrecK(const SparseMb& y, int k)
 {
-  assert (y.rows() == static_cast<int>(_preddata->size()));
+  assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
   std::vector<int> preds;
   std::vector<PredVec*>::iterator predit;
   size_t i;
@@ -33,7 +36,7 @@ double PredictionSet::PrecK(const SparseMb& y, int k)
 
 double PredictionSet::TopK(const SparseMb& y, int k)
   {
-    assert (y.rows() == static_cast<int>(_preddata->size()));
+    assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
     std::vector<int> preds;
     std::vector<PredVec*>::iterator predit;
     size_t i;
@@ -56,7 +59,7 @@ double PredictionSet::TopK(const SparseMb& y, int k)
   
 double PredictionSet::MicroF1(const SparseMb& y, double thresh, size_t k)
   {
-    assert (y.rows() == static_cast<int>(_preddata->size()));
+    assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
     std::vector<int> preds;
     std::vector<PredVec*>::iterator predit;
     size_t i;
@@ -83,12 +86,12 @@ double PredictionSet::MicroF1(const SparseMb& y, double thresh, size_t k)
   
 double PredictionSet::MacroF1(const SparseMb& y, double thresh, size_t k)
   {
-    assert (y.rows() == static_cast<int>(_preddata->size()));
+    assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
     std::vector<int> preds;
     std::vector<size_t> class_tp(y.cols());
     std::vector<size_t> class_total_p(y.cols());    
     std::vector<PredVec*>::iterator predit;
-    int i;
+    size_t i;
     for ( predit = _preddata->begin(), i=0; predit != _preddata->end(); predit++,i++)
       {
 	(*predit)->predict(preds, thresh, k);
@@ -136,7 +139,7 @@ double PredictionSet::MacroF1(const SparseMb& y, double thresh, size_t k)
 
 double PredictionSet::MacroF1_2(const SparseMb& y, double thresh, size_t k)
   {
-    assert (y.rows() == static_cast<int>(_preddata->size()));
+    assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
     std::vector<int> preds;
     std::vector<size_t> class_tp(y.cols());
     std::vector<size_t> class_total_p(y.cols());    
@@ -157,7 +160,7 @@ double PredictionSet::MacroF1_2(const SparseMb& y, double thresh, size_t k)
 
     // get the number of examples in each class
     std::vector<size_t> ncl(y.cols());
-    for (int i = 0; i < y.rows(); i++)
+    for (size_t i = 0; i < y.rows(); i++)
       {
 	for (SparseMb::InnerIterator it(y,i); it ; ++it)
 	  {
@@ -194,7 +197,7 @@ double PredictionSet::MacroF1_2(const SparseMb& y, double thresh, size_t k)
   
 double PredictionSet::MacroRecall(const SparseMb& y, double thresh, size_t k)
   {
-    assert (y.rows() == static_cast<int>(_preddata->size()));
+    assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
     std::vector<int> preds;
     std::vector<size_t> class_tp(y.cols());
     std::vector<size_t> class_total_p(y.cols());    
@@ -215,7 +218,7 @@ double PredictionSet::MacroRecall(const SparseMb& y, double thresh, size_t k)
 
     // get the number of examples in each class
     std::vector<size_t> ncl(y.cols());
-    for (int i = 0; i < y.rows(); i++)
+    for (size_t i = 0; i < y.rows(); i++)
       {
 	for (SparseMb::InnerIterator it(y,i); it ; ++it)
 	  {
@@ -322,7 +325,7 @@ void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1,
 			       double& MicroRecall, double& MacroRecall, 
 			       const SparseMb& y, double thresh, size_t k)
   {
-    assert (y.rows() == static_cast<int>(_preddata->size()));
+    assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
     std::vector<size_t> class_tp(y.cols(),0);
     std::vector<size_t> class_total_p(y.cols(),0);    
     std::vector<size_t> ncl(y.cols(),0);
@@ -424,7 +427,7 @@ void PredictionSet::TopMetrics(double& Prec1, double& Top1,
 			       double& Prec10, double& Top10,
 			       const SparseMb& y)
   {
-    assert (y.rows() == static_cast<int>(_preddata->size()));
+    assert (y.rows() == static_cast<SparseMb::Index>(_preddata->size()));
     int maxtop = 10;
     double my_top1=0, my_prec1=0, my_top5=0, my_prec5=0, my_top10=0, my_prec10=0;
     
@@ -503,7 +506,7 @@ SparseM* PredictionSet::toSparseM() const
   std::vector< Eigen::Triplet<double> > tripletList;
   tripletList.reserve(npreds());
   size_t i;
-  int maxclass = 0;
+  size_t maxclass = 0;
   std::vector<PredVec*>::iterator predit;
   std::vector<Prediction*>::iterator it;
 

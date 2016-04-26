@@ -56,7 +56,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     VectorXd xSqNorms;
     if (params.update_type == SAFE_SGD)
     {
-        assert(batch_size == 1); // save_sgd update only works with batch size 1
+        assert(batch_size == 1); // safe_sgd update only works with batch size 1
         calc_sqNorms( x, xSqNorms );
     }
 
@@ -127,7 +127,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     int idx_remaining = batch_size % idx_chunks;
 
     init_nc(nc, nclasses, y);
-    if (params.optimizeLU_epoch > 0)
+    if (params.optimizeLU_epoch > 0||params.reoptimize_LU)
     {
         init_wc(wc, nclasses, y, params);
     }
@@ -140,25 +140,21 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     int projection_dim = 0;
     VectorXd vect;
 
+    // this should not be here. Params should be specified before this function is called 
+    // if (params.C1<0.0 || params.C2 < 0.0){
+    //    // a reasonable "auto" mode
+    //    params.C2 = 1.0;
+    //    params.C2 = 2.0*params.C2*noClasses;
+    // }
+    assert(params.C1 >= 0.0);
+    assert(params.C2 >= 0.0);
+
+    //have to do this better. Maybe divide by exp(log(params.C1)/2)??
     double lambda, C1, C2;
-    if(params.C1>=0.0 && params.C2>=0.0){
-#if 1 // original version
-        lambda = 1.0/params.C2;
-        C1 = params.C1/params.C2;
-        C2 = 1.0;
-#else // new
-        C1 = params.C1;
-        C2 = params.C2;
-        if( C2 > 1.e-2 ) lambda = C1/C2; else lambda = 100.0;
-#endif
-    }else{ // try to provide a reasonble 'auto' mode
-        // untested [ejk]
-        //double x = n * noClasses;
-        //double y = total_constraints * params.C2;
-        lambda = n*noClasses * 1.0 / (total_constraints*params.C2);
-        C1 = lambda;
-        C2 = 1.0;
-    }
+    lambda = 1.0/params.C2;
+    C1 = params.C1/params.C2;
+    C2 = 1.0;
+
     cout<<" begin solve_optimization, lambda="<<lambda<<" C1="<<C1<<" C2="<<C2<<endl;
 
     if(1) { // throw if input dims inconsistent or conflicting with params
@@ -287,7 +283,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
                     lambda = no_remaining*1.0/(total_constraints*params.C2);
                     if (params.reweight_lambda == REWEIGHT_ALL)
                     {
-                        //C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                         C1 = params.C1*lambda;
                     }
                 }
@@ -332,7 +327,24 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
         // XXX ohoh, if reoptimize_LU, then are some things already known?
         init_w      ( w, x,y,nc, weights_avg,projection_dim);
         w.project   ( projection,x);        // project each example onto current projection dirn, w
-        init_lu     ( l,u,means, params.reorder_type,projection, y,nc); // init l, u and means
+        init_lu     ( l,u,projection, y,nc); // init l, u 
+
+	// get the initial ordering of classes
+	switch (params.reorder_type)
+	  {
+	  case REORDER_AVG_PROJ_MEANS:
+	    // use the current w since averaging has not started yet 
+	  case REORDER_PROJ_MEANS:	       
+	    proj_means(means, nc, projection, y);
+	    break;
+	  case REORDER_RANGE_MIDPOINTS:
+	    // what to do if u < l? 
+	    means = l+u; //no need to divide by 2 since it is only used for ordering
+	    break;
+	  default:
+	    cerr << "Error, reordering " << params.reorder_type << " not implemented" << endl;
+	    exit(-1);	      
+	  }	  
         rank_classes( sorted_class, class_order, means);
         cout << "start optimize LU" << endl; cout.flush();
 #ifdef PROFILE
@@ -388,18 +400,12 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
             eta_t = set_eta(params, t, lambda);
             // compute the gradient and update
             if (params.update_type == SAFE_SGD) {
-                // [ejk] update_safe_SGD now MODIFIES eta_t ...  but eta_t vanishes :(
-                //double eta_t_usual = set_eta(params,t,lambda);
-                //if( t==1 ) eta_t = params.eta;
-                //std::cout<<" eta_t,eta_t'="<<std::right<<std::setw(9)<<eta_t_usual
-                //<<","<<std::left<<std::setw(9)<<eta_t; std::cout.flush();
-                update_safe_SGD(w, sortedLU, sortedLU_avg, eta_t,
-                                x, y, xSqNorms, C1, C2, lambda, t, n,
+                update_safe_SGD(w, sortedLU, sortedLU_avg,
+                                x, y, xSqNorms, C1, C2, lambda, t, eta_t, n,
                                 nclasses, maxclasses, sorted_class, class_order, filtered,
                                 sc_chunks, sc_chunk_size, sc_remaining,
                                 params);
             } else if (params.update_type == MINIBATCH_SGD) {
-                //eta_t = set_eta(params, t, lambda);
                 update_minibatch_SGD(w, sortedLU, sortedLU_avg,
                                      x, y, C1, C2, lambda, t, eta_t, n, batch_size/*<--*/,
                                      nclasses, maxclasses, sorted_class, class_order, filtered,

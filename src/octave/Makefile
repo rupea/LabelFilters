@@ -1,4 +1,4 @@
-CXX ?= g++
+XX ?= g++
 ifneq ($(wildcard /opt/boost-1.60),)
 BOOSTDIR ?= /opt/boost-1.60/include
 endif
@@ -43,9 +43,10 @@ octave-objects:
 	$(MAKE) -j10 -C../c -fMakefile
 	$(MAKE) -j10 -C../c -fMakefile.octave
 
-octave-executables: oct_find_w oct_project_data oct_predict_data oct_evaluate_model oct_normalize_data oct_evaluate_predictions
+#octave-executables: oct_find_w oct_project_data oct_predict_data oct_evaluate_model oct_normalize_data oct_evaluate_predictions
+octave-executables: oct_find_w oct_project_data oct_predict_data oct_normalize_data oct_evaluate_predictions
 
-oct_find_w: oct_find_w.o find_w.o EigenOctave.o printing.o utils.o
+oct_find_w: oct_find_w.o find_w.o EigenOctave.o printing.o utils.o parameter.o find_w_detail.o optimizelu.o mcsolver.o 
 	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
 
 oct_normalize_data: oct_normalize_data.o normalize.o EigenOctave.o printing.o

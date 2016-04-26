@@ -43,9 +43,9 @@ struct MCupdate
             // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU
             assert( luPerm.ok_sortlu_avg == true ); // accumulator begins at all zeros, so true
             if (params.update_type == SAFE_SGD) {
-                update_safe_SGD(w, sortedLU, sortedLU_avg, eta_t,
+                update_safe_SGD(w, sortedLU, sortedLU_avg,
                                 x, y, xSqNorms,
-                                C1, C2, lambda, t, nTrain, // nTrain is just x.rows()
+                                C1, C2, lambda, t, eta_t, nTrain, // nTrain is just x.rows()
                                 nclasses, maxclasses, sorted_class, class_order, filtered,
                                 sc_chunks, sc_chunk_size, sc_remaining,
                                 params);

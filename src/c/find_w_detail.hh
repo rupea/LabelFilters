@@ -50,7 +50,7 @@ void init_w( WeightVector& w,
     VectorXd init(d);
     //init.setZero();
     init.setRandom(); init.normalize();
-
+    
     if(1){
         cout<<" + vector-between-2-classes"; cout.flush();
         // initialize w as vector between the means of two random classes.
@@ -92,7 +92,6 @@ void init_w( WeightVector& w,
         else                      {cout<<" orthogonalized"; init *= (1.0 / inorm);}
     }
     cout<<endl;
-
     assert( init.size() == d );
     assert( fabs(init.norm() - 1.0) < 1.e-6 );
     w.init(init);
@@ -102,6 +101,8 @@ void init_w( WeightVector& w,
     template<typename EigenType>
 void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y, const VectorXi& nc, const int c1, const int c2)
 {
+    assert(nc(c1) != 0);
+    assert(nc(c2) != 0);
     size_t const d = x.cols();
     size_t const n = x.rows();
     difference.resize(d);
@@ -197,10 +198,10 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx,
  * - and then eta or eta_t in final adjustment loops ???
  */
     template<typename EigenType>
-void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg, double& eta_t,
+void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg, 
                       const EigenType& x, const SparseMb& y, const VectorXd& sqNormsX,
                       const double C1, const double C2, const double lambda,
-                      const unsigned long t,
+		      const unsigned long t, const double eta_t,
                       const size_t n, const VectorXi& nclasses, const int maxclasses,
                       const std::vector<int>& sorted_class, const std::vector<int>& class_order,
                       const boolmatrix& filtered,
@@ -254,20 +255,13 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     // make sure we do not overshoot with the update
     // this is expensive, so we might want an option to turn it off
     double new_multiplier, new_proj;
-    double eta = eta_t;       // ORIGINAL
-    //double & eta = eta_t;       // NOW WE MODIFY eta_t itself
+    double eta = eta_t;      
     // original values 2.0, 0.5 could be a bit unstable for some problems (ex. mnist)
     double const eta_bigger = 2.0;
     double const eta_smaller = 1.0 / eta_bigger;
     do
     {
-        // WARNING: for now it assumes that norm(x) = 1!!!!!
-        //new_proj = proj - eta*lambda*proj - eta*multiplier;   // original, with WARNING
-        new_proj = proj - eta*lambda*proj - eta*multiplier*iSqNorm;     // [alex]
-        //
-        // The [alex]  suggestion seems OK.  Actually made no big difference
-        //
-        if(0) std::cout<<"eta:"<<eta<<" proj:"<<proj<<" new_proj:"<<new_proj<<" norm:"<<sqNormsX.coeff(i)<<endl;
+        new_proj = proj - eta*lambda*proj - eta*multiplier*iSqNorm;
         new_multiplier=0;
 #if MCTHREADS
 #pragma omp parallel for  default(shared) reduction(+:new_multiplier) schedule(static,1)
@@ -293,22 +287,18 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
         }
         eta *= eta_smaller;
         if( eta < 1.e-8 ) break;        // ??? params.eta_min ??? [ejk] [ok]
-    } while (
-             multiplier*new_multiplier < -1e-5
-             //multiplier*new_multiplier*iSqNorm < -1e-5 [ejk]
-             );
+    } while (multiplier*new_multiplier < -1e-5);
 
-    // last eta did not overshooot so restore it
-    if( eta >= 1.e-8) // <-- NEW: [ejk] [ok]
-        eta *= eta_bigger;
-    // at this point...
-    //new_proj = proj - eta*lambda*proj - eta*multiplier*sqNormsX.coeff(i);
-
-    //update w [ejk] multiplier*iSqNorm here seems not a good thing
-    if (params.avg_epoch && t >= params.avg_epoch)      // update current and avg w
-        w.batch_gradient_update_avg(x, i, multiplier, lambda, eta);
-    else                                                // update only current w
-        w.batch_gradient_update    (x, i, multiplier, lambda, eta);
+    
+    if( eta >= 1.e-8){ // if we kept overshooting got too small, do not update w at all. 
+        eta *= eta_bigger; // last eta did not overshooot so restore it
+        if (params.avg_epoch && t >= params.avg_epoch)      // update current and avg w
+            w.batch_gradient_update_avg(x, i, multiplier, lambda, eta);
+        else                                                // update only current w
+            w.batch_gradient_update    (x, i, multiplier, lambda, eta);
+    }else{
+        new_proj = proj; // we have not updated w
+    }
 
     // update L and U with w fixed.
     // use new_proj since it is exactly the projection obtained with the new w
@@ -322,20 +312,17 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
         int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
         if (params.class_samples)
         {
-            // [ejk] in these calls it seemed reasonable to use 'eta' instead of eta_t
             update_single_sortedLU_sample(sortedLU, sc_start, sc_start+sc_incr,
                                           sample, new_proj, i,
                                           y, nclasses, maxclasses,
                                           sorted_class, class_order,
-                                          //filtered, C1, C2, eta_t, params
-                                          filtered, C1, C2, eta, params // [ejk]
-                                          );
-        }else{
+					filtered, C1, C2, eta_t, params);
+	}
+      else
+	{
             update_single_sortedLU(sortedLU, sc_start, sc_start+sc_incr, new_proj, i,
                                    y, nclasses, maxclasses, sorted_class, class_order,
-                                   //filtered, C1, C2, eta_t, params
-                                   filtered, C1, C2, eta, params // [ejk]
-                                   );
+				 filtered, C1, C2, eta_t, params);
         }
         // update the average LU
         // need to do something special when samplin classes to avoid the O(noClasses) complexity.
@@ -362,7 +349,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
 #endif
 }
 
-    template<typename EigenType>
+template<typename EigenType>
 void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
                           const EigenType& x, const SparseMb& y,
                           const double C1, const double C2, const double lambda,
@@ -376,155 +363,147 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
                           MutexType* idx_locks, MutexType* sc_locks,
                           const param_struct& params)
 {
-    // use statics to avoid the cost of alocation at each iteration?
-    static VectorXd proj(batch_size);
-    static VectorXsz index(batch_size);
-    static VectorXd multipliers(batch_size);
-    VectorXd multipliers_chunk;
-    //  VectorXd sortedLU_gradient(2*noClasses); // used to improve cache performance
-    VectorXd sortedLU_gradient_chunk;
-    size_t i,idx;
-
-    // first compute all the projections so that we can update w directly
-    assert( batch_size <= n );
+  // use statics to avoid the cost of alocation at each iteration?
+  static VectorXd proj(batch_size);
+  static VectorXsz index(batch_size);
+  static VectorXd multipliers(batch_size);
+  VectorXd multipliers_chunk;
+  //  VectorXd sortedLU_gradient(2*noClasses); // used to improve cache performance
+  VectorXd sortedLU_gradient_chunk;
+  size_t i,idx;
+  
+  // first compute all the projections so that we can update w directly
+  assert( batch_size <= n );
 #if 1
-    for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
+  for (idx = 0; idx < batch_size; idx++)// batch_size will be equal to n for complete GD
     {
-        i = (batch_size < n? ((size_t) rand()) % n: idx );
-        proj.coeffRef(idx)  = w.project_row(x,i);
-        index.coeffRef(idx) = i;
+      i = (batch_size < n? ((size_t) rand()) % n: idx );
+      proj.coeffRef(idx)  = w.project_row(x,i);
+      index.coeffRef(idx) = i;
     }
 #else // sampling WITHOUT replacement, in rand case ...
-    if( batch_size < n ){ // sample without replacement: batch_size of n
-        // choose batch_size monotonic items
-        while(size_t low=0U, i=batch_size; i--; ){
-            size_t r = batch_size-low+1-i;
-            low += ( r? rand()%r : 0 );
-            index.coeffRef(i) = low;
-            ++low;
-        }
-        for(size_t i=batch_size; i>1; --i){
-            size_t r = rand()%i;
-            size_t tmp = index.coeff(r);        // swap i <--> r
-            index.coeffRef(r) = index.coeff(i);
-            index.coeffRef(i) = tmp;
-        }
+  if( batch_size < n ){ // sample without replacement: batch_size of n
+    // choose batch_size monotonic items
+    while(size_t low=0U, i=batch_size; i--; ){
+      size_t r = batch_size-low+1-i;
+      low += ( r? rand()%r : 0 );
+      index.coeffRef(i) = low;
+      ++low;
+    }
+    for(size_t i=batch_size; i>1; --i){
+      size_t r = rand()%i;
+      size_t tmp = index.coeff(r);        // swap i <--> r
+      index.coeffRef(r) = index.coeff(i);
+      index.coeffRef(i) = tmp;
+    }
 #pragma omp parallel for schedule(static,32)
-        for(size_t i=0U; i<batch_size; ++i){
-            proj.coeffRef(i) = w.project_row(x,i);
-        }
-    }else{
+    for(size_t i=0U; i<batch_size; ++i){
+      proj.coeffRef(i) = w.project_row(x,i);
+    }
+  }else{
 #pragma omp parallel for schedule(static,32)
-        for (idx = 0; idx < n; ++idx){
-            index.coeffRef(idx) = i;
-            proj.coeffRef(i) = w.project_row(x,i);
-        }
+    for (idx = 0; idx < n; ++idx){
+      index.coeffRef(idx) = i;
+      proj.coeffRef(i) = w.project_row(x,i);
     }
+  }
 #endif
-
-    // now we can update w and L,U directly
-
-    multipliers.setZero();
-    //  sortedLU_gradient.setZero();
+  
+  // now we can update w and L,U directly
+  
+  multipliers.setZero();
+  //  sortedLU_gradient.setZero();
 #if MCTHREADS
-    #pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(1)
-    //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
-    //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(1) if(idx_chunks > 1)
-    //#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) collapse(2) if(idx_chunks > 1)
+#pragma omp parallel for  default(shared) shared(idx_locks,sc_locks) private(multipliers_chunk,sortedLU_gradient_chunk) collapse(2)
 #endif
-    for (int idx_chunk = 0; idx_chunk < idx_chunks; idx_chunk++)
+  for (int idx_chunk = 0; idx_chunk < idx_chunks; idx_chunk++)
+    for (size_t sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
+      {
+	// the first chunks will have an extra iteration
+	size_t idx_start = idx_chunk*idx_chunk_size + (idx_chunk<idx_remaining?idx_chunk:idx_remaining);
+	size_t idx_incr = idx_chunk_size + (idx_chunk<idx_remaining);
+	// the first chunks will have an extra iteration
+	size_t sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
+	int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
+	compute_gradients(multipliers_chunk, sortedLU_gradient_chunk,
+			  idx_start, idx_start+idx_incr,
+			  sc_start, sc_start+sc_incr,
+			  proj, index, y, nclasses, maxclasses,
+			  sorted_class, class_order,
+			  sortedLU, filtered,
+			  C1, C2, params);
+	
+#if MCTHREADS
+#pragma omp task default(none) shared(sc_chunk, idx_chunk, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
+#endif
+	{
+#if MCTHREADS
+#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
+#endif                
+	  {
+#if MCTHREADS
+	    idx_locks[idx_chunk].YieldLock();
+#endif
+	    multipliers.segment(idx_start, idx_incr) += multipliers_chunk;
+#if MCTHREADS
+	    idx_locks[idx_chunk].Unlock();
+#endif
+	  }
+#if MCTHREADS
+	  sc_locks[sc_chunk].YieldLock();
+#endif
+	  // update the lower and upper bounds
+	  // divide by batch_size here because the gradients have
+	  // not been averaged
+	  sortedLU.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk * (eta_t / batch_size);
+	  //		  sortedLU_gradient.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk;
+#if MCTHREADS
+	  sc_locks[sc_chunk].Unlock();
+#pragma omp taskwait
+#endif
+	}
+#if MCTHREADS
+#pragma omp taskwait
+#endif
+      }
+  //update w
+  if (params.avg_epoch && t >= params.avg_epoch)
     {
-        //VectorXd sortedLU_gradient_chunk;
-        //VectorXd multipliers_chunk;
-        //multipliers.setZero();
-
-        for (size_t sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
-        {
-            // the first chunks will have an extra iteration
-            size_t idx_start = idx_chunk*idx_chunk_size + (idx_chunk<idx_remaining?idx_chunk:idx_remaining);
-            size_t idx_incr = idx_chunk_size + (idx_chunk<idx_remaining);
-            // the first chunks will have an extra iteration
-            size_t sc_start = sc_chunk*sc_chunk_size + (sc_chunk<sc_remaining?sc_chunk:sc_remaining);
-            int sc_incr = sc_chunk_size + (sc_chunk<sc_remaining);
-            compute_gradients(multipliers_chunk, sortedLU_gradient_chunk,
-                              idx_start, idx_start+idx_incr,
-                              sc_start, sc_start+sc_incr,
-                              proj, index, y, nclasses, maxclasses,
-                              sorted_class, class_order,
-                              sortedLU, filtered,
-                              C1, C2, params);
-
-#if MCTHREADS
-            #pragma omp task default(none) shared(sc_chunk, idx_chunk, multipliers, sc_start, idx_start, sc_incr, idx_incr, sortedLU, sortedLU_gradient_chunk, multipliers_chunk, sc_locks,  idx_locks)
-#endif
-            {
-                //#pragma omp task default(none) shared(idx_chunk, multipliers, multipliers_chunk, idx_start, idx_incr, idx_locks)
-                {
-#if MCTHREADS
-                    idx_locks[idx_chunk].YieldLock();
-#endif
-                    multipliers.segment(idx_start, idx_incr) += multipliers_chunk;
-#if MCTHREADS
-                    idx_locks[idx_chunk].Unlock();
-#endif
-                }
-#if MCTHREADS
-                sc_locks[sc_chunk].YieldLock();
-#endif
-                // update the lower and upper bounds
-                // divide by batch_size here because the gradients have
-                // not been averaged
-                sortedLU.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk * (eta_t / batch_size);
-                //		  sortedLU_gradient.segment(2*sc_start, 2*sc_incr) += sortedLU_gradient_chunk;
-#if MCTHREADS
-                sc_locks[sc_chunk].Unlock();
-                //#pragma omp taskwait
-#endif
-            }
-#if MCTHREADS
-            #pragma omp taskwait
-#endif
-        }
+      // updates both the curent w and the average w
+      w.batch_gradient_update_avg(x, index, multipliers, lambda, eta_t);
     }
-
-    //update w
-    if (params.avg_epoch && t >= params.avg_epoch)
+  else
     {
-        // updates both the curent w and the average w
-        w.batch_gradient_update_avg(x, index, multipliers, lambda, eta_t);
+      // update only the current w
+      w.batch_gradient_update(x, index, multipliers, lambda, eta_t);
     }
-    else
+  
+  ///// did this above in parallel
+  // update the lower and upper bounds
+  // divide by batch_size here because the gradients have
+  // not been averaged
+  // should be done above
+  // sortedLU += sortedLU_gradient * (eta_t / batch_size);
+  
+  
+  // update the average version
+  // should do in parallel (maybe Eigen already does it?)
+  // especially for small batch sizes.
+  if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
     {
-        // update only the current w
-        w.batch_gradient_update(x, index, multipliers, lambda, eta_t);
-    }
-
-    ///// did this above in parallel
-    // update the lower and upper bounds
-    // divide by batch_size here because the gradients have
-    // not been averaged
-    // should be done above
-    // sortedLU += sortedLU_gradient * (eta_t / batch_size);
-
-
-    // update the average version
-    // should do in parallel (maybe Eigen already does it?)
-    // especially for small batch sizes.
-    if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
-    {
-        // if we optimize the LU, we do not need to
-        // keep track of the averaged lower and upper bounds
-        // We optimize the bounds at the end based on the
-        // average w
-
-        // do not divide by t-params.avg_epoch + 1 here
-        // do it when using sortedLU_avg
-        // it might become too big!, but through division it
-        //might become too small
-        sortedLU_avg += sortedLU;
-        if(t==params.avg_epoch) std::cout<<" ACC "; std::cout.flush();
+      // if we optimize the LU, we do not need to
+      // keep track of the averaged lower and upper bounds
+      // We optimize the bounds at the end based on the
+      // average w
+      
+      // do not divide by t-params.avg_epoch + 1 here
+      // do it when using sortedLU_avg
+      // it might become too big!, but through division it
+      //might become too small
+      sortedLU_avg += sortedLU;
+      if(t==params.avg_epoch) std::cout<<" ACC "; std::cout.flush();
 #if MCPRM>0
-        //++luPerm.nAccSortlu_avg;
+      //++luPerm.nAccSortlu_avg;
 #endif
     }
 }

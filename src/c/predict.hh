@@ -59,7 +59,7 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
       #ifdef PROFILE
       ProfilerStart("full_predict.profile");
       #endif
-      VectorXd outs(noClasses);
+      Eigen::RowVectorXd outs(noClasses);
 #pragma omp parallel for firstprivate(outs) default(shared)
       for (i = 0; i < n; i++)
 	{	  	

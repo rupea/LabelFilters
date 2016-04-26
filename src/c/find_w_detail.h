@@ -21,14 +21,6 @@ void init_w( WeightVector& w,
              EigenType const& x, SparseMb const& y, VectorXi const& nc,
              DenseM const& weights, int const projection_dim, bool const weightsCopy = false);
 
-#if 0
-/** Initializes the lower and upper bound */
-template<typename EigenType>
-void init_lu(VectorXd& l, VectorXd& u, VectorXd& means, const VectorXi& nc,
-             const WeightVector& w,
-             EigenType& x, const SparseMb& y);
-#endif
-
 /** function to calculate the difference vector beween the mean vectors of two classes */
 template<typename EigenType>
 void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y,
@@ -51,10 +43,9 @@ void finite_diff_test(const WeightVector& w, const EigenType& x, size_t idx,
  * - may require x input data to have unit norms (?) */
 template<typename EigenType>
 void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg,
-                      double& eta_t,
                       const EigenType& x, const SparseMb& y, const VectorXd& sqNormsX,
                       const double C1, const double C2, const double lambda,
-                      const unsigned long t,
+                      const unsigned long t, const double eta_t,
                       const size_t n, const VectorXi& nclasses, const int maxclasses,
                       const std::vector<int>& sorted_class, const std::vector<int>& class_order,
                       const boolmatrix& filtered,
@@ -95,11 +86,11 @@ double set_eta(param_struct const& params, size_t const t, double const lambda);
 void proj_means(VectorXd& means, const VectorXi& nc,
 		const VectorXd& projection, const SparseMb& y);
 
-/** Initialize l, u and means.
+/** Initialize l, u.
  * \p projection is the projection of every example x onto w
  */
-void init_lu( VectorXd& l, VectorXd& u, VectorXd& means,
-              enum Reorder_Type const reorder_type, VectorXd const& projection,
+void init_lu( VectorXd& l, VectorXd& u,
+	      VectorXd const& projection,
               SparseMb const& y, VectorXi const& nc );
 
 /** Update the filtered constraints */

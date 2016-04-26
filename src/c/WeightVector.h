@@ -76,9 +76,10 @@ class WeightVector
     {
       my_norm_sq = 0.0;
       my_weights = VectorXd(size);
+      my_weights.setZero();
       my_scale = 1.0;
       my_A = VectorXd(size);
-	//my_A.setZero();
+      my_A.setZero();
       my_avg_t = 0;
       my_beta = 1;
       my_alpha = 1;
@@ -358,7 +359,7 @@ class WeightVector
           typename SMat::Index const outerEnd = x.outerIndexPtr()[row+1];
           typename SMat::Scalar const * const __restrict__ vals = x.valuePtr();
           typename SMat::Index  const * const __restrict__ idxs = x.innerIndexPtr();
-#pragma omp simd
+	  //#pragma omp simd
 //#pragma omp parallel for simd schedule(static,8192) reduction(+:ret)
           for(typename SMat::Index i = outer; i < outerEnd; ++i){
               ret += vals[i] * my_weights.coeff( idxs[i] );
@@ -379,7 +380,9 @@ class WeightVector
       void project(VectorXd& proj,
                    Eigen::SparseMatrix<_Scalar,_Options,_Index> const& x) const {
 //#pragma omp parallel for simd schedule(static,4096)
-#pragma omp parallel for simd schedule(guided,256)
+//#pragma omp parallel for simd schedule(guided,256)
+    proj.resize(x.rows());
+#pragma omp parallel for schedule(guided,256)
           for(size_t i=0U; i<x.rows(); ++i){
               //proj.coeffRef(i) = project_row( x, i );
               //proj.coeffRef(i) = x.row(i) .dot(my_weights) * my_scale;

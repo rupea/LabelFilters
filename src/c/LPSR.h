@@ -196,9 +196,8 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 		//active_chunk_valid[i]->resize(chunk_size);
 	      }	    
 	    time(&start);
-	    predict_chunk(predictions_valid, nact_valid_chunk,
-			  x.topRows(n_valid), ovaW, start_class, 
-			  active_chunk_valid, thresh, k, verbose);
+	    predict(predictions_valid, x.topRows(n_valid), ovaW, active_chunk_valid, nact_valid_chunk,
+		    verbose, thresh, k, start_class);
 	    time(&stop);	 
 	    predict_time_valid[0] += difftime(start,stop);
 	    nact_valid+=nact_valid_chunk;
@@ -215,9 +214,8 @@ void evaluate_LPSR_chunks(const EigenType& x, const SparseMb& y,
 	    //active_chunk[i-n_valid].resize(chunk_size);
 	  }
 	time(&start);
-	predict_chunk(predictions, nact_chunk, 
-		      x.bottomRows(n), ovaW, start_class,
-		      active_chunk, thresh, k, verbose);
+	predict(predictions, x.bottomRows(n), ovaW, active_chunk, nact_chunk,
+		verbose, thresh, k, start_class);
 	time(&stop);
 	predict_time[0] += difftime(stop,start);
 	nact_final += nact_chunk;

@@ -14,7 +14,7 @@ typedef float predtype;
 struct Prediction
 {
   predtype out;
-  int cls;
+  size_t cls;
 };
 
 /** A vector<Prediction> wrapper, with \c sort, \c prune, \c predict. */
@@ -27,7 +27,7 @@ public:
     ~PredVec();
     /** const base vector access */
     Base const& predvec() const {return *this;}
-    void add_pred(predtype out, int cls);       ///< push back new \c Prediction item
+    void add_pred(predtype out, size_t cls);       ///< push back new \c Prediction item
     void sort();                                ///< if nec, sort highest \c Prediction::out first
     /** keep highest \c Prediction::out items (at least k, with value > \c keep_thresh) */
     void prune (size_t k, predtype keep_thresh = boost::numeric::bounds<predtype>::highest());
@@ -134,7 +134,7 @@ inline void PredVec::sort()
     }
 };
 
-inline void PredVec::add_pred(predtype out, int cls)
+inline void PredVec::add_pred(predtype out, size_t cls)
 {
   /* if (!AddWarned && (_keep_thresh > boost::numeric::bounds<predtype>::lowest() || _keep_size < boost::numeric::bounds<size_t>::highest())) */
   /*   { */

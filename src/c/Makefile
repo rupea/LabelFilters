@@ -2,13 +2,13 @@ CXX ?= g++
 ifneq ($(wildcard /opt/boost-1.60),)
 BOOSTROOT?=/opt/boost-1.60
 BOOSTDIR :=$(BOOSTROOT)/include
-BOOSTLIB :=$(BOOSTROOT)/lib
 endif
 ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
-BOOSTLIB :=$(BOOSTDIR)/../lib   # probably wrong !!!
 endif
+BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB)
+
 
 OPENMP ?= -fopenmp
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
@@ -105,6 +105,7 @@ PredictionSet-dbg.lo utils-dbg.lo: %-dbg.lo: %.cpp
 settings:
 	echo "boost wildcard check <$(wildcard /opt/boost-1.60)>"
 	echo "BOOSTDIR       = $(BOOSTDIR)"
+	echo "BOOSTLIB       = $(BOOSTLIB)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
 CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
@@ -333,23 +334,23 @@ demo-io: | libmcfilter-dbg.a
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 #static linkage : 2.6M executable
-#mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
-mcgen: erik/mcgen.cpp $(BOOSTDIR)/../lib/libboost_program_options.a
-	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+#mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.
+mcgen: erik/mcgen.cpp
+	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^ $(BOOSTLIB)/libboost_program_options.a
 # link with libmcfilter allows saving a .soln file ...
 mcgenx: | libmcfilter-dbg.a
-mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a | libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. -Wno-error=maybe-uninitialized $^
-erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	# mcsolve0 is an initial version, before opt::MCsolveProgram was written
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
-mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
-mcproj0: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+mcproj0: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
-mcproj: mcproj.cpp libmcfilter-dbg.a $(BOOSTDIR)/../lib/libboost_program_options.a
+mcproj: mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
 .PHONY: run-mcproj
 run-mcproj:
@@ -378,11 +379,11 @@ mcproj.log: mcgenx mcproj mcsolve erik/mcsolve0
 	@grep '\(ERROR SUMMARY\)\|\(== run :\)' mcproj.log
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
-#	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTDIR)/../lib -lboost_program_options -Wl,-rpath=$(BOOSTDIR)/../lib -Wl,-rpath=.
+#	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTLIB) -lboost_program_options -Wl,-rpath=$(BOOSTLIB) -Wl,-rpath=.
 
-#mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_program_options.a -lprofiler /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0
-#mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_program_options.a -lprofiler /usr/lib/debug/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 -lpthread /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 
-mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTDIR)/../lib/libboost_program_options.a -lprofiler
+#mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTLIB)/libboost_program_options.a -lprofiler /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0
+#mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTLIB)/libboost_program_options.a -lprofiler /usr/lib/debug/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 -lpthread /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 
+mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTLIB)/libboost_program_options.a -lprofiler
 	$(CXX) -o $@ $(CPPFLAGS) -Wno-error=maybe-uninitialized -I. -DPROFILE $^
 
 #TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=100 --optlu=10 --treport=10 --proj=1 --threads=0

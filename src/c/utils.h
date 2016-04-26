@@ -100,7 +100,7 @@ void DotProductInnerVector (Eigen::Ref<Eigen::VectorXd> result, const Eigen::Ref
 #ifndef NDEBUG
   assert(result.size() == mat1.cols());
 #endif
-  for (int i=0;i<mat1.cols();++i)
+  for (size_t i=0;i<mat1.cols();++i)
     {
       result(i)=DotProductInnerVector(mat1.col(i),mat2,outerIndex);
     }

@@ -136,17 +136,22 @@ void output_perfs(const std::vector<double>& MicroF1, const std::vector<double>&
     }
 
   // the number of active classes is always calculated
-  // also they are not in reverse order
   out << str << "active_per_proj  ";
-  for (proj = 0; proj < nact.size(); proj++)
+  for (proj = nact.size()-1; proj >=0 ; proj--)
     {
       out  << nact[proj] << "  ";
     }
   out << endl;
   out << str << "prc_active_per_proj  ";
-  for (proj = 0; proj < nact.size(); proj++)
+  for (proj = nact.size()-1; proj >=0 ; proj--)
     {
       out  << nact[proj]*1.0/total_preds << "  ";
+    }
+  out << endl;
+  out << str << "speedup_active_per_proj  ";
+  for (proj = nact.size()-1; proj >=0 ; proj--)
+    {
+      out  << total_preds*1.0/nact[proj] << "  ";
     }
   out << endl;
 
@@ -163,8 +168,9 @@ void output_perfs(const std::vector<double>& MicroF1, const std::vector<double>&
   out << str << "Prec5  " << Prec5[0] << endl;
   out << str << "Top10  " << Top10[0] << endl;
   out << str << "Prec10  " << Prec10[0] << endl;
-  out << str << "nactive  " << nact(nact.size()-1) << endl;
-  out << str << "prc_active  " << nact(nact.size()-1)*1.0/total_preds << endl;
+  out << str << "nactive  " << nact(0) << endl;
+  out << str << "prc_active  " << nact(0)*1.0/total_preds << endl;
+  out << str << "speedup  " << total_preds*1.0/nact(0) << endl;
   out << str << "total  " << total_preds << endl;
   out << str << "total_time  " << total_time[0] << endl;
   out << str << "filter_time  " << filter_time[0] << endl;
@@ -173,117 +179,74 @@ void output_perfs(const std::vector<double>& MicroF1, const std::vector<double>&
 
 // -------- force some template instantiations --------
 // SparseM ...
+
 template
-void predict_chunk(PredictionSet* predictions, size_t& nact, 
-		   const SparseM& x, const DenseColMf& ovaW, 
-		   const size_t start_class, const ActiveDataSet* active,
-		   predtype thresh, int k, bool verbose);
+void predict_chunk(predvec& predictions, VectorXsz& no_active,
+		   doublevec& filter_time, doublevec& predict_time,
+		   doublevec& total_time,
+		   const SparseM& x, 
+		   const DenseColM* wmat, const DenseColM* lmat,
+		   const DenseColM* umat,		   
+		   const DenseColMf& ovaW_chunk, 
+		   const size_t start_class, predtype thresh, int k,
+		   bool allproj, bool verbose);
 template
-void evaluate_projection(const SparseM& x, const SparseMb& y, 
+void evaluate_projection(const std::vector<SparseM*>& x, 
+			 const std::vector<SparseMb*>& y, 
 			 const DenseColMf& ovaW,
 			 const DenseColM* wmat, const DenseColM* lmat,
 			 const DenseColM* umat,
 			 predtype thresh, int k, const string& projname,
-			 bool validation, bool allproj, bool verbose, ostream& out,
-			 double& MicroF1_final, double& MacroF1_final,
-			 double& MacroF1_2_final,
-			 double& MicroPrecision_final, double& MacroPrecision_final,
-			 double& MicroRecall_final, double& MacroRecall_final, 
-			 double& Top1_final, double& Top5_final, double& Top10_final, 
-			 double& Prec1_final, double& Prec5_final, 
-			 double& Prec10_final,
-			 size_t& nact_final, double& act_prc_final, 
-			 double& total_time_final);
+			 const std::vector<std::string>& setnames,
+			 bool allproj, bool verbose, ostream& out = cout);
+
 template
 void get_projection_measures(const SparseM& x, const SparseMb& y,
 			     const DenseColM& wmat, const DenseColM& lmat,
 			     const DenseColM& umat, bool verbose,
 			     VectorXsz& nrTrueActive, VectorXsz& nrActive, VectorXsz& nrTrue);
 template
-void evaluate_projection(const SparseM& x, const SparseMb& y, 
-			 const DenseColMf& ovaW,
-			 const DenseColM* wmat, const DenseColM* lmat,
-			 const DenseColM* umat,
-			 predtype thresh, int k, const string& projname, 
-			 bool validation, bool allproj, bool verbose, ostream& out);
-template
-void evaluate_projection_chunks(const SparseM& x, const SparseMb& y, 
-				const string& ova_file, size_t chunks,
-				const DenseColM* wmat, const DenseColM* lmat,
-				const DenseColM* umat,
-				predtype thresh, int k, const string& projname, 
-				bool validation, bool allproj, bool verbose, ostream& out);
-template
-void evaluate_projection_chunks(const SparseM& x, const SparseMb& y, 
-				const string& ova_file, size_t chunks,
+void evaluate_projection_chunks(const std::vector<SparseM*>& x, 
+				const std::vector<SparseMb*>& y, 
+				const string& ova_file, int chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname,
-				bool validation, bool allproj, bool verbose, ostream& out,
-				double& MicroF1_final, double& MacroF1_final,
-				double& MacroF1_2_final,
-				double& MicroPrecision_final, double& MacroPrecision_final,
-				double& MicroRecall_final, double& MacroRecall_final, 
-				double& Top1_final, double& Top5_final, double& Top10_final, 
-				double& Prec1_final, double& Prec5_final, 
-				double& Prec10_final,
-				size_t& nact_final, double& act_prc_final, 
-				double& total_time_final);
+				const std::vector<std::string>& setnames,
+				bool allproj, bool verbose, ostream& out = cout);
+
 // DenseM ...
 template
-void predict_chunk(PredictionSet* predictions, size_t& nact, 
-		   const DenseM& x, const DenseColMf& ovaW, 
-		   const size_t start_class, const ActiveDataSet* active,
-		   predtype thresh, int k, bool verbose);
+void predict_chunk(predvec& predictions, VectorXsz& no_active,
+		   doublevec& filter_time, doublevec& predict_time,
+		   doublevec& total_time,
+		   const DenseM& x, 
+		   const DenseColM* wmat, const DenseColM* lmat,
+		   const DenseColM* umat,		   
+		   const DenseColMf& ovaW_chunk, 
+		   const size_t start_class, predtype thresh, int k,
+		   bool allproj, bool verbose);
 template
-void evaluate_projection(const DenseM& x, const SparseMb& y, 
+void evaluate_projection(const std::vector<DenseM*>& x, 
+			 const std::vector<SparseMb*>& y, 
 			 const DenseColMf& ovaW,
 			 const DenseColM* wmat, const DenseColM* lmat,
 			 const DenseColM* umat,
 			 predtype thresh, int k, const string& projname,
-			 bool validation, bool allproj, bool verbose, ostream& out,
-			 double& MicroF1_final, double& MacroF1_final,
-			 double& MacroF1_2_final,
-			 double& MicroPrecision_final, double& MacroPrecision_final,
-			 double& MicroRecall_final, double& MacroRecall_final, 
-			 double& Top1_final, double& Top5_final, double& Top10_final, 
-			 double& Prec1_final, double& Prec5_final, 
-			 double& Prec10_final,
-			 size_t& nact_final, double& act_prc_final, 
-			 double& total_time_final);
+			 const std::vector<std::string>& setnames,
+			 bool allproj, bool verbose, ostream& out = cout);
 template
 void get_projection_measures(const DenseM& x, const SparseMb& y,
 			     const DenseColM& wmat, const DenseColM& lmat,
 			     const DenseColM& umat, bool verbose,
 			     VectorXsz& nrTrueActive, VectorXsz& nrActive, VectorXsz& nrTrue);
 template
-void evaluate_projection(const DenseM& x, const SparseMb& y, 
-			 const DenseColMf& ovaW,
-			 const DenseColM* wmat, const DenseColM* lmat,
-			 const DenseColM* umat,
-			 predtype thresh, int k, const string& projname, 
-			 bool validation, bool allproj, bool verbose, ostream& out);
-template
-void evaluate_projection_chunks(const DenseM& x, const SparseMb& y, 
-				const string& ova_file, size_t chunks,
-				const DenseColM* wmat, const DenseColM* lmat,
-				const DenseColM* umat,
-				predtype thresh, int k, const string& projname, 
-				bool validation, bool allproj, bool verbose, ostream& out);
-template
-void evaluate_projection_chunks(const DenseM& x, const SparseMb& y, 
-				const string& ova_file, size_t chunks,
+void evaluate_projection_chunks(const std::vector<DenseM*>& x, 
+				const std::vector<SparseMb*>& y, 
+				const string& ova_file, int chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname,
-				bool validation, bool allproj, bool verbose, ostream& out,
-				double& MicroF1_final, double& MacroF1_final,
-				double& MacroF1_2_final,
-				double& MicroPrecision_final, double& MacroPrecision_final,
-				double& MicroRecall_final, double& MacroRecall_final, 
-				double& Top1_final, double& Top5_final, double& Top10_final, 
-				double& Prec1_final, double& Prec5_final, 
-				double& Prec10_final,
-				size_t& nact_final, double& act_prc_final, 
-				double& total_time_final);
+				const std::vector<std::string>& setnames,
+				bool allproj, bool verbose, ostream& out = cout);
 
