@@ -12,6 +12,8 @@ using namespace std;
 
 Filter::Filter(const VectorXd& l, const VectorXd& u)
 {
+  assert(l.size() == u.size());
+  _noClasses = l.size();
   _sortedLU = new VectorXd(2*l.size());
   for (int i=0;i<l.size();i++)
     {
@@ -46,10 +48,9 @@ Filter::~Filter()
 
 void Filter::init_map(vector<int>& ranks)
 {
-  size_t noClasses = ranks.size()/2;
-  _map = new vector<dynamic_bitset<>*>(2*noClasses+1);
+  _map = new vector<dynamic_bitset<>*>(2*_noClasses+1);
   vector<dynamic_bitset<>*>::iterator map_it = _map->begin();
-  *map_it++ = new dynamic_bitset<>(noClasses);
+  *map_it++ = new dynamic_bitset<>(_noClasses);
   size_t i = 0;
   while (map_it != _map->end())
     {

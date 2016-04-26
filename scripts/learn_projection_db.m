@@ -99,21 +99,19 @@ function learn_projection_db(proj_params, database)
       endif 
     elseif (length(db_log_entries) > 1)
       error("There was more than one file in the database that matched the query");
-    else
+    endif
 
-      if (isempty(proj_params.log_file))
-	if (isempty(proj_params.log_name_fields))
-	  proj_params.log_file = "stdout";
-	  warning("Neither log_file nor log_name_fields were specified. Using stdout for log")
-	endif
-	fname = ds_name(db_proj_log_params, strsplit(proj_params.log_name_fields));
-	proj_params.log_file = fullfile(tilde_expand(proj_params.log_dir),fname);
+    if (isempty(proj_params.log_file))
+      if (isempty(proj_params.log_name_fields))
+	proj_params.log_file = "stdout";
+	warning("Neither log_file nor log_name_fields were specified. Using stdout for log")
       endif
+      fname = ds_name(db_proj_log_params, strsplit(proj_params.log_name_fields));
+      proj_params.log_file = fullfile(tilde_expand(proj_params.log_dir),fname);
+    endif
       
-
-      if (proj_params.relearn_projection && !strcmp(proj_params.log_file,"stdout") && exist(proj_params.log_file,"file"))
-	unlink(proj_params.log_file);
-      endif
+    if (proj_params.relearn_projection && !strcmp(proj_params.log_file,"stdout") && exist(proj_params.log_file,"file"))
+      unlink(proj_params.log_file);
     endif
   endif 
   
@@ -234,7 +232,7 @@ function learn_projection_db(proj_params, database)
   endif  
     
   if (proj_params.resume && !exist(proj_params.projection_file,"file"))
-    db_proj_file_resume_params = rmfield(db_proj_file_params,["no_projections";"seed";]);
+    db_proj_file_resume_params = rmfield(db_proj_file_params,["no_projections";"seed";"resumed_from"]);
 
     db_proj_file_resume = ds_query(db_proj_file_resume_params);
     if (length(db_proj_file_resume) >= 1) 

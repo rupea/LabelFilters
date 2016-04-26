@@ -117,13 +117,13 @@ void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const pa
   double ml_wt_class = 1.0;
   int noClasses = y.cols();
   wc.setZero(noClasses);
-  int n = y.rows();  
+  size_t n = y.rows();  
   if (nclasses.size() != n) 
     {
       cerr << "init_wc has been called with vector nclasses of wrong size" << endl;
       exit(-1);
     }
-  for (int i=0;i<n;i++)
+  for (size_t i=0;i<n;i++)
     {      
       if (params.ml_wt_class_by_nclasses)
 	{
@@ -440,26 +440,28 @@ double compute_single_w_gradient_size ( int sc_start, int sc_end,
 	  if (!params.remove_class_constraints || !(filtered.get(i,cp))) 
 	    {			      
 	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
-	      if (*(sortedLU_iter++) > pm1)// I1 Condition  w*x < l(c)+1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I1 : " << i<< endl;
-		  }
-#endif
-		  multiplier -= class_weight;
-		} // end if
+// 	      if (*(sortedLU_iter++) > pm1)// I1 Condition  w*x < l(c)+1
+// 		{
+// #ifdef PRINTI
+// 		  {
+// 		    cout << "I1 : " << i<< endl;
+// 		  }
+// #endif
+// 		  multiplier -= class_weight;
+// 		} // end if
 	      
-	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
-	      if (pp1 > *(sortedLU_iter++))//  I2 Condition  w*x > u(c)-1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I2 : " << i << endl;
-		  }
-#endif
-		  multiplier += class_weight;
-		} // end if			      
+// 	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
+// 	      if (pp1 > *(sortedLU_iter++))//  I2 Condition  w*x > u(c)-1
+// 		{
+// #ifdef PRINTI
+// 		  {
+// 		    cout << "I2 : " << i << endl;
+// 		  }
+// #endif
+// 		  multiplier += class_weight;
+// 		} // end if			      
+
+	      multiplier -= class_weight*((*(sortedLU_iter++) > pm1) - (pp1 > *(sortedLU_iter++)));
 	    }
 	  else
 	    {
@@ -482,27 +484,32 @@ double compute_single_w_gradient_size ( int sc_start, int sc_end,
       if (!(filtered.get(i,cp))) 
 	{			      
 	  //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
-	  if (left_classes && (pp1 > *sortedLU_iter)) // I3 Condition w*x > l(cp) - 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I3 : " << i << endl;
-	      }
-#endif
-	      multiplier += left_update; 
-	    }
-	  ++sortedLU_iter;
+// 	  if (left_classes && (pp1 > *sortedLU_iter)) // I3 Condition w*x > l(cp) - 1
+// 	    {
+// #ifdef PRINTI
+// 	      {
+// 		cout << "I3 : " << i << endl;
+// 	      }
+// #endif
+// 	      multiplier += left_update; 
+// 	    }
+//	  ++sortedLU_iter;
+
+	  multiplier += (pp1 > *(sortedLU_iter++))*left_update - (*(sortedLU_iter++) > pm1)*right_update; 
 	  //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
-	  if (right_classes && (*sortedLU_iter > pm1)) //  I4 Condition  w*x < u(cp) + 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I4 : " << i<< endl;
-	      }
-#endif
-	      multiplier -= right_update;
-	    }
-	  ++sortedLU_iter;			      
+
+// 	  if (right_classes && (*sortedLU_iter > pm1)) //  I4 Condition  w*x < u(cp) + 1
+// 	    {
+// #ifdef PRINTI
+// 	      {
+// 		cout << "I4 : " << i<< endl;
+// 	      }
+// #endif
+// 	      multiplier -= right_update;
+// 	    }
+// 	  ++sortedLU_iter;			      
+	  
+	  //  multiplier -= (*(sortedLU_iter++) > pm1)*right_update;
 	}
       else
 	{
@@ -765,27 +772,29 @@ double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
 	  cp = sorted_class[cls];
 	  if (!params.remove_class_constraints || !(filtered.get(i,cp))) 
 	    {			      
-	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
-	      if (sortedLU[2*cls] > pm1)// I1 Condition  w*x < l(c)+1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I1 : " << i<< endl;
-		  }
-#endif
-		  multiplier -= class_weight;
-		} // end if
+// 	      //if ((1 - proj + *(sortedLU_iter++)) > 0)// I1 Condition  w*x < l(c)+1
+// 	      if (sortedLU[2*cls] > pm1)// I1 Condition  w*x < l(c)+1
+// 		{
+// #ifdef PRINTI
+// 		  {
+// 		    cout << "I1 : " << i<< endl;
+// 		  }
+// #endif
+// 		  multiplier -= class_weight;
+// 		} // end if
 	      
-	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
-	      if (pp1 > sortedLU[2*cls+1])//  I2 Condition  w*x > u(c)-1
-		{
-#ifdef PRINTI
-		  {
-		    cout << "I2 : " << i << endl;
-		  }
-#endif
-		  multiplier += class_weight;
-		} // end if			      
+// 	      //if ((1 + proj - *(sortedLU_iter++)) > 0)//  I2 Condition  w*x > u(c)-1
+// 	      if (pp1 > sortedLU[2*cls+1])//  I2 Condition  w*x > u(c)-1
+// 		{
+// #ifdef PRINTI
+// 		  {
+// 		    cout << "I2 : " << i << endl;
+// 		  }
+// #endif
+// 		  multiplier += class_weight;
+// 		} // end if			      
+
+	      multiplier -= class_weight*((sortedLU[2*cls] > pm1) - (pp1 > sortedLU[2*cls+1]));
 	    }
 	  //update the left and right classes;
 	  ++left_classes;
@@ -807,26 +816,28 @@ double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
       cp = sorted_class[sc]; 			  
       if (!(filtered.get(i,cp))) 
 	{			      
-	  //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
-	  if (left_classes && (pp1 > sortedLU[2*sc])) // I3 Condition w*x > l(cp) - 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I3 : " << i << endl;
-	      }
-#endif
-	      multiplier += left_update; 
-	    }
-	  //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
-	  if (right_classes && (sortedLU[2*sc+1] > pm1)) //  I4 Condition  w*x < u(cp) + 1
-	    {
-#ifdef PRINTI
-	      {
-		cout << "I4 : " << i<< endl;
-	      }
-#endif
-	      multiplier -= right_update;
-	    }		      
+// 	  //if (left_classes && ((1 - *sortedLU_iter + proj) > 0)) // I3 Condition w*x > l(cp) - 1
+// 	  if (left_classes && (pp1 > sortedLU[2*sc])) // I3 Condition w*x > l(cp) - 1
+// 	    {
+// #ifdef PRINTI
+// 	      {
+// 		cout << "I3 : " << i << endl;
+// 	      }
+// #endif
+// 	      multiplier += left_update; 
+// 	    }
+// 	  //if (right_classes && ((1 - proj + *sortedLU_iter) > 0)) //  I4 Condition  w*x < u(cp) + 1
+// 	  if (right_classes && (sortedLU[2*sc+1] > pm1)) //  I4 Condition  w*x < u(cp) + 1
+// 	    {
+// #ifdef PRINTI
+// 	      {
+// 		cout << "I4 : " << i<< endl;
+// 	      }
+// #endif
+// 	      multiplier -= right_update;
+// 	    }		      
+
+	  multiplier += (pp1 > sortedLU[2*sc])*left_update - (sortedLU[2*sc+1] > pm1)*right_update;
 	}
       sc = sc_sample[++s];
     } // while(1)
@@ -1325,7 +1336,7 @@ void proj_means(VectorXd& means, const VectorXi& nc,
     }
   for (k = 0; k < noClasses; k++)
     {
-      means(k) /= nc(k);
+      nc(k)?means(k) /= nc(k):0.0;
     }
 }
 
@@ -1359,7 +1370,7 @@ void getBoundGrad (VectorXd& grad, VectorXd&  bound,
 	  class_iter++;
 	  continue;
 	}		  
-      const double gsc = grad.coeff(sc);
+      //      const double gsc = grad.coeff(sc);
       // if (gsc >= 0 )
       // 	{
       // 	  const int cp = sorted_class[sc];
@@ -1420,6 +1431,8 @@ void optimizeLU(VectorXd&l, VectorXd&u,
 		const param_struct& params,
 		bool print)
 {
+
+  assert(params.remove_class_constraints == false);
   size_t n = projection.size();
   size_t noClasses = y.cols();
   VectorXd allproj(2*n);
@@ -1456,8 +1469,8 @@ void optimizeLU(VectorXd&l, VectorXd&u,
 	  if (classweight == 0)
 	    {
 	      // there are no examples of this class
-	      // so just put l and u to 0 (l is set below)
-	      u.coeffRef(sorted_class[sc]) = 0;
+	      // so just put l and u to the highest/lowest possible value (l is set below)
+	      u.coeffRef(sorted_class[sc]) = boost::numeric::bounds<double>::lowest()/10; // the /10 is needed because octave has trouble reading back ascii files that are written with the highest/lowest limits
 	      grad.coeffRef(sc) = -1; 
 	    }
 	  else
@@ -1592,8 +1605,8 @@ void optimizeLU(VectorXd&l, VectorXd&u,
 	  if (classweight == 0)
 	    {
 	      // there are no examples of this class
-	      // so just put l and u to 0
-	      l.coeffRef(sorted_class[sc]) = 0.0;
+	      // so just put l and u to the highest/lowest possible value
+	      l.coeffRef(sorted_class[sc]) = boost::numeric::bounds<double>::highest()/10; // the /10 is needed because octave has trouble reading back ascii files that are written with the highest/lowest limits;
 	      grad.coeffRef(sc) = -1; 
 	    }
 	  else

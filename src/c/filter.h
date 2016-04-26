@@ -11,11 +11,18 @@ class Filter
   Filter(const VectorXd& l, const VectorXd& u);
   ~Filter();
   const dynamic_bitset<>* filter (double xproj) const;
+  size_t noClasses();
  private:  
+  size_t _noClasses;
   VectorXd* _sortedLU;
   vector<dynamic_bitset<>*>* _map;
   void init_map(vector<int>& ranks);
 };
+
+inline size_t Filter::noClasses() 
+{
+  return _noClasses;
+}
 
 inline const dynamic_bitset<>* Filter::filter(double xproj) const
 {

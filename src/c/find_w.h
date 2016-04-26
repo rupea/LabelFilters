@@ -717,6 +717,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   //  VectorXd sortedLU_gradient_chunk;
   VectorXd l_avg(noClasses),u_avg(noClasses); // the lower and upper bounds for the averaged gradient
   VectorXd sortedLU_avg(2*noClasses); // holds l_avg and u_avg interleaved in the curent class sorting order (i.e. l_avg,u_avg,l_avg,u_avg,l_avg,u_avg)
+  VectorXd sortedLU_test(2*noClasses); // 
   VectorXd means(noClasses); // used for initialization of the class order vector;
   VectorXi nc; // the number of examples in each class 
   VectorXd wc; // the number of examples in each class 
@@ -763,7 +764,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
   int idx_remaining = batch_size % idx_chunks;
   
   init_nc(nc, nclasses, y);
-  if (params.optimizeLU_epoch > 0)
+  if (params.optimizeLU_epoch > 0||params.reoptimize_LU)
     {
       init_wc(wc, nclasses, y, params);
     }
@@ -833,6 +834,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 		  rank_classes(sorted_class, class_order, means);
 
 		  optimizeLU(l,u,projection,y,class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);
+
 		  lower_bounds_avg.col(projection_dim) = l;
 		  upper_bounds_avg.col(projection_dim) = u;
 		  // coppy w, lower_bound, upper_bound from the coresponding averaged terms. 
@@ -929,7 +931,8 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	case REORDER_PROJ_MEANS:	       
 	  proj_means(means, nc, projection, y);
 	  break;
-	case REORDER_RANGE_MIDPOINTS: 
+	case REORDER_RANGE_MIDPOINTS:
+	  // what to do if u < l? 
 	  means = l+u; //no need to divide by 2 since it is only used for ordering
 	  break;
 	default:
@@ -1111,7 +1114,6 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
 	      if ( params.avg_epoch && t >= params.avg_epoch)
 		{
 		  // use the average to calculate objective
-		  VectorXd sortedLU_test;
 		  if (params.optimizeLU_epoch > 0)
 		    {
 		      optimizeLU(l_avg, u_avg, projection_avg, y, class_order, sorted_class, wc, nclasses, filtered, C1, C2, params);

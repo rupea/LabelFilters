@@ -19,7 +19,8 @@ OCTFILES = oct_find_w.oct oct_normalize_data.oct
 
 all: octave
 
-octave: oct_find_w oct_project_data oct_predict_data oct_evaluate_model oct_normalize_data oct_evaluate_predictions
+octave: oct_find_w oct_project_data oct_predict_data oct_normalize_data oct_evaluate_predictions
+#octave: oct_find_w oct_project_data oct_predict_data oct_evaluate_model oct_normalize_data oct_evaluate_predictions
 
 
 oct_find_w: find_w.o EigenOctave.o printing.o oct_find_w.o utils.o

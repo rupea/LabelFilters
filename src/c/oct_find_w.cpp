@@ -49,7 +49,7 @@ void print_usage()
   cout << "                        sqrt (eta/sqrt(t))" << endl;
   cout << "                        lin (eta/(1+eta*lambda*t))" << endl;
   cout << "                        3_4 (eta*(1+eta*lambda*t)^(-3/4)" << endl;
-  cout << "           min_eta - the minimum value of the lerarning rate (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]" << endl;
+  cout << "           min_eta - the minimum value of the lerarning rate (i.e. lr will be max (eta_t), min_eta)  [1e-4]" << endl;
   cout << "           remove_constraints - whether to remove the constraints for instances that fall outside the class boundaries in previous projections. [false] " << endl;
   cout << "           remove_class_constraints - whether to remove the constraints for examples that fell outside their own class boundaries in previous projections. [false] " << endl;
   cout << "           reweight_lambda - whether to diminish lambda and/or C1 as constraints are eliminated. 0 - do not diminish any, 1 - diminish lambda only, 2 - diminish lambda and C1 (increase C2) [1]." << endl;

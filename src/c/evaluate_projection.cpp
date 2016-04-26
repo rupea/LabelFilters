@@ -210,14 +210,17 @@ int main(int argc, char * argv[])
       exit(-2);
     }
 
-  octave_value_list args; 
+  
+  octave_value x_te,y_te, x_va, y_va;
+    
+  octave_value_list args(3); 
   args(0)=vm["data_file"].as<string>();
   args(1)="x_te"; 
   args(2)="y_te"; 
-
+  
   if (verbose)
     {
-      cout << "Loading data file " << args(0).string_value() << " ... " <<endl;
+      cout << "Loading test set from " << args(0).string_value() << " ... " <<endl;
     }
   octave_value_list loaded = Fload(args, 1);
   //feval("load", args, 0); // no arguments returned 
@@ -225,15 +228,42 @@ int main(int argc, char * argv[])
     {
       cout << "success" << endl; 
     }
-  octave_value x_te = loaded(0).scalar_map_value().getfield(args(1).string_value()); 
-  octave_value y_te = loaded(0).scalar_map_value().getfield(args(2).string_value());
+  x_te = loaded(0).scalar_map_value().getfield(args(1).string_value()); 
+  y_te = loaded(0).scalar_map_value().getfield(args(2).string_value());
   args.clear();
   loaded.clear();
+
+  if(validation)
+    {
+      args(0)=vm["data_file"].as<string>();
+      args(1)="x_va"; 
+      args(2)="y_va"; 
+      
+      if (verbose)
+	{
+	  cout << "Loading validation set from " << args(0).string_value() << " ... " <<endl;
+	}
+      loaded = Fload(args, 1);
+      //feval("load", args, 0); // no arguments returned 
+      if (verbose)
+	{
+	  cout << "success" << endl; 
+	}
+      x_va = loaded(0).scalar_map_value().getfield(args(1).string_value()); 
+      y_va = loaded(0).scalar_map_value().getfield(args(2).string_value());
+      args.clear();
+      loaded.clear();
+    }
   
-  SparseMb y;
+  std::vector<SparseMb*> y;
   if (y_te.is_sparse_type())
     {
-      y = toEigenMat(y_te.sparse_bool_matrix_value());
+      y.push_back(new SparseMb(toEigenMat(y_te.sparse_bool_matrix_value())));
+      if (validation)
+	{
+	  y.push_back(new SparseMb(toEigenMat(y_va.sparse_bool_matrix_value())));
+	}
+      //      y = toEigenMat(y_te.sparse_bool_matrix_value());
       // multilabel problems. Use a threshold of 0 for classification 
       // if no prediction is above 0, return the class with the highest predictions
       // should get this info in the parameters
@@ -248,9 +278,11 @@ int main(int argc, char * argv[])
     }
   else
     {      
-      VectorXd yVec = toEigenVec(y_te.array_value());
-  
-      y = labelVec2Mat(yVec);
+      y.push_back(new SparseMb(labelVec2Mat(toEigenVec(y_te.array_value()))));
+      if (validation)
+	{
+	  y.push_back(new SparseMb(labelVec2Mat(toEigenVec(y_va.array_value()))));
+	}
       // multiclass data 
       // the class with the highest output will be the prediction
       if (!vm.count("threshold"))
@@ -268,7 +300,7 @@ int main(int argc, char * argv[])
   assert(chunks > 0);
   if (chunks == 1)
     {
-      size_t noClasses = y.cols();
+      size_t noClasses = y[0]->cols();
       size_t dim;
       if(x_te.is_sparse_type())
 	{
@@ -320,11 +352,24 @@ int main(int argc, char * argv[])
       proj_files = vm["projection_files"].as<std::vector<string> >();
     }
 
+
+  std::vector<std::string> setnames;
+  setnames.push_back("test");
+  if (validation)
+    {
+      setnames.push_back("valid");
+    }
+  
+
   if(x_te.is_sparse_type())
     {
       // Sparse data
-      SparseM x = toEigenMat(x_te.sparse_matrix_value());
-
+      std::vector<SparseM*> x;
+      x.push_back(new SparseM(toEigenMat(x_te.sparse_matrix_value())));
+      if (validation)
+	{
+	  x.push_back(new SparseM(toEigenMat(x_va.sparse_matrix_value())));
+	}	  
       // size_t reducedsize = 10000;
       // SparseM smallx = x.topLeftCorner(reducedsize,x.cols());
       // SparseMb smally = y.topLeftCorner(reducedsize, y.cols());
@@ -337,58 +382,80 @@ int main(int argc, char * argv[])
 	  load_projections(wmat, lmat, umat, *pit, verbose);
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
+	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
 	    } 
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
 	    }	  
 	}      
       if (do_full)
 	{
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
+	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", setnames, false, verbose, out);
 	    }
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", validation, false,  verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", setnames, false,  verbose, out);
 	    }
 	}
+      for (int set=0;set < x.size(); set++)
+	{
+	  delete x[set];
+	}     
     }
   else
     {
       // Dense data
-      DenseM x = toEigenMat<DenseM>(x_te.array_value());
-
+      std::vector<DenseM*> x;
+      x.push_back(new DenseM(toEigenMat<DenseM>(x_te.array_value())));
+      if (validation)
+	{
+	  x.push_back(new DenseM(toEigenMat<DenseM>(x_va.array_value())));
+	}
+      
       for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
 	  cerr << "***********" << *pit << "************" << endl;
 	  load_projections(wmat, lmat,umat,*pit,verbose);
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
+	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
 	    } 
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, validation, allproj, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
 	    }	  
 	}      
       if (do_full)
 	{
 	  if (chunks == 1)
 	    {
-	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
+	      evaluate_projection(x, y, ovaW, NULL, NULL, NULL, thresh, k, "full", setnames, false, verbose, out);
 	    }
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_vile"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", validation, false, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_vile"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", setnames, false, verbose, out);
 	    }
 	}
+      for (int set=0;set < x.size(); set++)
+	{
+	  delete x[set];
+	}
     }
+  for (int set=0;set < y.size(); set++)
+    {
+      delete y[set];
+    }
+  
+
   if (vm.count("out_file"))
     {
       outf.close();
     }
+
+  
+
   clean_up_and_exit(0);  
 }

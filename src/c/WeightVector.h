@@ -48,6 +48,7 @@ class WeightVector
       my_scale = 1.0;
       my_weights = w;
       my_A = VectorXd(w.size());
+      my_A.setZero();
       my_avg_t = 0; 
       my_beta = 1;
       my_alpha = 1;
@@ -57,8 +58,10 @@ class WeightVector
     {
       my_norm_sq = 0.0;
       my_weights = VectorXd(size);
+      my_weights.setZero();
       my_scale = 1.0;
       my_A = VectorXd(size);
+      my_A.setZero();
       my_avg_t = 0; 
       my_beta = 1;
       my_alpha = 1;

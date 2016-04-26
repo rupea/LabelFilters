@@ -1,4 +1,6 @@
-#!/home/mlshack/alex/Programs/octave-3.8.2/bin/octave -qf 
+#! /usr/bin/env octave 
+
+#  #!/home/mlshack/alex/Programs/octave-3.8.2/bin/octave -qf 
 
 # #!/usr/bin/octave -qf
 
@@ -151,14 +153,14 @@ for data_entry = db_data_entries
       
       ## get the ova file on /mnt/local to avoid over the network loading
       s = make_absolute_filename(ova_file);
-      local_ova_file = ["/mnt/local/" substr(s,strfind(s,"alex"))];
+      local_ova_file = ["/mnt/local/" substr(s,strfind(s,"alex"))]
       if (!exist(local_ova_file,"file"))	
-	[status,msg] = system(["mkdir -p ", fileparts(local_ova_file)]);
-	if (!status)
+	[status,msg] = system(["mkdir -p ", fileparts(local_ova_file)])
+	if (status)
 	  warning(["Copy of the ova file to the local drive failed with message: " msg "\n   Using the nfs file"]);
 	  local_ova_file = ova_file;
 	else	
-	  [status,msg] = copyfile(ova_file,local_ova_file);
+	  [status,msg] = copyfile(ova_file,local_ova_file)
 	  if (!status)
 	    warning(["Copy of the ova file to the local drive failed with message: " msg "\n   Using the nfs file"]);
 	    local_ova_file = ova_file;
