@@ -157,6 +157,67 @@ public:
 /** For debug tests: write to sstream, read from sstream, throw if error detected */
 void testMCsolnWriteRead( MCsoln const& mcsoln, enum MCsoln::Fmt fmt, enum MCsoln::Len len);
 
+/** lazy stats for x,y data. WIP, so opaque for now. */
+struct MCLazyData;
+
+/** NEW: introduce a data wrapper.
+ *
+ * - This allows base x [,y] data to be passed/shared easily between solver
+ *   and projector objects, \c MCprojProg and \c MCsolveProgram.
+ * - Another benefit is removing duplicate code for reading data.
+ * - Eventually, may help move template code into the library? */
+class MCxyData {
+public:
+    MCxyData();
+    ~MCxyData();
+    /// \name row-wise test data matrix
+    //@{
+    // perhaps denseOk and sparseOk can be replaced by xDense.size() != 0 (etc.) ?
+    DenseM xDense;
+    bool denseOk;
+    SparseM xSparse;
+    bool sparseOk;
+    //@}
+    SparseMb y;                 ///< optional for projection operation.
+    /// \name optional, private stats
+    //@{
+private:
+    double qscal; ///< if >0, the multiplier used for \c quadx dimensions
+    double xscal; ///< if >0, the global x multipler used for \c xscale
+    struct MCLazyData * lazx;   ///< lazy x statistics
+    struct MCLazyData * lazy;   ///< lazy y statistics
+public:
+    void xchanged();                    ///< scrap any x stats
+    void ychanged();                    ///< scrap any y stats
+    //@}
+
+    void xread( std::string xFile );    ///< read x (binary, sparse/dense) (txt fmt \b todo)
+    void yread( std::string yFile );    ///< read x (sparse binary or text)
+    void xwrite( std::string xFile ) const; ///< save x (binary only, for now)
+    void ywrite( std::string yFile ) const; ///< save y (binary only, for now)
+
+    std::string shortMsg() const;       ///< format+dimensions
+
+    void xrunit();                      ///< scale rows have unit norm.
+    void xcunit();                      ///< scale rows have unit norm.
+
+    void xrnormal();                    ///< remove mean,stdev from x rows (dense only)
+    void xcnormal();                    ///< remove mean,stdev from x cols (dense only)
+
+    void xscale(double scal);           ///< multiply all x values by const
+    double xmul() const {return xscal;} ///< what's global x multiplier?
+
+    void quadx(double qscal=0.0);       ///< add quadratic dimensions (0.0 autoscales, somehow) \throw if no x data
+    double quadmul() const {return qscal;} ///< return the used quadmul (or 0.0 if quadx has not been called)
+    
+    // I got annoyed with weighting for an error before aborting trying binary
+    // reads. So let me (everywhere, sigh) use a magic header, for a quick check.
+    static std::array<char,4> magic_xSparse; ///< 0x00,'X','s','8' (or 4 for floats)
+    static std::array<char,4> magic_xDense;  ///< 0x00,'X','d','8' (or 4 for floats)
+    static std::array<char,4> magic_yBin;    ///< 0x00,'Y','s','b'
+    // feel free to add any other [binary] formats.
+};
+
 /** Provide a simpler API for solving.
  * - The long \c solve template is now in a 'detail' header,
  * - The library explicitly instiates for input data \c DenseM and SparseM.
@@ -251,6 +312,8 @@ public:
     void trim( enum Trim const kp = TRIM_AVG );
 
 private:
+    /** twice, we need to chop unused projections from the solution */
+    void chopProjections(size_t const nProj);
     int getNthreads( param_struct const& params ) const;
 };
 #endif // proposed

@@ -2,7 +2,7 @@
 #define __WEIGHTVECTOR_H
 
 #include "utils.h"
-
+#include "constants.h" // MCTHREADS
 using Eigen::VectorXd;
 using Eigen::VectorXi;
 

@@ -120,7 +120,7 @@ void optimizeLU(VectorXd& l, VectorXd& u,
     // ------------------------------------------------------
     size_t const n = projection.size();
     size_t const noClasses = y.cols();
-    bool const none_filtered = filtered.count()==0;             // XXX ouch, slow ???
+    bool const none_filtered = filtered.count()==0;
     VectorXd allproj(2*n);
     allproj << (projection.array() - 1), (projection.array() + 1);
     std::vector<size_t> indices(allproj.size());

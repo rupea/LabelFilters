@@ -109,18 +109,18 @@ private:
 // -------- inline definitions --------
 
 inline PredVec::PredVec()
-    : std::vector<Prediction>()
+	       : Base() //std::vector<Prediction>()
       , _sorted( false )
       , _keep_size( boost::numeric::bounds<size_t>::highest() )
       , _keep_thresh( boost::numeric::bounds<predtype>::lowest() )
 {}
 
-inline PredVec::PredVec(size_t n)
-    : std::vector<Prediction>( n )
+inline PredVec::PredVec(size_t n) // only reserves memory, does not initialize with n predictions
+	       : Base() //std::vector<Prediction>()
       , _sorted( false )
       , _keep_size( boost::numeric::bounds<size_t>::highest() )
       , _keep_thresh( boost::numeric::bounds<predtype>::lowest() )
-{}
+{Base::reserve(n);}
 
 inline PredVec::~PredVec()
 {}
@@ -141,7 +141,7 @@ inline void PredVec::add_pred(predtype out, size_t cls)
   /*     cerr << "Warning: addind a new prediction to an already prunned vector" << endl; */
   /*     AddWarned = true; */
   /*   }     */
-  Base::push_back( Prediction{out,cls} );
+  Base::push_back(Prediction{out,cls});
   _sorted=false;
 }
 
@@ -155,7 +155,7 @@ inline void PredVec::prune (size_t k, predtype keep_thresh)
     new_size = std::min( Base::size(), std::max( new_size, k ));
     if (new_size < Base::size()) {
         resize(new_size);
-        Base().swap(*this);
+        Base(*this).swap(*this);
     }
 }
 

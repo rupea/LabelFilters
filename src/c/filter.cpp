@@ -9,7 +9,7 @@ using Eigen::VectorXd;
 using namespace boost;
 using namespace std;
 
-int const Filter::verbose = 1;
+int const Filter::verbose = 0;
 
     Filter::Filter(const VectorXd& l, const VectorXd& u)
     : _sortedLU( 2*l.size() )
@@ -19,7 +19,7 @@ int const Filter::verbose = 1;
 #endif
 {
     //_sortedLU = new VectorXd(2*l.size());
-    for(int i=0; i<l.size(); ++i){
+    for(size_t i=0; i<l.size(); ++i){
         _sortedLU.coeffRef(2*i) = l.coeff(i);
         if (l.coeff(i) >= u.coeff(i)) {
             if(verbose) cerr<<"Warning, L >= U for class "<<i<<" (L="<<l.coeff(i)<<",U="<<u.coeff(i)

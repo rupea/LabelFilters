@@ -76,10 +76,61 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	{
 	  params.max_iter=tmp.int_value();
 	}
-      tmp = parameters.contents("avg_epoch");
+      tmp = parameters.contents("eta");
       if (tmp.is_defined())
 	{
-	  params.avg_epoch=tmp.int_value();
+	  params.eta=tmp.double_value();
+	}
+      tmp = parameters.contents("seed");
+      if (tmp.is_defined())
+	{
+	  params.seed=tmp.int_value();
+	}
+      tmp = parameters.contents("num_threads");
+      if (tmp.is_defined())
+	{
+	  params.num_threads=tmp.int_value();
+	}
+      tmp = parameters.contents("resume");
+      if (tmp.is_defined())
+	{
+	  params.resume=tmp.bool_value();
+	}
+      tmp = parameters.contents("reoptimize_LU");
+      if (tmp.is_defined())
+	{
+	  params.reoptimize_LU=tmp.bool_value();
+	}
+      tmp = parameters.contents("class_samples");
+      if (tmp.is_defined())
+	{
+	  params.class_samples=tmp.int_value();
+	}
+      tmp = parameters.contents("update_type");
+      if (tmp.is_defined())
+	{
+	  if (tmp.string_value() == "minibatch")
+	    params.update_type = MINIBATCH_SGD;
+	  else if (tmp.string_value() == "safe") 
+	    {
+	      params.update_type = SAFE_SGD;
+	      params.batch_size = 1;
+	    }
+	  else 
+	    {
+	      cerr << "ERROR: update_type value unrecognized" << endl;
+	      exit(-4);
+	    }
+	}
+      tmp = parameters.contents("batch_size");
+      if (tmp.is_defined())
+	{
+	  if (params.update_type == SAFE_SGD && tmp.int_value() != 1)
+	    {
+	      cerr << "ERROR: batch_size must be 1 with update_type = safe!" << endl;  
+	      exit(-4);
+	    }
+	  params.batch_size=tmp.int_value();
 	}
       tmp = parameters.contents("eps");
       if (tmp.is_defined())
@@ -103,41 +154,15 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	      exit(-4);
 	    }
 	}
-      tmp = parameters.contents("update_type");
-      if (tmp.is_defined())
-	{
-	  if (tmp.string_value() == "minibatch")
-	    params.update_type = MINIBATCH_SGD;
-	  else if (tmp.string_value() == "safe") 
-	    {
-	      params.update_type = SAFE_SGD;
-	      params.batch_size = 1;
-	    }
-	  else 
-	    {
-	      cerr << "ERROR: update_type value unrecognized" << endl;
-	      exit(-4);
-	    }
-	}
-      tmp = parameters.contents("eta");
-      if (tmp.is_defined())
-	{
-	  params.eta=tmp.double_value();
-	}
       tmp = parameters.contents("min_eta");
       if (tmp.is_defined())
 	{
 	  params.min_eta=tmp.double_value();
 	}
-      tmp = parameters.contents("batch_size");
+      tmp = parameters.contents("avg_epoch");
       if (tmp.is_defined())
 	{
-	  if (params.update_type == SAFE_SGD && tmp.int_value() != 1)
-	    {
-	      cerr << "ERROR: batch_size must be 1 with update_type = safe!" << endl;  
-	      exit(-4);
-	    }
-	  params.batch_size=tmp.int_value();
+	  params.avg_epoch=tmp.int_value();
 	}
       tmp = parameters.contents("report_epoch");
       if (tmp.is_defined())
@@ -199,16 +224,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	{
 	  params.ml_wt_class_by_nclasses=tmp.bool_value();
 	}
-      tmp = parameters.contents("seed");
-      if (tmp.is_defined())
-	{
-	  params.seed=tmp.int_value();
-	}
-      tmp = parameters.contents("num_threads");
-      if (tmp.is_defined())
-	{
-	  params.num_threads=tmp.int_value();
-	}
+#if GRADIENT_TEST
       tmp = parameters.contents("finite_diff_test_epoch");
       if (tmp.is_defined())
 	{
@@ -224,21 +240,7 @@ DEFUN_DLD (oct_find_w, args, nargout,
 	{
 	  params.finite_diff_test_delta=tmp.double_value();
 	}
-      tmp = parameters.contents("resume");
-      if (tmp.is_defined())
-	{
-	  params.resume=tmp.bool_value();
-	}
-      tmp = parameters.contents("reoptimize_LU");
-      if (tmp.is_defined())
-	{
-	  params.reoptimize_LU=tmp.bool_value();
-	}
-      tmp = parameters.contents("class_samples");
-      if (tmp.is_defined())
-	{
-	  params.class_samples=tmp.int_value();
-	}
+#endif
     }
 
 

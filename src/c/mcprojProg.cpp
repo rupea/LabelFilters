@@ -1,5 +1,6 @@
 
 #include "mcprojProg.hpp"
+#include "mcsolveProg.hpp"
 #include "printing.hh"
 #include "normalize.h"
 #include "mcpredict.hh"
@@ -25,26 +26,23 @@ namespace opt {
                                   , int const verbose/*=0*/ )
         : ::opt::MCprojArgs( argc, argv )
         , soln()
-        //, ::MCsolver( solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
-        , xDense()
-        , denseOk(false)
-        , xSparse()
-        , sparseOk(false)
-        , y() // SparseMb
+        , solveProg(nullptr)           // empty shared pointer
+        , xy( new MCxyData() )
         , feasible()
         //, projFeasible()
     {
         // defaults: if given explicitly as \c defparms
         if(verbose>=1){
             //++A::verbose;
-            cout<<" +MCprojProgram --xfile="<<A::xFile <<" --yFile="<<A::yFile;
+            cout<<" +MCprojProgram --xfile="<<A::xFile;
             if(A::solnFile.size()) cout<<" --solnFile="<<A::solnFile;
             if(A::outFile.size()) cout<<" --output="<<A::outFile;
+            if(A::maxProj) cout<<" --proj="<<A::maxProj;
             if(A::outBinary) cout<<" -B";
             if(A::outText)   cout<<" -T";
             if(A::outSparse) cout<<" -S";
             if(A::outDense)  cout<<" -D";
-            if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
+            if(A::yFile.size()) cout<<(A::yPerProj?" --Yfile=":" --yfile")<<A::yFile;
             //if(A::threads)   cout<<" --threads="<<A::threads;
             if(A::xnorm)     cout<<" --xnorm";
             if(A::xunit)     cout<<" --xunit";
@@ -52,12 +50,30 @@ namespace opt {
             cout<<endl;
         }
     }
+    MCprojProgram::MCprojProgram( MCsolveProgram * const solver, std::string mod/*=std::string()*/ )
+        : ::opt::MCprojArgs( mod )
+        , soln( solver->getSoln() )     // COPY the solver's solution  FIXME (soln doesn't arrive, can tryRead to reread it)
+        , solveProg( solver )
+        , xy( solver->xy )
+        , feasible()
+        //, projFeasible()
+    {
+        assert( xy );
+        assert( solver );
+        cout<<"+MCprojProgram: "<<xy->shortMsg()<<endl;
+        cout<<"Initial MCprojProgram soln is "; soln.pretty(cout); cout<<endl;
+    }
+    MCprojProgram::~MCprojProgram(){
+        if( solveProg && solveProg->projProg ){  // reset known shared_ptr to me [circular]
+            //solveProg->projProg.reset();
+            solveProg->projProg = nullptr;
+        }
+    }
 
     void MCprojProgram::tryRead( int const verb/*=0*/ )
     {
         int const verbose = A::verbose + verb;  // verb modifies the initial value from MCprojArgs --verbose
         if(verbose>=1){cout<<" MCprojProgram::tryRead()"; cout.flush();}
-        //MCsoln soln;
         {
             try{
                 ifstream sfs(A::solnFile);
@@ -70,167 +86,81 @@ namespace opt {
             }
         }
         if(verbose>=2) soln.pretty(cout);
-        // read the following MCprojProgram data:
-        //DenseM xDense;
-        //bool denseOk=false;
-        //SparseM xSparse;
-        //bool sparseOk=false;
+        // obtain this->xy->MCxyData::{xDense, denseOk, xSparse,sparseOk, y}
         {
-            ifstream xfs;
-            // TODO XXX try Dense-Text, Sparse-Text too?
-            try{
-                if(verbose>=2) cout<<" try reading DenseM from xFile="<<xFile<<endl;
-                xfs.open(xFile);
-                if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-               ::detail::eigen_io_bin(xfs, xDense);
-                if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
-                char c;
-                xfs >> c;   // should trigger eof if BINARY dense file exactly the write length
-                if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
-                xfs.close();
-                assert( xDense.cols() > 0U );
-                denseOk=true;
-            }catch(po::error& e){
-                cerr<<"Invalid argument: "<<e.what()<<endl;
-                throw;
-            }catch(std::exception const& e){
-                cout<<" oops ... "<<e.what()<<endl;
-                cerr<<"Retrying xFile as SparseM..."<<endl;
-                try{
-                    xfs.close();
-                    xfs.open(xFile);
-                    if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-                    ::detail::eigen_io_bin( xfs, xSparse );
-                    if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
-                    xfs.close();
-                    assert( xSparse.cols() > 0U );
-                    sparseOk=true;
-                }catch(...){
-                    cerr<<" Doesn't seem to be sparse either"<<endl;
-                }
-            }
+            if(verbose>=1) cout<<" try reading DenseM from xFile="<<xFile<<endl;
+            xy->xread(xFile);    // tries binary dense, sparse, (others?)
         }
-#if 0 // sparse projection seems ok now...
-        if(xnorm && sparseOk){
-            xDense = DenseM( xSparse );     // convert sparse --> dense
-            xSparse.resize(0,0);
-            sparseOk = false;
-            denseOk = true;
+#if 1 // enable when sparse projection seems ok now... ???
+        if(xnorm && xy->sparseOk){
+            xy->xDense = DenseM( xy->xSparse );     // convert sparse --> dense
+            xy->xSparse.resize(0,0);
+            xy->sparseOk = false;
+            xy->denseOk = true;
         }
 #endif
-        //SparseMb y;                         // now this is optional
-        // read SparseMb y;
+        //SparseMb xy->y;                         // now this is optional
+        // read SparseMb xy->y;
         if(A::yFile.size()){
-            ifstream yfs;
-            bool yOk = false;
-            try{
-                yfs.open(yFile);
-                if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-                ::detail::eigen_io_binbool( yfs, y );
-                assert( y.cols() > 0U );
-                if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
-                yOk = true;
-            }catch(po::error& e){
-                cerr<<"Invalid argument: "<<e.what()<<endl;
-                throw;
-            }catch(std::runtime_error const& e){
-                cerr<<e.what()<<endl;
-                //throw;
-            }catch(std::exception const& e){
-                cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
-                throw;
-            }
-            if( !yOk ){
-                cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
-                try{
-                    yfs.close();
-                    yfs.open(yFile);
-                    if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-                    ::detail::eigen_io_txtbool( yfs, y );
-                    assert( y.cols() > 0U );
-                    // yfs.fail() is expected
-                    if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
-                }
-                catch(std::exception const& e){
-                    cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
-                    throw;
-                }
-            }
-            assert( y.size() > 0 );
+            xy->yread(yFile);
+            assert( xy->y.size() > 0 );
         }else{
-            assert( y.size() == 0 );
+            assert( xy->y.size() == 0 );
         }
 #ifndef NDEBUG
-        assert( denseOk || sparseOk );
-        if( denseOk ){
-            assert( xDense.rows() == y.rows() );
-        }else{ //sparseOk
-            assert( xSparse.rows() == y.rows() );
-            // col-norm DISALLOWED
+        assert( xy->denseOk || xy->sparseOk );
+        if( xy->y.size() ){ // xy->y is optional, for projection operation (allows validation)
+            if( xy->denseOk ){
+                assert( xy->xDense.rows() == xy->y.rows() );
+            }else{ //xy->sparseOk
+                assert( xy->xSparse.rows() == xy->y.rows() );
+                // col-norm DISALLOWED
+            }
         }
 #endif
-        if( sparseOk && xnorm )
+        if( xy->sparseOk && xnorm )
             throw std::runtime_error("sparse --xfile does not support --xnorm");
-        if( denseOk ){
+        if( xy->denseOk ){
             if( A::xnorm ){
                 VectorXd xmean;
                 VectorXd xstdev;
                 if(verbose>=1){
-                    cout<<"xDense ORIG:\n"<<xDense<<endl;
+                    if( xy->xDense.size() < 50U ) cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
                     cout<<" xnorm!"<<endl;
                 }
 #if 1
-                column_normalize(xDense,xmean,xstdev);
+                col_normalize(xy->xDense,xmean,xstdev);
                 if(verbose>=1){
                     cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
                     cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
                 }
 #else
-                normalize_col(xDense);
+                normalize_col(xy->xDense);
 #endif
             }
         }
         if( A::xunit ){
-            VectorXd xSqNorms;
-            if( denseOk ){
-                for(size_t r=0U; r<xDense.rows(); ++r){
-                    double const l2 = xDense.row(r).squaredNorm();
-                    if( l2 > 1.e-10 ){
-                        xDense.row(r) *= (1.0/sqrt(l2));
-                    }
-                }
-            }else if( sparseOk ){
-                for(size_t r=0U; r<xSparse.rows(); ++r){
-                    double const l2 = xSparse.row(r).squaredNorm();
-                    if( l2 > 1.e-10 ){
-                        xSparse.row(r) *= (1.0/sqrt(l2));
-                    }
-                }
-            }
+            xy->xrunit();
         }
         if( A::xscale != 1.0 ){
-            if( denseOk ){
-                xDense *= A::xscale;
-            }else if( sparseOk ){
-                xSparse *= A::xscale;
-            }
+            xy-> xscale( A::xscale );
         }
 
-        if(verbose>=2){
-            if( denseOk ){
-                cout<<"--------- xDense"<<prettyDims(xDense)<<":\n";
-                if(xDense.size()<1000||verbose>=3) cout<<xDense<<endl;
-            }else{ //sparseOk
-                cout<<"--------- xSparse"<<prettyDims(xSparse)<<":\n";
-                if(xSparse.size()<1000||verbose>=3) cout<<xSparse<<endl;
-                //if( xnorm ){ cout<<" xnorm!"<<endl; column_normalize(xSparse,xmean,xstdev); }
+        if(verbose>=1){
+            if( xy->denseOk ){
+                cout<<"--------- xy->xDense"<<prettyDims(xy->xDense)<<":\n";
+                if(xy->xDense.size()<1000||verbose>=3) cout<<xy->xDense<<endl;
+            }else{ //xy->sparseOk
+                cout<<"--------- xy->xSparse"<<prettyDims(xy->xSparse)<<":\n";
+                if(xy->xSparse.size()<1000||verbose>=3) cout<<xy->xSparse<<endl;
+                //if( xnorm ){ cout<<" xnorm!"<<endl; col_normalize(xy->xSparse,xmean,xstdev); }
                 // col-norm DISALLOWED
                 if( xnorm ) throw std::runtime_error("sparse --xfile does not support --xnorm");
             }
-            if( y.size() <= 0 ) cout<<"y: (no validation data)"<<endl;
+            if( xy->y.size() <= 0 ) cout<<"xy->y: (no validation data)"<<endl;
             else{
-                cout<<"--------- y"<<prettyDims(y)<<":\n";
-                if(y.size()<1000||verbose>=3) cout<<y<<endl;
+                cout<<"--------- xy->y"<<prettyDims(xy->y)<<":\n";
+                if(xy->y.size()<1000||verbose>=3) cout<<xy->y<<endl;
             }
         }
         //throw std::runtime_error("TBD");
@@ -241,22 +171,26 @@ namespace opt {
      * incorrectly eliminated, could the set of projection lines be used as a
      * mixture of experts instead?  Under what run conditions would that be a
      * correct view?
+     *
+     * \todo project --> mcpredict.h (project) --> mcpredict.cpp (projectionsToBitsets)
+     *       modify projectionsToBitsets to track per-projection all-example stats
+     *       (like ConfusionMatrix PER PROJECTION)
      */
     void MCprojProgram::tryProj( int const verb/*=0*/ )
     {
         int const verbose = A::verbose + verb;  // verb modifies the initial value from MCprojArgs --verbose
-        if(verbose>=1) cout<<" MCprojProgram::tryProj() "<<(denseOk?"dense":sparseOk?"sparse":"HUH?")<<endl;
-#ifndef NDEBUG
-        if(1){ // test that one of the low-level routines runs...
+        if(verbose>=1) cout<<" MCprojProgram::tryProj() "<<(xy->denseOk?"dense":xy->sparseOk?"sparse":"HUH?")<<endl;
+#if NDEBUG
+        { // This is still fairly high level -- it does ALL projections in x
             cout<<"\t\tjust for show test... START (deprecated)"<<endl;
             VectorXsz no_active;
             ActiveDataSet * ads=nullptr;
-            if( denseOk ){
-                ads = getactive( no_active, xDense,
+            if( xy->denseOk ){
+                ads = getactive( no_active, xy->xDense,
                                  soln.weights_avg, soln.lower_bounds_avg, soln.upper_bounds_avg,
                                  /*verbose=*/true );
             }else{
-                ads = getactive( no_active, xSparse,
+                ads = getactive( no_active, xy->xSparse,
                                  soln.weights_avg, soln.lower_bounds_avg, soln.upper_bounds_avg,
                                  /*verbose=*/true );
             }
@@ -266,52 +200,59 @@ namespace opt {
             cout<<"\t\tjust for show test... DONE"<<endl;
         }
 #endif
-        if( denseOk ){
-            feasible = project( xDense, soln );
-            if(verbose>=1){                                // dump x and 'feasible' classes
-                cout<<" feasible["<<feasible.size()<<"] classes, after project(xDense,soln)"; cout.flush();
-                if(verbose>=2){
-                    cout<<":"<<endl;
-                    for(uint32_t i=0U; i<feasible.size(); ++i){
-                        auto const& fi = feasible[i];
-                        cout<<" x.row("<<setw(4)<<i<<")=";
-                        OUTWIDE(cout,40,xDense.row(i));
-                        cout<<"   classes: ";
-                        for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
-                        //for(uint32_t c=0U; c<fi.size(); ++c) cout<<fi[c];
-                        cout<<endl;
-                    }
-                }else{
-                    cout<<endl;
-                }
-            }
-        }else if( sparseOk ){
-            if(A::xnorm && verbose>=1) cout<<"// normalization NOT YET SUPPORTED for sparse"<<endl;
-            feasible = project( xSparse, soln );
-            if(verbose>=1){                                    // dump x and 'feasible' classes
-                cout<<" feasible["<<feasible.size()<<"] classes, after project(xDense,soln)"; cout.flush();
-                if(verbose>=2){
-                    cout<<":"<<endl;
-                    for(uint32_t i=0U; i<feasible.size(); ++i){
-                        auto const& fi = feasible[i];
-                        cout<<" x.row("<<setw(4)<<i<<")=";
-                        //OUTWIDE(cout,40,xSparse.row(i)); // Eigen bug: unwanted CR (dense row output OK)
-                        {
-                            ostringstream oss;
-                            oss<<xSparse.row(i);
-                            string s = oss.str();
-                            cout<<setw(40)<<s.substr(0,s.size()-1);
+        if( A::yPerProj || A::maxProj )
+        {
+            cout<<(A::yPerProj?" -xy->y":" ")<<(A::maxProj?" -p":" ")<<" options **NOT IMPLEMENTED**"
+                <<"\nHere, may want to unroll predict.cpp: projectionsToActiveSet per projection"
+                <<endl;
+        }if(1){ // high-level "do ALL projections" routine
+            if( xy->denseOk ){
+                feasible = project( xy->xDense, soln );
+                if(verbose>=1){                                // dump x and 'feasible' classes
+                    cout<<" feasible["<<feasible.size()<<"] classes, after project(xy->xDense,soln)"; cout.flush();
+                    if(verbose>=2){
+                        cout<<":"<<endl;
+                        for(uint32_t i=0U; i<feasible.size(); ++i){
+                            auto const& fi = feasible[i];
+                            cout<<" x.row("<<setw(4)<<i<<")=";
+                            OUTWIDE(cout,40,xy->xDense.row(i));
+                            cout<<"   classes: ";
+                            for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+                            //for(uint32_t c=0U; c<fi.size(); ++c) cout<<fi[c];
+                            cout<<endl;
                         }
-                        cout<<"   classes: ";
-                        for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+                    }else{
                         cout<<endl;
                     }
-                }else{
-                    cout<<endl;
                 }
+            }else if( xy->sparseOk ){
+                if(A::xnorm && verbose>=1) cout<<"// normalization NOT YET SUPPORTED for sparse"<<endl;
+                feasible = project( xy->xSparse, soln );
+                if(verbose>=1){                                    // dump x and 'feasible' classes
+                    cout<<" feasible["<<feasible.size()<<"] classes, after project(xy->xDense,soln)"; cout.flush();
+                    if(verbose>=2){
+                        cout<<":"<<endl;
+                        for(uint32_t i=0U; i<feasible.size(); ++i){
+                            auto const& fi = feasible[i];
+                            cout<<" x.row("<<setw(4)<<i<<")=";
+                            //OUTWIDE(cout,40,xy->xSparse.row(i)); // Eigen bug: unwanted CR (dense row output OK)
+                            {
+                                ostringstream oss;
+                                oss<<xy->xSparse.row(i);
+                                string s = oss.str();
+                                cout<<setw(40)<<s.substr(0,s.size()-1);
+                            }
+                            cout<<"   classes: ";
+                            for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) cout<<" "<<c;
+                            cout<<endl;
+                        }
+                    }else{
+                        cout<<endl;
+                    }
+                }
+            }else{
+                throw std::runtime_error("neither sparse nor dense training x was available");
             }
-        }else{
-            throw std::runtime_error("neither sparse nor dense training x was available");
         }
     }
     struct ConfusionMatrix{
@@ -337,14 +278,14 @@ namespace opt {
         double recall() const {return static_cast<double>(tp)/(tp+fn);}
         double f1() const {return static_cast<double>(tp+tp)/(tp+tp+fp+fn);}
         /** hist[] true label distribution as fraction */
-        double pctTrue( size_t const nlabels ){
+        double fracTrue( size_t const nlabels ){
             if( nlabels >= nhist ) throw std::runtime_error("hist[] array bound exceeded");
-            return static_cast<double>(hist[nlabels].truu) / trueLabels();
+            return static_cast<double>(hist[nlabels].truu) / n; //trueLabels();
         }
         /** hist[] predicted label distribution as fraction */
-        double pctPred( size_t const nlabels ){
+        double fracPred( size_t const nlabels ){
             if( nlabels >= nhist ) throw std::runtime_error("hist[] array bound exceeded");
-            return static_cast<double>(hist[nlabels].pred) / predLabels();
+            return static_cast<double>(hist[nlabels].pred) / n; //predLabels();
         }
         //@}
     };
@@ -414,9 +355,9 @@ namespace opt {
             }
             os<<endl;
         }
-        os<<"Overall confusion matrix: tp="<<setw(8)<<xtp<<" fp="<<setw(8)<<xfp
-            <<"\n                          tn="<<setw(8)<<xtn<<" fn="<<setw(8)<<xfn
-            <<endl;
+        if( y.size() )
+            os  <<  "Overall confusion matrix: tp="<<setw(8)<<xtp<<" fp="<<setw(8)<<xfp
+                <<"\n                          tn="<<setw(8)<<xtn<<" fn="<<setw(8)<<xfn<<endl;
         ConfusionMatrix r;
         r.tp=xtp; r.fp=xfp; r.tn=xtn; r.fn=xfn;
         return r;
@@ -435,7 +376,7 @@ namespace opt {
             cout<<"##    xFile: "<<A::xFile<<endl;
             cout<<"## feasible["<<feasible.size()<<"x"<<soln.lower_bounds.rows()<<"] classes"
                 ", after project(x,soln):"<<endl;
-            dumpFeasible( cout, feasible, y, A::outDense, /*firstRows=*/0U );
+            dumpFeasible( cout, feasible, xy->y, A::outDense, /*firstRows=*/0U );
         }else{
             ofstream ofs(outFile);
             if( ! ofs.good() ) throw std::runtime_error("trouble opening outFile");
@@ -451,11 +392,11 @@ namespace opt {
                 ofs<<"##    xFile: "<<A::xFile<<endl;
                 ofs<<"## feasible["<<feasible.size()<<"x"<<soln.lower_bounds.rows()<<"] classes"
                 ", after project(x,soln):"<<endl;
-                ConfusionMatrix cm = dumpFeasible( ofs, feasible, y, A::outDense, /*firstRows=*/0U );
-                if( y.size() ){
+                ConfusionMatrix cm = dumpFeasible( ofs, feasible, xy->y, A::outDense, /*firstRows=*/0U );
+                if( xy->y.size() ){
                     cout<<"Overall confusion matrix: tp="<<setw(8)<<cm.tp<<" fp="<<setw(8)<<cm.fp
                         <<"\n                          tn="<<setw(8)<<cm.tn<<" fn="<<setw(8)<<cm.fn
-                        <<"\n Average true predictions per example = "<<(cm.tp+cm.fp)/y.rows()
+                        <<"\n Average true predictions per example = "<<(cm.tp+cm.fp)/xy->y.rows()
                         <<endl;
                 }
             }
@@ -466,27 +407,31 @@ namespace opt {
     void MCprojProgram::tryValidate( int const verb/*=0*/ )
     {
         int const verbose = A::verbose + verb;  // verb modifies the initial value from MCprojArgs --verbose
-        if( y.size() ){
+        if( A::yPerProj || A::maxProj )
+        {
+            cout<<(A::yPerProj?" -xy->y":" ")<<(A::maxProj?" -p":" ")<<" options **NOT IMPLEMENTED**"
+                <<"\nHere, may want to unroll predict.cpp: projectionsToActiveSet per projection"
+                <<endl;
+        }
+        if( xy->y.size() ){
             cout<<" McprojProgram::tryValidate() against --yfile "<<yFile<<endl;
-            ConfusionMatrix cm = confusion( feasible, y );
+            ConfusionMatrix cm = confusion( feasible, xy->y );
             cout<<"Overall confusion matrix: tp="<<setw(8)<<cm.tp<<" fp="<<setw(8)<<cm.fp
                 <<"\n                          tn="<<setw(8)<<cm.tn<<" fn="<<setw(8)<<cm.fn
                 <<"\n Average labels      per example = "
-                <<setw(12)<<static_cast<double>(cm.tp+cm.fn)/y.rows()
-                <<"  hist:";
+                <<setw(12)<<static_cast<double>(cm.tp+cm.fn)/xy->y.rows()
+                <<"  hist%:";
             size_t iz;
             for(iz=cm.nhist; --iz<cm.nhist; ) if(cm.hist[iz].truu) break;
             ++iz;
-            for(size_t i=0U; i<iz; ++i) cout<<setw(6)<<round(cm.pctTrue(i),0.01);
-            cout<<endl
-                <<"\n Average predictions per example = "
-                <<setw(12)<<static_cast<double>(cm.tp+cm.fp)/y.rows()
-                <<"  hist:";
+            for(size_t i=0U; i<iz; ++i) cout<<setw(6)<<round(cm.fracTrue(i)*100.0,0.01);
+            cout<<"\n Average predictions per example = "
+                <<setw(12)<<static_cast<double>(cm.tp+cm.fp)/xy->y.rows()
+                <<"  hist%:";
             for(iz=cm.nhist; --iz<cm.nhist; ) if(cm.hist[iz].pred) break;
             ++iz;
-            for(size_t i=0U; i<iz; ++i) cout<<setw(6)<<round(cm.pctPred(i),0.01);
-            cout<<endl
-                <<"\n Precision (tp/tp+fp)            = "
+            for(size_t i=0U; i<iz; ++i) cout<<setw(6)<<round(cm.fracPred(i)*100.0,0.01);
+            cout<<"\n Precision (tp/tp+fp)            = "
                 <<setw(12)<<static_cast<double>(cm.tp)/(cm.tp+cm.fp)
                 <<"\n Recall    (tp/tp+fn)            = "
                 <<setw(12)<<static_cast<double>(cm.tp)/(cm.fp+cm.fn)

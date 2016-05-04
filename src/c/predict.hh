@@ -3,6 +3,7 @@
 
 #include "predict.h"
 #include "utils.h"
+#include "constants.h" // MCTHREADS
 
 #include <boost/numeric/conversion/bounds.hpp>
 #include <boost/limits.hpp>

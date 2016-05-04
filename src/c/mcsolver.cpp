@@ -9,6 +9,34 @@
 
 using namespace std;
 
+// ... MCxyData magic headers (simplify I/O)
+std::array<char,4> MCxyData::magic_xSparse = {0,'X','s','8'}; // or 4 for floats
+std::array<char,4> MCxyData::magic_xDense  = {0,'X','d','8'}; // or 4 for floats
+// x text mode not supported so far.
+std::array<char,4> MCxyData::magic_yBin    = {0,'Y','s','b'};
+// y text mode readable but has no magic.
+// ...
+/** Set solution sizes for nProj projections.
+ * Typically used to chop un-needed projections.
+ * ?? should it also handle increasing number
+ *    of projections (and zero-initializing all) ??
+ */
+void MCsolver::chopProjections(size_t const nProj){
+    cerr<<" chopProjections("<<nProj<<")"<<endl;
+    if(weights.cols() > nProj){
+        cerr<<"Reducing weights from "<<weights.cols()<<" to "<<nProj<<" projections"<<endl;
+        weights.conservativeResize(/*d*/weights.rows(), nProj);
+        lower_bounds.conservativeResize(/*nClass*/lower_bounds.rows(), nProj);
+        upper_bounds.conservativeResize(/*nClass*/upper_bounds.rows(), nProj);
+    }
+    if(weights_avg.cols() > nProj){
+        cerr<<"Reducing weights_avg from "<<weights_avg.cols()<<" to "<<nProj<<" projections"<<endl;
+        weights_avg.conservativeResize(/*d*/weights_avg.rows(), nProj);
+        lower_bounds_avg.conservativeResize(/*nClass*/lower_bounds_avg.rows(), nProj);
+        upper_bounds_avg.conservativeResize(/*nClass*/upper_bounds_avg.rows(), nProj);
+    }
+}
+
     MCpermState::MCpermState( size_t nClass )
     : Perm(nClass)
     , ok_lu(false)

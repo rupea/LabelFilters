@@ -12,6 +12,32 @@
 #include <iomanip>
 #include <vector>
 
+#ifdef PROFILE
+#define PROFILER_START( CSTR )      do{ ProfilerStart(CSTR); }while(0)
+#define PROFILER_STOP_START( CSTR ) do{ ProfilerStop(); ProfilerStart(CSTR); }while(0)
+#define PROFILER_STOP               ProfilerStop()
+#else
+#define PROFILER_START( CSTR )      do{}while(0)
+#define PROFILER_STOP_START( CSTR ) do{}while(0)
+#define PROFILER_STOP               do{}while(0)
+#endif
+
+#if GRADIENT_TEST // compile-time option, disabled by default, macro to unclutter iteration loop
+#define OPT_GRADIENT_TEST do \
+{   /* now thread-safe, just in case */ \
+    static unsigned thread_local seed = static_cast<unsigned>(this_thread.get_id()); \
+    if(t4.finite_diff_test){            /* perform finite differences test */ \
+        for (size_t fdtest=0; fdtest<params.no_finite_diff_tests; ++fdtest) { \
+            size_t idx = ((size_t) rand_r(&seed)) % n; \
+            finite_diff_test( w, x, idx, y, nclasses, maxclasses, luPerm.perm/*sorted_class*/, \
+                              luPerm.rev, luPerm.sortlu, filtered, C1, C2, params); \
+        } \
+    } \
+}while(0)
+#else
+#define OPT_GRADIENT_TEST do{}while(0)
+#endif
+
 // first let's define mcsolver.h utilities...
 
 #define MCITER_PERIODIC(XXX) XXX( params.XXX##_epoch && t % params.XXX##_epoch == 0 )
@@ -20,7 +46,9 @@
     , MCITER_PERIODIC( report )
     , MCITER_PERIODIC( report_avg )
     , MCITER_PERIODIC( optimizeLU )
+#if GRADIENT_TEST
     , MCITER_PERIODIC( finite_diff_test )
+#endif
       , doing_avg_epoch( params.avg_epoch && t >= params.avg_epoch )    // <-- true after a certain 't'
 {
 }
@@ -182,15 +210,6 @@ inline void MCpermState::getSortlu_avg( VectorXd& sortlu_test ) const
 }while(0)
 #endif
 
-#ifdef PROFILE
-#define PROFILER_STOP_START( CSTR ) do{ ProfilerStop(); ProfilerStart(CSTR); }while(0)
-#define PROFILER_STOP               ProfilerStop()
-#define PROFILER_START( CSTR )      do{ ProfilerStart(CSTR); }while(0)
-#else
-#define PROFILER_STOP_START( CSTR ) do{}while(0)
-#define PROFILER_STOP               do{}while(0)
-#define PROFILER_START( CSTR )      do{}while(0)
-#endif
     template< typename EIGENTYPE >
 void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                      param_struct const* const params_arg /*= nullptr*/ )
@@ -291,6 +310,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
     MCpermState luPerm( nClass );
     VectorXd means(nClass); // used for initialization of the class order vector;
+
+    
+
     size_t obj_idx = 0, obj_idx_avg = 0;
     // in the multilabel case each example will have an impact proportinal
     // to the number of classes it belongs to. ml_wt and ml_wt_class
@@ -327,8 +349,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         assert( updateSettings.sc_locks != nullptr );
     }
 #else
-    //MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, nThreads, params );
-    MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, 2, params );
+    MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, nThreads, params );
+    //MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, 2, params );  // 2 might be fastest?
 #endif
     size_t const& batch_size    = updateSettings.batch_size; // really only for print_report ?
 
@@ -347,14 +369,14 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     boolmatrix filtered(nTrain,nClass);
     //VectorXd difference(d);
     VectorXd tmp(d);
-    unsigned long total_constraints = nTrain*nClass
+    unsigned long const total_constraints = nTrain*nClass
         - (1-params.remove_class_constraints) * nc.sum();
     size_t no_filtered=0;
     // Possibly read in from save file:
     if( ! params.resume ){      // NEW --- needs checking
         if(  params.C1 >= 0.0 && params.C2 >= 0.0 ){
             this->t = 0U;
-#if 0
+#if 1 // original
             /*double*/this-> lambda = 1.0/params.C2;
             /*double*/this-> C1 = params.C1/params.C2;
             /*double*/this-> C2 = 1.0;
@@ -362,7 +384,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 #else // new -- For un-row-normalized data, want to scale C1,C2 proportionally ??
             C1 = params.C1;
             C2 = params.C2;
-            if( C2 > 1.e-2 ) lambda = C1/C2; else lambda = 100.0;
+            //if( C2 > 1.e-4 ) lambda = 1.0/C2; else lambda = 100.0;
+            lambda = C2;
 #endif
         }else{
             //this-> C2 = 1.0; // / sqrt(nClass);
@@ -424,23 +447,19 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                                           lambda, C1, C2, params); 
     };
 
-    if (weights.cols() > nProj) { // <--- weights_avg would be better ?
-        cerr<<"Warning: the number of requested filters is lower than the number of filters already learned."
-           "\n\tDropping the extra filters" << endl;
-        weights.conservativeResize(d, nProj);
-        weights_avg.conservativeResize(d, nProj);
-        lower_bounds.conservativeResize(nClass, nProj);
-        upper_bounds.conservativeResize(nClass, nProj);
-        lower_bounds_avg.conservativeResize(nClass, nProj);
-        upper_bounds_avg.conservativeResize(nClass, nProj);
-    }
-
-    int projection_dim = 0;
+    // does resume mean "add new dims" or "recalc old"?
+    bool const resume_newdims = (params.resume && nProj > weights_avg.cols()
+                                 ? true : false );
+    chopProjections(nProj);
+    int prjax = 0;
     int reuse_dim = weights_avg.cols();
     cout<<"  ... begin with weights"<<prettyDims(weights)<<" weights_avg"<<prettyDims(weights_avg)
         <<" lower_bounds_avg"<<prettyDims(lower_bounds_avg)<<" upper_bounds_avg"<<prettyDims(upper_bounds_avg)
         <<endl;
-    if (params.resume || params.reoptimize_LU) {
+    if (params.reoptimize_LU && params.reorder_type == REORDER_RANGE_MIDPOINTS )
+        throw std::runtime_error("Error, reordering REORDER_RANGE_MIDPOINTS should "
+                                 "not be used when reoptimizing the LU parameters");
+    if (resume_newdims || params.reoptimize_LU) {
         if (params.reoptimize_LU) {
             lower_bounds.setZero(nClass, reuse_dim);
             upper_bounds.setZero(nClass, reuse_dim);
@@ -453,39 +472,36 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         if(params.reoptimize_LU || params.remove_constraints) {
             // set {l,u,w}_avg.  If possible copy into {l,u,w}
             cout<<"\tInitial tweaks to {l,u,w}_avg for projections 0.."<<reuse_dim-1<<endl;
-            for (projection_dim = 0; projection_dim < reuse_dim; projection_dim++) {
-                cout<<"\tp:"<<projection_dim;
-                w.init(weights_avg.col(projection_dim));
+            for (prjax = 0; prjax < reuse_dim; ++prjax) {
+                cout<<"\tp:"<<prjax;
+                w.init(weights_avg.col(prjax));
                 xwProj.w_changed();  // projections of 'x' onto 'w' no longer valid
-                //luPerm.init( xwProj.std(), y, nc );     // try to appease valgrind?
-
                 if (params.reoptimize_LU) {
                     luPerm.init( xwProj.std(), y, nc );     // try to appease valgrind?
-                    if( params.reorder_type == REORDER_RANGE_MIDPOINTS ){
-                        throw std::runtime_error("Error, reordering REORDER_RANGE_MIDPOINTS should "
-                                                 "not be used when reoptimizing the LU parameters");
-                    }
                     luPerm.rank( GetMeans(params.reorder_type) );
-                    OPTIMIZE_LU(" OPTLU-Init");         // OPTIMIZE_LU(w,projection,sort_order) ----> luPerm.{l,u}
-                    weights_avg.col(projection_dim) = w.getVec();
-                    lower_bounds_avg.col(projection_dim) = luPerm.l;
-                    upper_bounds_avg.col(projection_dim) = luPerm.u;
+                    PROFILER_STOP_START("optimizeLU.profile");
+                    OPTIMIZE_LU(" OPTLU-Init"); // w,projection,sort_order ----> luPerm.l,u
+                    PROFILER_STOP;
+                    weights_avg.col(prjax) = w.getVec();
+                    lower_bounds_avg.col(prjax) = luPerm.l;
+                    upper_bounds_avg.col(prjax) = luPerm.u;
                     //
-                    if( projection_dim < weights.cols() ) weights.col(projection_dim) = weights_avg.col(projection_dim);
-                    if( projection_dim < lower_bounds.cols() ) lower_bounds.col(projection_dim) = luPerm.l;
-                    if( projection_dim < upper_bounds.cols() ) upper_bounds.col(projection_dim) = luPerm.u;
+                    if( prjax < weights.cols() ) weights.col(prjax) = weights_avg.col(prjax);
+                    if( prjax < lower_bounds.cols() ) lower_bounds.col(prjax) = luPerm.l;
+                    if( prjax < upper_bounds.cols() ) upper_bounds.col(prjax) = luPerm.u;
                 }else{
-                    luPerm.set_lu( lower_bounds_avg.col(projection_dim), upper_bounds_avg.col(projection_dim) );
+                    luPerm.set_lu( lower_bounds_avg.col(prjax), upper_bounds_avg.col(prjax) );
                 }
                 // should update to use the filter class
                 // things will not work correctly with remove_class_constrains on.
                 // We need to update wc, nclass and maybe nc
                 // Check if nclass and nc are used for anything other than weighting
                 // examples belonging to multiple classes
-                if (params.remove_constraints && projection_dim < (int)nProj-1) {
+                if (params.remove_constraints && prjax < (int)nProj-1) {
                     update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
-                    no_filtered = filtered.count(); // <--- OUCH
-                    cout << "Filtered " << no_filtered << " out of " << total_constraints;
+                    no_filtered = filtered.count();
+                    cout<<"Filter["<<filtered.rows()<<"x"<<filtered.cols()<<"] removed "<<no_filtered
+                        <<" of "<<total_constraints<<" constraints"<<endl;
                 }
 
                 // work on this. This is just a crude approximation.
@@ -493,30 +509,65 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 // if weighting is done, the number is different
                 // eliminating one example -class pair removes nclass(exmple) potential
                 // if the class not among the classes of the example
-                if( params.reweight_lambda != REWEIGHT_NONE ){
+                if( params.reweight_lambda != REWEIGHT_NONE ){ // XXX code duplication here
                     long int no_remaining = (long)total_constraints - no_filtered;
                     lambda = no_remaining*1.0/(total_constraints*params.C2);
                     if( params.reweight_lambda == REWEIGHT_ALL ){
                         C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                     }
-                    cout<<" initial reweighting: lambda="<<lambda<<" C1="<<C1<<" C2="<<C2;
+                    // New: test for early exit ...
+                    cout<<setw(20)<<tostring(params.reweight_lambda)<<": total_constraints="
+                        <<total_constraints<<" minus no_filtered="<<no_filtered<<"\n"<<setw(20)
+                        <<""<<"  leaving no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
+                    if( no_filtered > total_constraints )
+                        throw std::runtime_error(" programmer error: removed more constraints than exist?");
+                    if( no_remaining == 0 ){
+                        cout<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left\n"
+                            "  nProj "<<nProj<<" becomes "<<prjax+1U<<endl;
+                        nProj = prjax+1U;
+                        reuse_dim = nProj;
+                        const_cast<param_struct*>(params_arg)->no_projections = nProj; // <-- NB
+                        const_cast<param_struct&>(params).no_projections = nProj; // <-- NB
+                        chopProjections( nProj );
+                        break;
+                    }
                 }
                 cout<<endl;
             }
         }
-        // Note: if soln NOT stored in LONG format, we will redo all projections
-        //       if soln IS  stored in LONG format, we will never re-iterate over previous projections
-        projection_dim = weights.cols();
         obj_idx = objective_val.size();
         obj_idx_avg = objective_val_avg.size();
+        // Note: if soln NOT stored in LONG format, we will redo all projections
+        //       if soln IS  stored in LONG format, we will never re-iterate over previous projections
+        //prjax = weights.cols();
     }
     if(1){
         cout<<"  ... starting with     weights"<<prettyDims(weights)<<":\n"<<weights<<endl;
         cout<<"  ... starting with weights_avg"<<prettyDims(weights_avg)<<":\n"<<weights_avg<<endl;
-        cout<<"  ... beginning at projection_dim="<<projection_dim<<" reuse_dim="<<reuse_dim<<endl;
+        cout<<"  ... beginning at prjax="<<prjax<<" reuse_dim="<<reuse_dim<<endl;
         cout<<"  ... sc_chunks="<<updateSettings.sc_chunks<<" MCTHREADS="<<MCTHREADS<<endl;
     }
-    // XXX make more robust to continued runs?
+    if( params.reoptimize_LU ){
+        cout<<" ... optlu : reoptimized projections 0.."<<reuse_dim<<endl;
+        if ( !params.resume ){
+            cout<<"  ... --reoptlu with no --resume --> early solver exit"<<endl;
+            return;
+        }
+    }
+    if( params.resume ){
+        if( !resume_newdims && reuse_dim > 0U){ // recalc beginning with axis 0
+            prjax = 0U;
+            filtered.reset();
+            // XXX should really agree with above initial settings
+            lambda = params.C1;
+            C1 = params.C1/params.C2;
+            C2 = 1.0;
+        }
+        weights = weights_avg;
+        lower_bounds = lower_bounds_avg;
+        upper_bounds = upper_bounds_avg;
+    }
+    // XXX make more robust to continued runs (zero-initalize new projections) ?
     weights             .conservativeResize(d, nProj);
     weights_avg         .conservativeResize(d, nProj);
     lower_bounds        .conservativeResize(nClass, nProj);
@@ -526,11 +577,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     if(0){ // conservativeResize may make many entries undefined...
         cout<<"  ... resized     weights"<<prettyDims(weights)<<":\n"<<weights<<endl;
         cout<<"  ... resized weights_avg"<<prettyDims(weights_avg)<<":\n"<<weights_avg<<endl;
-        cout<<"  ... beginning at projection_dim="<<projection_dim<<" reuse_dim="<<reuse_dim<<endl;
+        cout<<"  ... beginning at prjax="<<prjax<<" reuse_dim="<<reuse_dim<<endl;
     }
     {// more space for objective_val history, per new projection...
-        size_t const newProjs = (nProj < (size_t)projection_dim? 0U
-                                 : nProj - (size_t)projection_dim);
+        size_t const newProjs = (nProj < (size_t)prjax? 0U
+                                 : nProj - (size_t)prjax);
         if(params.report_epoch > 0){
             size_t const nReports = params.max_iter / params.report_epoch + 1U;
             size_t const more = newProjs * (nReports+1U) + 1000U;
@@ -544,12 +595,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     }
     assert(w.getAvg_t() == 0);
     // if(0) ---> valgrind only 616 errors, 17 contexts, all assoc'd with Eigen::operator<< (likely ignorable?)
-    if(1) for(; projection_dim < (int)nProj; projection_dim++)
+    if(1) for(; prjax < (int)nProj; ++prjax)
     {
-        init_w( w, x,y,nc, weights_avg,projection_dim, (projection_dim<reuse_dim) );
-        cout<<" start projection "<<projection_dim<<" w.norm="<<w.norm();
-        if( w.size()<50U ){ w.toVectorXd(tmp); cout<<" w: "<<tmp.transpose(); }
-        cout<<endl;
+        init_w( w, x,y,nc, weights_avg,prjax, (prjax<reuse_dim) );
+        cout<<" start projection "<<prjax<<" w.norm="<<w.norm();
+        if( w.size()<50U ){ w.toVectorXd(tmp); cout<<" w: "<<tmp.transpose(); } cout<<endl;
         xwProj.w_changed();                     // invalidate w-dependent stuff (projections)
         luPerm.init( xwProj.std(), y, nc );     // std because w can't have started averaging yet
         luPerm.rank( GetMeans(params.reorder_type) );
@@ -560,14 +610,14 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         }
         luPerm.mkok_sortlu();
         PROFILER_STOP;
-        print_report(projection_dim,batch_size, nClass,C1,C2,lambda,w.size(),print_report(x));
+        print_report(prjax,batch_size, nClass,C1,C2,lambda,w.size(),print_report(x));
         t = 0;        // part of MCsoln data -- TODO -- continue iterating
         if(PRINT_O){
             if(0)cout<<" t=0 luPerm.{ok_lu="<<luPerm.ok_lu<<",ok_sortlu="<<luPerm.ok_sortlu
                 <<",  ok_lu_avg="<<luPerm.ok_lu_avg<<",ok_sortlu_avg="<<luPerm.ok_sortlu_avg
                     <<" nAccSortlu_avg="<<luPerm.nAccSortlu_avg<<"}"<<endl;
-            cout<<"objective_val[  t   ]: value    w.norm (initially "<<w.norm()<<")\n"
-                <<"--------------------- -------  -------"<<endl;
+            cout<<"objective_val[  t   ]:       value    w.norm (initially "<<w.norm()<<")\n"
+                <<"--------------------- --------------- ------"<<endl;
 
         }
         PROFILER_START("learning.profile");
@@ -576,34 +626,19 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
             ++t;
             MCiterBools t4(t, params);          // "time for" ... various const bool
             if (!params.report_epoch && t % 1000 == 0) { // print some progress
-                snprintf(iter_str,30, "Projection %d > ", projection_dim+1);
+                snprintf(iter_str,30, "Projection %d > ", prjax+1);
                 print_progress(iter_str, t, params.max_iter);
                 cout.flush();
             }
-            if(t4.finite_diff_test){            // perform finite differences test
-                for (size_t fdtest=0; fdtest<params.no_finite_diff_tests; ++fdtest) {
-                    size_t idx = ((size_t) rand()) % nTrain;
-                    finite_diff_test( w, x, idx, y, nclasses, maxclasses, luPerm.perm/*sorted_class*/,
-                                      luPerm.rev, luPerm.sortlu, filtered, C1, C2, params);
-                }
-            }
-            double eta_t_usual = set_eta(params, t, lambda); // set eta for this iteration
-            //if( params.update_type == MINIBATCH_SGD             // NEW XXX
-            //    || ( params.update_type == SAFE_SGD && t==1 ) ){
-            eta_t = eta_t_usual;
-            //}
-            //if( params.update_type==SAFE_SGD && t4.report ){
-            //    std::cout<<" mcs:eta_t,eta_t'="<<std::right<<std::setw(9)<<eta_t_usual
-            //        <<","<<std::left<<std::setw(9)<<eta_t<<" "; std::cout.flush();
-            //}
+            OPT_GRADIENT_TEST;
+            eta_t = set_eta(params, t, lambda); // set eta for this iteration
             // compute the gradient and update
             //      modifies w, sortedLU, (sortedLU_avg) ONLY  (l,u,l_avg,u_avg values may be stale)
-            // --> update( w, MCpermState, /* R/O: */x, y, MCsoln, MCiterBools, MCiterState, MCbatchState, params )
             // --> the ONLY place where 'w' is modified
-            // update --> invalidates projection_avg and projection
             MCupdate::update(w, luPerm, eta_t,   /*R/O:*/x, y, xSqNorms, C1, C2, lambda, t,
                              nTrain, nclasses, maxclasses, filtered, updateSettings, params);
-            xwProj.w_changed(); // Projections no good. They map raw data in 'x' ---> the updated line in 'w'
+            // update 'w' ==> projections of raw 'x' data (projection_avg & projection) invalid.
+            xwProj.w_changed();
             if(t4.reorder) {
                 if(ITER_TRACE){ std::cout<<" REORDER"<<t<<" "; std::cout.flush(); }
                 if( luPerm.nAccSortlu_avg ) luPerm.mkok_lu_avg();       // sortlu_avg --> {l,u}_avg
@@ -613,9 +648,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 if( luPerm.nAccSortlu_avg ) luPerm.mkok_sortlu_avg();   // {l,u}_avg --> sortlu_avg
             }
             if (t4.optimizeLU){  // w, luPerm-ranking constant, optimize {l,u}. Needs valid 'projection'
-                // if ranking type is REORDER_RANGE_MIDPOINTS, have option to optimizeLU before luPerm.rank()
-                OPTIMIZE_LU(" OPTLU"<<t<<" ");  assert( luPerm.ok_lu ); // sort order unchanged, so sortlu_avg unaffected
-                luPerm.mkok_sortlu(); // XXX is this nec.?
+                // if ranking type is REORDER_RANGE_MIDPOINTS, perhaps optimizeLU before luPerm.rank()?
+                OPTIMIZE_LU(" OPTLU"<<t<<" ");  assert( luPerm.ok_lu );
+                luPerm.mkok_sortlu(); // XXX is this ever nec.?
             }
             bool haveObjectiveHinge = false;
             if(t4.report){ // params.report_epoch && (t % params.report_epoch == 0) )
@@ -633,12 +668,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 #endif
             if(t4.report_avg){
                 double objective_avg;       // calculate the objective for the averaged w [if avail]
-                // if optimizing LU then this is expensive since
-                // it runs the optimizaion
+                // if optimizing LU then this is expensive since it runs the optimization
                 if ( w.getAvg_t() ) { // equiv. t4.doing_avg_epoch, so use *_avg for objective
                     VectorXd sortedLU_test( luPerm.l_avg.size()*2U );
-                    if (params.optimizeLU_epoch > 0) {  // <-- {l,u}_avg used as temporaries in this code block!
-                        OPTIMIZE_LU_AVG("REPORT_AVG_opt");        // NO effect on sortlu_avg (still a sortlu accumulator)
+                    if (params.optimizeLU_epoch > 0) { // <-- Note: {l,u}_avg as SCRATCH storage ...
+                        OPTIMIZE_LU_AVG("REPORT_AVG_opt"); // sortlu_avg UNCHANGED, sortlu ~ accumulator
                         //get_sortedLU( sortedLU_test, l_avg, u_avg, sorted_class);
                         luPerm.toSorted( sortedLU_test, luPerm.l_avg, luPerm.u_avg );
                     }else{ assert( luPerm.nAccSortlu_avg > 0U );
@@ -655,7 +689,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 objective_val_avg[obj_idx_avg++] = objective_avg;
                 if(PRINT_O) {
                     cout<<"objective_avg["<<t<<"]:"<<objective_avg<<" ";
-                    if( w.getAvg_t() ) cout<<w.norm_avg()<<" (avg)"<<endl;      //<-- 'if' to fix valgrind issue
+                    if( w.getAvg_t() ) cout<<w.norm_avg()<<" (avg)"<<endl; // 'if' for valgrind? XXX
                     else               cout<<w.norm()<<" (std)"<<endl;
                 }
             }
@@ -727,20 +761,20 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         if(PRINT_O) cout<<" * END iterations: * luPerm ok_lu="<<luPerm.ok_lu<<" ok_sortlu="<<luPerm.ok_sortlu
                 <<" * luPerm ok_lu_avg="<<luPerm.ok_lu_avg<<" ok_sortlu_avg="<<luPerm.ok_sortlu_avg
                 <<" nAccSortlu_avg="<<luPerm.nAccSortlu_avg<<endl;
-        if(ITER_TRACE){ std::cout<<" UPD-W-AVG.col("<<projection_dim<<")"; }
-        weights.col(projection_dim) = w.getVec();
-        lower_bounds.col(projection_dim) = luPerm.l;
-        upper_bounds.col(projection_dim) = luPerm.u;
+        if(ITER_TRACE){ std::cout<<" UPD-W-AVG.col("<<prjax<<")"; }
+        weights.col(prjax) = w.getVec();
+        lower_bounds.col(prjax) = luPerm.l;
+        upper_bounds.col(prjax) = luPerm.u;
         if( w.getAvg_t() ) { // equiv. ( params.avg_epoch && t > params.avg_epoch )
-            weights_avg.col(projection_dim) = w.getVecAvg();
+            weights_avg.col(prjax) = w.getVecAvg();
             luPerm.mkok_lu_avg(); if( ! luPerm.ok_lu_avg ) throw std::runtime_error("BAD final luPerm.ok_lu_avg");
-            lower_bounds_avg.col(projection_dim) = luPerm.l_avg;
-            upper_bounds_avg.col(projection_dim) = luPerm.u_avg;
+            lower_bounds_avg.col(prjax) = luPerm.l_avg;
+            upper_bounds_avg.col(prjax) = luPerm.u_avg;
         }else{
-            weights_avg.col(projection_dim) = weights.col(projection_dim);
+            weights_avg.col(prjax) = weights.col(prjax);
             luPerm.mkok_lu(); if( ! luPerm.ok_lu ) throw std::runtime_error("BAD final luPerm.ok_lu");
-            lower_bounds_avg.col(projection_dim) = luPerm.l;
-            upper_bounds_avg.col(projection_dim) = luPerm.u;
+            lower_bounds_avg.col(prjax) = luPerm.l;
+            upper_bounds_avg.col(prjax) = luPerm.u;
         }
 
         // should we do this in parallel?
@@ -750,19 +784,21 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         //       and maybe nc
         // check if nclass and nc are used for anything else than weighting examples belonging
         //       to multiple classes
-        if (params.remove_constraints && projection_dim < (int)nProj-1) {
+        if (params.remove_constraints && prjax < (int)nProj-1) {
             if( w.getAvg_t() ){ // equiv. (params.avg_epoch && t > params.avg_epoch )
                 if(ITER_TRACE){ std::cout<<" proj_FILTER_avg "; std::cout.flush(); }
                 luPerm.mkok_lu_avg();  //-- *just* finished doing this
-                update_filtered(filtered, xwProj.avg(), luPerm.l_avg, luPerm.u_avg, y, params.remove_class_constraints);
+                update_filtered(filtered,  /*inputs:*/ xwProj.avg(), luPerm.l_avg, luPerm.u_avg
+                                , y, params.remove_class_constraints);
             }else{
                 if(ITER_TRACE){ std::cout<<" proj_FILTER_std "; std::cout.flush(); }
-                luPerm.mkok_lu();      //-- *just* finished doing this
+                luPerm.mkok_lu();
                 update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
             }
 
-            no_filtered = filtered.count();             // XXX ouch?
-            cout << "Filtered " << no_filtered << " out of " << total_constraints << endl;
+            no_filtered = filtered.count();
+            cout<<"Filter["<<filtered.rows()<<"x"<<filtered.cols()<<"] removed "<<no_filtered
+                <<" of "<<total_constraints<<" constraints"<<endl;
             // work on this. This is just a crude approximation.
             // now every example - class pair introduces nclass(example) constraints
             // if weighting is done, the number is different
@@ -774,6 +810,19 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 if (params.reweight_lambda == REWEIGHT_ALL){
                     C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
                 }
+                // New: test for early exit ...
+                cout<<setw(20)<<tostring(params.reweight_lambda)<<": total_constraints="
+                    <<total_constraints<<" minus no_filtered="<<no_filtered<<"\n"<<setw(20)
+                    <<""<<"  leaving no_remaining="<<no_remaining<<" lambda="<<lambda<<" C1="<<C1<<endl;
+                if( no_filtered > total_constraints )
+                    throw std::runtime_error(" programmer error: removed more constraints than exist?");
+                if( no_remaining == 0 ){
+                    cout<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left to satisfy"<<endl;
+                    const_cast<param_struct*>(params_arg)->no_projections = prjax+1U; // <-- NB
+                    const_cast<param_struct&>(params).no_projections = prjax+1U; // <-- NB
+                    chopProjections( prjax+1U );
+                    break;
+                }
             }
         }
         //C2*=((nTrain-1)*nClass)*1.0/no_remaining;
@@ -781,6 +830,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         PROFILER_STOP;
         if(ITER_TRACE || PRINT_O)
             cout<<endl;
-    } // end for projection_dim
+    } // end for prjax
+    PROFILER_STOP;
 }
 #endif //MCSOLVER_HH

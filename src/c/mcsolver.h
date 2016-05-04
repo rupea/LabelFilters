@@ -165,8 +165,10 @@ struct MCiterBools
     bool const report;               ///< true if param != 0 && t%param==0
     bool const report_avg;           ///< true if param != 0 && t%param==0
     bool const optimizeLU;           ///< true if param != 0 && t%param==0
-    bool const finite_diff_test;     ///< true if param != 0 && t%param==0
     bool const doing_avg_epoch;      ///< avg_epoch && t >= avg_epoch
+#if GRADIENT_TEST
+    bool const finite_diff_test;     ///< true if param != 0 && t%param==0
+#endif
 };
 
 /** solver update step may parallelize by \em chunking the computation. */

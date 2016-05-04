@@ -117,6 +117,7 @@ int main(int argc, char**argv){
             throw;
         }
     }
+    array<char,4> magicHdr;     // NEW: most I/O now done by MCxyData, simplify all this i/o stuff
     DenseM xDense;
     bool denseOk=false;
     SparseM xSparse;
@@ -128,6 +129,7 @@ int main(int argc, char**argv){
             xfs.open(xFile);
             if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
             // Note: after read rows,cols, COULD have alternate reader that checks for exactly correct file size
+            ::detail::io_bin(xfs, magicHdr); // MCxyData::magic_xDense <-- NEW
             ::detail::eigen_io_bin(xfs, xDense);
             if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
             assert( xDense.cols() > 0U );
@@ -136,10 +138,6 @@ int main(int argc, char**argv){
             if( ! xfs.eof() ) throw std::overflow_error("xDense read did not use full file");
             xfs.close();
             denseOk=true;
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            xfs.close();
-            throw;
         }catch(std::exception const& e){
             cerr<<" xFile as DenseM failed: "<<e.what()<<endl;
             xDense.resize(0,0); //denseOk=false;
@@ -148,6 +146,7 @@ int main(int argc, char**argv){
                 xfs.close();
                 xfs.open(xFile);
                 if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+                ::detail::io_bin(xfs, magicHdr); // MCxyData::magic_xSparse <-- NEW
                 ::detail::eigen_io_bin( xfs, xSparse );
                 if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
                 xfs.close();
@@ -173,6 +172,7 @@ int main(int argc, char**argv){
         try{
             yfs.open(yFile);
             if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+            ::detail::io_bin(yfs, magicHdr); // MCxyData::magic_yBin <-- NEW
             ::detail::eigen_io_binbool( yfs, y );
             assert( y.cols() > 0U );
             if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
@@ -198,7 +198,7 @@ int main(int argc, char**argv){
             cout<<"xDense ORIG:\n"<<xDense<<endl;
             cout<<" xnorm!"<<endl;
 #if 1 // perhaps a better alg. but I only programmed it for dense, so far
-            column_normalize(xDense,xmean,xstdev);
+            col_normalize(xDense,xmean,xstdev);
             cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
             cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
 #else

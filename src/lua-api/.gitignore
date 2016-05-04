@@ -3,6 +3,8 @@ x-mnist.bin
 y-mnist.bin
 *.log
 *.soln
+*.proj
+*.vg
 linkme-dbg
 libmclua*
 mc.soln
@@ -19,6 +21,8 @@ mcgen-a3-slc-y.txt
 mcgen-a3-txt.soln
 mcgen-a3-x-D.bin
 mcgen-a3-x-S.bin
+x-mnist-mlc.bin
+y-mnist-mlc.bin
 mnist-x.bin
 mnist-y.bin
 mnist-xquad.bin

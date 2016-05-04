@@ -1,5 +1,10 @@
 /** \file
  * test case generator for multi-class label filter.
+ *
+ * This also predates the official i/o stuff.
+ *
+ * Typically, we write and then check that we can read
+ * back equivalent data.
  */
 
 #include <cstdint>
@@ -13,6 +18,9 @@
 #ifndef USE_LIBMCFILTER
 #define USE_LIBMCFILTER 0
 #endif
+
+// compare 2 std::array<char,4> ...
+#define MAGIC_EQU( A, B ) (A[0]==B[0] && A[1]==B[1] && A[2]==B[2] && A[3]==B[3])
 
 // fwd and function declarations
 namespace mcgen {
@@ -1649,6 +1657,7 @@ int main(int argc, char** argv)
                 cout<<"original example vector x["<<x.size()<<"] -->"
                     <<"x as SparseMf ex"<<prettyDims(ex)<<endl;
                 ofstream ofs(fname);
+                io_bin( ofs, MCxyData::magic_xDense );  // <-- NEW
                 eigen_io_bin( ofs, ex ); // x is Dense
                 ofs.close();
             }
@@ -1664,6 +1673,9 @@ int main(int argc, char** argv)
 #if 1
                 decltype(ex) fx;
                 ifstream ifs(fname);
+                array<char,4> magicHdr;
+                io_bin(ifs, magicHdr);
+                assert( MAGIC_EQU(magicHdr, MCxyData::magic_xDense) );
                 eigen_io_bin( ifs, fx );
                 ifs.close();
                 assert( fx.rows() == ex.rows() );
@@ -1673,6 +1685,9 @@ int main(int argc, char** argv)
                 cout<<"\tGood, read back "<<fname<<" as DenseMf with sumsqr-difference "<<diff<<endl;
 #else
                 ifstream ifs(fname);
+                array<char,4> magicHdr;
+                io_bin(ifs, magicHdr);
+                assert( MAGIC_EQU(magicHdr, MCxyData::magic_xDense) );
                 uint64_t rows,cols;
                 io_bin(ifs,rows);
                 io_bin(ifs,cols);
@@ -1726,6 +1741,7 @@ int main(int argc, char** argv)
             {
                 cout<<" writing "<<fname<<" ... "; cout.flush();
                 ofstream ofs(fname);
+                io_bin( ofs, MCxyData::magic_xSparse ); // <-- NEW
                 eigen_io_bin( ofs, ex ); // x is Dense, ex is Sparse
                 ofs.close();
                 cout<<" OK"<<endl;
@@ -1743,6 +1759,8 @@ int main(int argc, char** argv)
             if(1){ // read it back and assert equivalent data
                 SparseMf fx;
                 ifstream ifs(fname);
+                array<char,4> magicHdr; io_bin(ifs, magicHdr);
+                assert( MAGIC_EQU(magicHdr, MCxyData::magic_xSparse) );
                 eigen_io_bin( ifs, fx );
                 ifs.close();
                 assert( fx.rows() == ex.rows() );
@@ -1755,6 +1773,8 @@ int main(int argc, char** argv)
                 // This should be AUTOMATIC  -- it is now, for SparseM, but not yet for DenseM
                 SparseM fx;
                 ifstream ifs(fname);
+                array<char,4> magicHdr; io_bin(ifs, magicHdr);
+                assert( MAGIC_EQU(magicHdr, MCxyData::magic_xSparse) );
                 eigen_io_bin( ifs, fx );
                 ifs.close();
                 assert( fx.rows() == ex.rows() );
@@ -1798,6 +1818,7 @@ int main(int argc, char** argv)
             }
             {
                 ofstream ofs(fname);
+                io_bin(ofs, MCxyData::magic_yBin);      // <-- NEW
                 //eigen_io_bin( ofs, sy ); // y is sparse bool
                 // 32 nonzero elements stored in 672 bytes  <--- FIXME (printing.hh, eigen_io_bin)
                 // --> 32 nonzero elements stored in 441 bytes  (smaller outerindex)
@@ -1831,9 +1852,11 @@ int main(int argc, char** argv)
             if(1){ // read it back and assert equivalent data
                 SparseMb fy;
                 ifstream ifs(fname);
-                //std::array<char,4> magic = {'S', 'M', 'b', 'b' };
+                //std::array<char,4> magic = {'S', 'M', 'b', 'b' };     // now 0,'Y','s','b'
                 //io_bin( ifs, magic );
                 //cout<<" magic "<<magic[0]<<magic[1]<<magic[2]<<magic[3]; cout.flush();
+                array<char,4> magicHdr; io_bin(ifs, magicHdr);
+                assert( MAGIC_EQU(magicHdr, MCxyData::magic_yBin) );
                 eigen_io_binbool( ifs, fy );
                 ifs.close();
                 cout<<"sy "; dump(cout,sy);     // short output
@@ -1893,6 +1916,7 @@ int main(int argc, char** argv)
             }
             {
                 ofstream ofs(fname);
+                io_bin(ofs, MCxyData::magic_yBin ); // <-- NEW
                 //eigen_io_bin( ofs, sy ); // y is sparse bool
                 // 64 nonzero elements stored in 1056 bytes !!!
                 // --> 64 nonzero elements stored in 825 bytes
@@ -1916,6 +1940,8 @@ int main(int argc, char** argv)
             if(1){ // read it back and assert equivalent data
                 SparseMb fy;
                 ifstream ifs(fname);
+                array<char,4> magicHdr; io_bin(ifs, magicHdr);
+                assert( MAGIC_EQU(magicHdr, MCxyData::magic_yBin) );
                 eigen_io_binbool( ifs, fy );
                 ifs.close();
                 cout<<"sy "; dump(cout,sy);     // short output
@@ -1969,6 +1995,13 @@ int main(int argc, char** argv)
         mcs.nProj       = p.axes;
         mcs.nClass      = p.nClass;     // NO class remap
         //mcs.fname       =
+
+        // solnscale is the 'length' of each projection vector (= col of weights_avg)
+        // solnscale is important because MCsolver is unable to correctly set an initial
+        //       scale for the weights.
+        double solnscale = 1000.0; // (p.axes + 1U); // <-- NEW (multiplier for weight, l AND u)
+        if( p.margin > 0 ) solnscale *= 1/p.fmargin;
+
         { // copy vector<vector<float>> weights ---> Eigen DenseM MCsoln::weights_avg
             mcs.parms.no_projections = mcs.nProj;
             // TODO XXX The following can be played with until something that stays at
@@ -1983,10 +2016,9 @@ int main(int argc, char** argv)
             //mcs.parms.reoptimize_LU = true;
 
             mcs.weights_avg.conservativeResize( mcs.d, mcs.nProj );     // soln, as col. vectors
-            double wnorm = 1.0; // (p.axes + 1U);                                 // <-- NEW
             for(uint32_t d=0U; d<mcs.d; ++d){
                 for(uint32_t s=0U; s<mcs.nProj; ++s){
-                    mcs.weights_avg.coeffRef(d,s) = soln[s][d] * wnorm;
+                    mcs.weights_avg.coeffRef(d,s) = soln[s][d] * solnscale;
                 }
             }
             cout<<"\tw["<<mcs.weights_avg.rows()<<","<<mcs.weights_avg.cols()<<"]\n"
@@ -2021,7 +2053,7 @@ int main(int argc, char** argv)
                         assert( cls < mcs.nClass );
                         for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
                             //cout<<" cls,p = "<<cls<<","<<p;
-                            float const vdots = dot( v, soln[p] );
+                            float const vdots = dot( v, soln[p] ) * solnscale;      // NEW: scaled by solnscale
                             l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
                             u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
                         }
@@ -2032,7 +2064,7 @@ int main(int argc, char** argv)
                             assert( cls < mcs.nClass );
                             for(uint32_t p=0U; p<mcs.nProj; ++p){     // for each soln unit vector
                                 //cout<<" cls,p = "<<cls<<","<<p;
-                                float const vdots = dot( v, soln[p] );
+                                float const vdots = dot( v, soln[p] ) * solnscale;
                                 l.coeffRef(cls,p) = min( static_cast<float>(l.coeff(cls,p)), vdots );    // update l
                                 u.coeffRef(cls,p) = max( static_cast<float>(u.coeff(cls,p)), vdots );    // and u bounds
                             }
@@ -2043,8 +2075,8 @@ int main(int argc, char** argv)
             //cout<<endl;
             // Now push apart the {l,u} bounds by a slight bit (non-zero margin)
             //    see comments in Filter.h about bad things with zero-margin {l,u} !
-            l.array() -= 1.1111e-4;
-            u.array() += 1.1111e-4;
+            l.array() -= 1.1111e-4 * solnscale;
+            u.array() += 1.1111e-4 * solnscale;
             if(1){ //print, you can very that every l,u pairs is shattered when all solns considered
                 cout<<" {l,u} projection bounds from Eigen col(p).transpose() ...:";
                 for(uint32_t p=0U; p<soln.size(); ++p){

@@ -133,7 +133,7 @@ libs-only: | hdr-stamp
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 #demp-proj1 demo-quick demo-proj2 demo-proj3 demo-proj4 mcdumpsoln demo-prof: | libs-only
 
-test: lib demo-printing demo-io do-tests mcgen mcgenx mcproj.log
+test: lib demo-printing demo-io demo-norm do-tests mcgen mcgenx mcproj.log
 long: clean
 	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
 	&& $(MAKE) -j20 do-tests \
@@ -225,9 +225,10 @@ do-vg: demo-mcsolver
 tail-vg:
 	tail -n1 erik/log-op0*.vg
 	tail -n1 erik/log-mp0*.vg
-do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver test-scaling.log
-do-tests: | lib demo-printing demo-io demo-quick demo-mcsolver test-scaling.log
+do-tests: | lib demo-printing demo-io demo-norm demo-quick demo-mcsolver test-scaling.log
+do-tests: | lib demo-printing demo-io demo-norm demo-quick demo-mcsolver test-scaling.log
 	./demo-quick > demo-quick.log 2>&1
+	./demo-norm > demo-norm.log 2>&1
 	./demo-printing > demo-printing.log 2>&1
 	./demo-io > demo-io.log 2>&1
 	./demo-mcsolver > demo-mcsolver.log 2>&1
@@ -333,6 +334,9 @@ demo-parms: erik/demo-parms.cpp libmcfilter-dbg.a
 demo-io: | libmcfilter-dbg.a
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
 	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+demo-norm: | libmcfilter-dbg.a
+demo-norm: erik/demo-norm.cpp libmcfilter-dbg.a
+	$(CXX) -o $@ $(DBGFLAGS) -I. $^
 #static linkage : 2.6M executable
 #mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.
 mcgen: erik/mcgen.cpp
@@ -377,6 +381,50 @@ mcproj.log: mcgenx mcproj mcsolve erik/mcsolve0
 	@echo ""
 	@echo mcproj.log valgrind summary:
 	@grep '\(ERROR SUMMARY\)\|\(== run :\)' mcproj.log
+mcproj1.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in \
+		"./mcproj --solnfile=mcgen-a3-bin.soln -xmcgen-a3-x-D.bin -ymcgen-a3-slc-y.bin -v" \
+		"./mcsolve --solnfile=mcgen-a3-bin.soln -xmcgen-a3-x-D.bin -ymcgen-a3-slc-y.bin -oxx --reoptlu --treport=500" \
+		"./mcproj --solnfile=xx.soln -xmcgen-a3-x-D.bin -ymcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
+mcproj2.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in \
+		"./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin" \
+		"./mcsolve --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin -o xx --reoptlu" \
+		"./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
+mcproj3.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in "./mcproj --solnfile mcgen-a3-txt.soln -x mcgen-a3-x-D.bin" \
+		"./mcproj --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin" \
+		"./mcsolve --solnfile mcgen-a3-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -o xx --reoptlu --resume" \
+		"./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
+mcproj4.log: mcgenx mcproj mcsolve
+	./mcgenx
+	{ for cmd in \
+		"./mcproj --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin" \
+		"./mcsolve --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin -y mcgen-a3-mlc-y.bin -o xx --reoptlu --resume" \
+		"./mcproj --solnfile xx.soln -x mcgen-a3-x-D.bin -y mcgen-a3-slc-y.bin -v" \
+		; do \
+		echo ""; \
+		echo "=== run : $$cmd"; \
+		$$cmd; \
+		done; } 2>&1 | tee $@
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
 #	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTLIB) -lboost_program_options -Wl,-rpath=$(BOOSTLIB) -Wl,-rpath=.

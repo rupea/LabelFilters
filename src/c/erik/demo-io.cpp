@@ -23,18 +23,28 @@ int main(int,char**)
     }
     {
         // b = garbage
-        param_struct b = {1,2,3,4,5,SAFE_SGD,6,ETA_CONST,7,8,9,10,11,12,13,0,0,REWEIGHT_NONE,REORDER_RANGE_MIDPOINTS,0,0,14,15,16,17,18,1,1,19};
+        param_struct b = {1U, 2., 3., 4U, 5., 6U, 7U, false,false, 10U
+            , SAFE_SGD,12,13,ETA_CONST, 15,16,17,18,19,20U,true,true
+            , REWEIGHT_NONE, REORDER_RANGE_MIDPOINTS,false,false
+            IF_GRADIENT_TEST(,25,26,27) };
         cout<<"read from parms.txt"<<endl;
         ifstream f("parms.txt");
         read_ascii( f, b );
 
 #define CHK(PARM) assert( a.PARM == b.PARM )
+        // main
         CHK(no_projections);
         CHK(C1);
         CHK(C2);
         CHK(max_iter);
-        CHK(batch_size);
+        CHK(num_threads);
+        CHK(seed);
+        CHK(resume);
+        CHK(reoptimize_LU);
+        CHK(class_samples);
+        // dev
         CHK(update_type);
+        CHK(batch_size);
         CHK(eps);
         CHK(eta_type);
         CHK(eta);
@@ -50,16 +60,12 @@ int main(int,char**)
         CHK(reorder_type);
         CHK(ml_wt_by_nclasses);
         CHK(ml_wt_class_by_nclasses);
-        CHK(num_threads);
-        CHK(seed);
-        CHK(finite_diff_test_epoch);
-        CHK(no_finite_diff_tests);
+        // compile-time optional
+#if GRADIENT_TEST
         CHK(finite_diff_test_epoch);
         CHK(no_finite_diff_tests);
         CHK(finite_diff_test_delta);
-        CHK(resume);
-        CHK(reoptimize_LU);
-        CHK(class_samples);
+#endif
         //  memcmp failed, even though all fields asserted equivalent --- where is the difference?
         char const* ita = (char const*)(void const*)&a;
         char const* itb = (char const*)(void const*)&b;
@@ -82,21 +88,31 @@ int main(int,char**)
     }
     {
         // b = garbage
-        param_struct b = {1,2,3,4,5,SAFE_SGD,6,ETA_CONST,7,8,9,10,11,12,13,0,0,REWEIGHT_NONE,REORDER_RANGE_MIDPOINTS,0,0,14,15,16,17,18,1,1,19};
+        param_struct b = {1U, 2., 3., 4U, 5., 6U, 7U, false,false, 10U
+            , SAFE_SGD,12,13,ETA_CONST, 15,16,17,18,19,20U,true,true
+            , REWEIGHT_NONE, REORDER_RANGE_MIDPOINTS,false,false
+            IF_GRADIENT_TEST(,25,26,27) };
         cout<<"read from parms.bin"<<endl;
         ifstream f("parms.bin");
         read_binary( f, b );
 
 #define CHK(PARM) assert( a.PARM == b.PARM )
+        // main
         CHK(no_projections);
         CHK(C1);
         CHK(C2);
         CHK(max_iter);
-        CHK(batch_size);
+        CHK(eta);
+        CHK(seed);
+        CHK(num_threads);
+        CHK(resume);
+        CHK(reoptimize_LU);
+        CHK(class_samples);
+        // dev
         CHK(update_type);
+        CHK(batch_size);
         CHK(eps);
         CHK(eta_type);
-        CHK(eta);
         CHK(min_eta);
         CHK(avg_epoch);
         CHK(reorder_epoch);
@@ -109,16 +125,11 @@ int main(int,char**)
         CHK(reorder_type);
         CHK(ml_wt_by_nclasses);
         CHK(ml_wt_class_by_nclasses);
-        CHK(num_threads);
-        CHK(seed);
-        CHK(finite_diff_test_epoch);
-        CHK(no_finite_diff_tests);
+#if GRADIENT_TEST
         CHK(finite_diff_test_epoch);
         CHK(no_finite_diff_tests);
         CHK(finite_diff_test_delta);
-        CHK(resume);
-        CHK(reoptimize_LU);
-        CHK(class_samples);
+#endif
         //  memcmp failed, even though all fields asserted equivalent --- where is the difference?
         char const* ita = (char const*)(void const*)&a;
         char const* itb = (char const*)(void const*)&b;

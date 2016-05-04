@@ -1,4 +1,4 @@
-XX ?= g++
+CXX ?= g++
 ifneq ($(wildcard /opt/boost-1.60),)
 BOOSTDIR ?= /opt/boost-1.60/include
 endif
@@ -18,10 +18,10 @@ ifneq ($(wildcard /usr/include/octave-3.8.1),)
 OCTAVEDIR = /usr
 OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
 endif
-OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
 HDF5_INC ?= -I/usr/include/hdf5/serial
-OCTAVE_CFLAGS ?= -O3 -fPIC -fopenmp -std=c++11 $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG  -I$(BOOSTDIR)
+OCTAVE_CFLAGS ?= -O3 -fPIC -fopenmp -std=c++11 $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
 OCTAVE_LDFLAGS ?= -L../c
+OCTAVE_MEX ?= env CXXFLAGS="$(OCTAVE_CFLAGS)" LDFLAGS="$(OCTAVE_LDFLAGS)" CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
 
 
 VPATH = ../c

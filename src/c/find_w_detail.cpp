@@ -203,6 +203,7 @@ void update_filtered(boolmatrix& filtered, const VectorXd& projection,
 		  filtered.set(i,cp);
 		}
 	      //no_filtered += filtered[i][cp] = filtered[i][cp] || (projection.coeff(i)<l.coeff(cp))||(projection.coeff(i)>u.coeff(cp))?true:false;
+              //assert( 
 	    }
 	  if ( cp == c )
 	    {

@@ -1,5 +1,7 @@
 /** \file
- * learn projections using only C++ */
+  * learn projections using only C++,
+  * via \em low-level \ref solve_optimization routine.
+  */
 #include "../find_w.h"
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -77,6 +79,27 @@ int main(int,char**)
   param_struct params = set_default_params();
   params.update_type    = MINIBATCH_SGD;
   params.batch_size     = nex;            // minibatch == # of examples (important)
+
+  int const settings = 99;      // old setting worked, new ones (apr14 '2016) did not... fixing...
+  if(settings == 0){            // OK
+      params.remove_constraints = false;        // new default is TRUE
+      params.reweight_lambda = REWEIGHT_ALL;    // new default is REWEIGHT_LAMBDA
+  }else if(settings == 1){      // OK
+      params.remove_constraints = false;
+      params.reweight_lambda = REWEIGHT_LAMBDA;
+  }else if(settings == 2){      // OK
+      params.remove_constraints = true;
+      params.reweight_lambda = REWEIGHT_NONE;
+  }else if(settings == 3){      // hit "no more constraints left", now exit without bug :)
+      params.remove_constraints = true;
+      params.reweight_lambda = REWEIGHT_LAMBDA;
+  }else if(settings == 4){      // hit "no more constraints left", now exit without bug :)
+      params.remove_constraints = true;
+      params.reweight_lambda = REWEIGHT_ALL;
+  }else{ // all new settings.  Celebrate if this works!
+      ;
+  }
+
 #if 1 // for a quick run
   params.no_projections = 2U;             // There is only one optimum for problems 0,1,2 (increase to see something in 'top')
   params.max_iter       = nex*1000U;      // trivial problem, so insist on few iterations
@@ -110,6 +133,7 @@ int main(int,char**)
         //params.eta = 100;
         break;
   }
+  cout<<"Initial parameters: "<<params<<endl;
   int const rand_seed = 997787879;
   int const d = 3U;             // x training data dimensionality
 

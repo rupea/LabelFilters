@@ -1,4 +1,5 @@
 #include "PredictionSet.h"
+#include "constants.h" //MCTHREADS
 //#include "Eigen/Dense"
 //#include "Eigen/Sparse"
 
@@ -375,7 +376,7 @@ void PredictionSet::ThreshMetrics(double& MicroF1, double& MacroF1,
 #pragma omp critical
 #endif
       {
-	for (int i=0; i < y.cols(); i++)
+	for (size_t i=0; i < y.cols(); i++)
 	  {
 	    class_total_p[i] += class_total_p_private[i];
 	    class_tp[i] += class_tp_private[i];

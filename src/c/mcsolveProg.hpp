@@ -5,13 +5,17 @@
  */
 #include "find_w.h"
 #include "parameter-args.h"
+#include <memory>
 
 namespace opt {
+
+    class MCprojProgram; // fwd decl, just in case.
 
     /** high level MCsolver api, as used in mcsolve executable */
     class MCsolveProgram : private ::opt::MCsolveArgs, public ::MCsolver {
         typedef ::opt::MCsolveArgs A;
         typedef ::MCsolver S;
+        friend class MCprojProgram;
     public:
 #ifdef NDBEUG
         static const int defaultVerbose=0;
@@ -22,16 +26,27 @@ namespace opt {
         MCsolveProgram( int argc, char** argv
                         , int const verbose=defaultVerbose
                         , param_struct const* const defparms=nullptr );
+        ~MCsolveProgram();
 
         void tryRead( int const verbose=defaultVerbose );        ///< read x,y data, or throw
         void trySolve( int const verbose=defaultVerbose );       ///< solve for projections
-        void trySave( int const verbose=defaultVerbose );        ///< save projections to sonlFile
-        /** display normalized projections.
-         * \c tryDisplay \em normalizes projection directions for display,
-         * so be sure to \c trySave \em before you \c tryDisplay. FIXME */
+        void trySave( int const verbose=defaultVerbose );        ///< save projections to solnFile
+        /** display normalized projections. */
         void tryDisplay( int const verbose=defaultVerbose );
 
         // other utilities ...
+
+        /** create or return a projector for this soln and data, or throw if impossible.
+         *
+         * \b Note: initial impl copies our MCsoln -- could also do it with a single
+         *          \em shared_ptr<MCsoln> I think.
+         *
+         * \c args can be used to override/add projector arguments.
+         * If args are not supplied, then a default set will be provided to
+         * <em>agree as much as possible</em> with settings of this solver
+         */
+        //std::shared_ptr<MCprojProgram> projector(std::string args);
+        MCprojProgram* projector(std::string args);
 
         ::opt::MCsolveArgs const& args() const {return *this;}
         /** utility to save binary Eigen data files.
@@ -56,11 +71,8 @@ namespace opt {
         void quadx();
         //::MCsolver const& solver() const {return *this;}
     private:
-        DenseM xDense;
-        bool denseOk;
-        SparseM xSparse;
-        bool sparseOk;
-        SparseMb y;
+        MCprojProgram * projProg;
+        std::shared_ptr<MCxyData> xy;
     };
 
 }//opt::

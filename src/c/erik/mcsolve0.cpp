@@ -54,26 +54,6 @@ void init( po::options_description & desc ){
         ;
 }
 
-#if 0 // moved to normalization.h (and into library as column_normalize(Dense const& x, VectorXd& mean, VectorXd& stdev))
-template< typename DERIVED >
-void column_mean_stdev( Eigen::DenseBase<DERIVED> const& x, VectorXd & mean, VectorXd &var ){
-    mean.resize( x.cols() );
-    mean.setZero();
-    var.resize( x.cols() );
-    var.setZero();
-    size_t n=0U;
-    VectorXd delta( x.cols() );
-    for(uint32_t r=0U; r<x.rows(); ++r){
-        ++n;
-        delta = x.row(r).transpose() - mean;
-        mean += delta * (1.0/n);
-        var += delta.cwiseProduct( x.row(r).transpose() - mean );
-    }
-    if( n < 2 ) var.setOnes();                  // not enough data to calculate var
-    else var = (var * (1.0/(n-1))).cwiseSqrt(); // var --> correct scale --> stdev
-}
-#endif
-
 void argsParse( int argc, char**argv ){
 #define ARGSDEBUG 1
 #if ARGSDEBUG > 0
@@ -174,6 +154,9 @@ int main(int argc, char**argv){
         if( parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu requires --solnfile=...");
     }
     cout<<"argc,argv -->\n"<<parms<<endl;          // pretty print final parms
+    // Note: now MCxyData handles all the I/O
+    //       MCxyData uses a magic hdr, but I'll just ignore it here.
+    array<char,4> magicHdr;
     DenseM xDense;
     bool denseOk=false;
     SparseM xSparse;
@@ -184,20 +167,19 @@ int main(int argc, char**argv){
         try{
             xfs.open(xFile);
             if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+            ::detail::io_bin(xfs, magicHdr );     // Now this might be MCxyData::magic_xDense
             ::detail::eigen_io_bin(xfs, xDense);
             xfs.close();
             if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
             assert( xDense.cols() > 0U );
             denseOk=true;
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
         }catch(std::exception const& what){
             cerr<<"Retrying xFile as SparseM..."<<endl;
             try{
                 xfs.close();
                 xfs.open(xFile);
                 if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+                ::detail::io_bin(xfs, magicHdr );     // Now this might be MCxyData::magic_xSparse
                 ::detail::eigen_io_bin( xfs, xSparse );
                 if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
                 xfs.close();
@@ -220,12 +202,10 @@ int main(int argc, char**argv){
         try{
             yfs.open(yFile);
             if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
+            ::detail::io_bin(yfs, magicHdr );     // Now this might be MCxyData::magic_yBin
             ::detail::eigen_io_binbool( yfs, y );
             assert( y.cols() > 0U );
             if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
         }catch(std::runtime_error const& e){
             cerr<<e.what()<<endl;
             throw;
@@ -242,7 +222,7 @@ int main(int argc, char**argv){
             cout<<"xDense ORIG:\n"<<xDense<<endl;
             cout<<" xnorm!"<<endl;
 #if 1
-            column_normalize(xDense,xmean,xstdev);
+            col_normalize(xDense,xmean,xstdev);
             cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
             cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
 #else
@@ -256,7 +236,7 @@ int main(int argc, char**argv){
         mcsolver.solve( xDense, y, &parms );
     }else if( sparseOk ){
         assert( ! xnorm );
-        //if( xnorm ){ cout<<" xnorm!"<<endl; column_normalize(xSparse,xmean,xstdev); } // col-norm DISALLOWED
+        //if( xnorm ){ cout<<" xnorm!"<<endl; col_normalize(xSparse,xmean,xstdev); } // col-norm DISALLOWED
         cout<<"xSparse:\n"<<xSparse<<endl;
         cout<<"y:\n"<<y<<endl;
         cout<<"parms:\n"<<parms<<endl;
