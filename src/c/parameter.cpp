@@ -93,7 +93,7 @@ void print_parameter_usage()
       "\n     reweight_lambda - whether to diminish lambda and/or C1 as constraints are eliminated."
       "\n              0 - do not diminish any,"
       "\n              1 - diminish lambda only,"
-      "\n              2 - diminish lambda and C1 (increase C2) [1]."
+      "\n              2 - diminish lambda and C1 (increase C2) [2]."
       "\n     reorder_type - how to order the classes [avg_proj_mean]: "
       "\n              AVG_PROJ_MEANS reorder by the mean of the projection on the"
       "\n              AVERAGED w (if averaging has not started is the ame as proj_mean"
@@ -103,6 +103,13 @@ void print_parameter_usage()
       "\n              to when conssidering other class contraints. [false]"
       "\n     ml_wt_class_by_nclasses - UNTESTED whether to weight an example by the number of classes it"
       "\n              belongs to when conssidering its class contraints.[false]"
+      "\n     init_type - how to initialize w [3]"
+      "\n              0 - initialize with the zero vector"
+      "\n              1 - initialize with the previous projection from w_prev"
+      "\n              2 - initialize with a random vector"
+      "\n              3 - initiazlie with the vector between two random class centers"
+      "\n     init_norm - renormalize the initial w to init_norm. Negative number means not renormalize. [10]"
+      "\n     init_orthogonal - make the initial w orthogonal on previous projections [false]"
 #if GRADIENT_TEST /* || others?*/
       "\n   Compile-time Parameters are:"
       "\n     finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [0]"
@@ -214,6 +221,18 @@ std::string tostring( enum Reweight_Type const e )
     assert(name != nullptr);
     return name;
 }
+std::string tostring( enum Init_W_Type const e )
+{
+    char const *name=nullptr;
+    switch(e){
+        ENUM_CASE(INIT_ZERO);
+        ENUM_CASE(INIT_PREV);
+        ENUM_CASE(INIT_RANDOM);
+        ENUM_CASE(INIT_DIFF);
+    }
+    assert(name != nullptr);
+    return name;
+}
 #undef ENUM_CASE
 
 #define ENUM_FIND( NAME, VALUE ) do { \
@@ -248,6 +267,14 @@ void fromstring( std::string s, enum Reweight_Type &e )
     ENUM_FIND(LAM,  REWEIGHT_LAMBDA);
     ENUM_FIND(ALL,  REWEIGHT_ALL);
     throw runtime_error("Unrecognized string for MCfilter enum Reweight_Type");
+}
+void fromstring( std::string s, enum Init_W_Type &e )
+{
+    ENUM_FIND(ZERO,   INIT_ZERO);
+    ENUM_FIND(PREV,  INIT_PREV);
+    ENUM_FIND(RAND,  INIT_RANDOM);
+    ENUM_FIND(DIFF,  INIT_DIFF);
+    throw runtime_error("Unrecognized string for MCfilter enum Init_W_Type");
 }
 #undef ENUM_FIND
 
@@ -314,6 +341,9 @@ using namespace detail;
         IO_enum(reorder_type); \
         IO_AS(bool,uint32_t,ml_wt_by_nclasses); \
         IO_AS(bool,uint32_t,ml_wt_class_by_nclasses); \
+	IO_enum(init_type); \
+	IO(init_norm); \
+	IO_AS(bool,uint32_t,init_orthogonal); \
         IF_GRADIENT_TEST( IO(finite_diff_test_epoch) ); \
         IF_GRADIENT_TEST( IO(no_finite_diff_tests) ); \
         IF_GRADIENT_TEST( IO(finite_diff_test_delta) ); \

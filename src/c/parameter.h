@@ -92,6 +92,13 @@ enum Reweight_Type
     REWEIGHT_ALL        ///< diminish lambda and C1 ", increase C2
 };
 
+enum Init_W_Type
+  {
+    INIT_ZERO,    // initiazlie with zero
+    INIT_PREV,    // initialize with previous value
+    INIT_RANDOM,  // initialize with random vector
+    INIT_DIFF     // initialize with vector between two class centers
+  };
 
 // ------- enum conversions & I/O
 
@@ -100,11 +107,13 @@ std::string tostring( enum Eta_Type const e );
 std::string tostring( enum Update_Type const e );
 std::string tostring( enum Reorder_Type const e );
 std::string tostring( enum Reweight_Type const e );
+std::string tostring( enum Init_W_Type const e );
 /** throw runtime_error if invalid string. Matches on some substring. */
 void fromstring( std::string s, enum Eta_Type &e );
 void fromstring( std::string s, enum Update_Type &e );
 void fromstring( std::string s, enum Reorder_Type &e );
 void fromstring( std::string s, enum Reweight_Type &e );
+void fromstring( std::string s, enum Init_W_Type &e );
 /** ostreams write enums as strings. XXX Why do these need templating? */
 template<typename OSTREAM> inline
 OSTREAM& operator<<(OSTREAM& os, enum Eta_Type const e) { return os<<tostring(e); }
@@ -114,6 +123,8 @@ template<typename OSTREAM> inline
 OSTREAM& operator<<(OSTREAM& os, enum Reorder_Type const e) { return os<<tostring(e); }
 template<typename OSTREAM> inline
 OSTREAM& operator<<(OSTREAM& os, enum Reweight_Type const e) { return os<<tostring(e); }
+template<typename OSTREAM> inline
+OSTREAM& operator<<(OSTREAM& os, enum Init_W_Type const e) { return os<<tostring(e); }
 
 // --------- parameter structure
 
@@ -151,6 +162,9 @@ typedef struct
   Reorder_Type reorder_type; ///< whether to rank the classes by the mean of the projected examples or by the midpoint \c (u+l)/2 of its [l,u] interval
   bool ml_wt_by_nclasses;  ///< UNTESTED - whether to weight an example by the number of classes it belongs to when considering other class contraints
   bool ml_wt_class_by_nclasses; ///< UNTESTED - whether to weight an example by the number of classes it belongs to when considering its class contraints
+  Init_W_Type init_type; // how to initialize w
+  bool init_orthogonal; // initialize w to be orthogonal on previous projections?
+  double init_norm;  // initialize w to this norm. If negative, no renormalization is performed. 
   //@}
   /// \group Compile-time options
   //@{
@@ -200,6 +214,9 @@ inline param_struct set_default_params()
   def.remove_class_constraints = false;
   def.ml_wt_by_nclasses = false;        // UNTESTED
   def.ml_wt_class_by_nclasses = false;  // UNTESTED
+  def.init_type = INIT_DIFF;
+  def.init_norm = 10; // no good reason for using 10. 
+  def.init_orthogonal = false;
   // Compile-time options
 #if GRADIENT_TEST
   def.finite_diff_test_epoch=0;

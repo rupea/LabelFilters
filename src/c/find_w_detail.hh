@@ -35,60 +35,67 @@ void calc_sqNorms( EigenType const& x, VectorXd& sqNorms ){
      * are \b not yet well-separated. */
 void init_w( WeightVector& w,
              EigenType const& x, SparseMb const& y, VectorXi const& nc,
-             DenseM const& weights, int const projection_dim, bool const weightsCopy/*=false*/ )
+             DenseM const& weights, int const projection_dim,
+	     param_struct const& params)            
 {
     using namespace std;
-    cout<<" init_w : weights.cols()="<<weights.cols()<<" projection_dim="<<projection_dim; cout.flush();
-    if( weightsCopy ){
-        cout<<" reusing existing w_avg.col("<<projection_dim<<") as is"<<endl;
-        assert( weights.cols() >= projection_dim );
-        w.init(weights.col(projection_dim));
-        return;
-    }
-    cout<<" random"; cout.flush();
+
     int const d = x.cols();
     int const noClasses = y.cols();
-    assert( projection_dim < weights.cols() );
-
+    int c1,c2,tries;
+    assert( projection_dim <= weights.cols() );
     VectorXd init(d);
-    //init.setZero();
-    init.setRandom(); init.normalize();
-    
-    if(1){
-        cout<<" + vector-between-2-classes"; cout.flush();
-        // initialize w as vector between the means of two random classes.
-        // should find cleverer initialization schemes
-        int c1, c2, tries=0;
-        // Actually better to select to far classes, probability prop. to dist between classes?
-        // BUT also want to avoid previously chosen directions.
-        // XXX fix this !!!
-        do{
-            c1 = ((int) rand()) % noClasses;
-            ++tries;
-        }while( nc(c1) == 0 && tries < 10 );
-        do{
-            c2 = ((int) rand()) % noClasses;
-            ++tries;
-        }while( (nc(c2) == 0 || c2 == c1) && tries < 50 );
-        if( nc(c1) > 0 && nc(c2) > 0 && c2 != c1 ){
-            VectorXd difference;
-            difference_means(difference,x,y,nc,c1,c2);
-            //cout<<" init["<<init.rows()<<"x"<<init.cols()<<"]"
-            //    <<" difference["<<difference.rows()<<"x"<<difference.cols()<<"]"; cout.flush();
-            assert( difference.rows() == init.rows() );
-            assert( difference.cols() == init.cols() );
-            init.array() += difference.array()*(10.0/difference.norm()); // 10 ? perhaps match margins?
-        }
-    }
 
-    if(1){ // I think starting w should be ~ orthogonal to previous projections.
+    cout<<" init_w : weights.cols()="<<weights.cols()<<" projection_dim="<<projection_dim; cout.flush();
+    
+    switch (params.init_type){
+    case INIT_ZERO:
+      cout << " zero"; cout.flush();
+      init.setZero();
+      break;      
+    case INIT_PREV:
+      cout<<" initializing with weights.col("<<projection_dim<<")"<<endl;
+      init = weights.col(projection_dim);
+      break;
+    case INIT_RANDOM:      
+      cout<<" random"; cout.flush();
+      init.setRandom(); init.normalize();
+      break;      
+    case INIT_DIFF:
+      cout<<" vector-between-2-classes"; cout.flush();
+      // initialize w as vector between the means of two random classes.
+      // should find cleverer initialization schemes
+      tries=0;
+      // Actually better to select to far classes, probability prop. to dist between classes?
+      // BUT also want to avoid previously chosen directions.
+      // XXX fix this !!!
+      do{
+	c1 = ((int) rand()) % noClasses;
+	++tries;
+      }while( nc(c1) == 0 && tries < 10 );
+      do{
+	c2 = ((int) rand()) % noClasses;
+	++tries;
+      }while( (nc(c2) == 0 || c2 == c1) && tries < 50 );
+      if( nc(c1) > 0 && nc(c2) > 0 && c2 != c1 ){
+	difference_means(init,x,y,nc,c1,c2);
+	init.normalize();
+      }
+      break;
+    default:
+      cerr << "ERROR: initilization type not recognized" << endl;
+      exit(-1);
+    }
+    
+    if (params.init_orthogonal)
+      {	// I think starting w should be ~ orthogonal to previous projections.
         //cout<<" + orthogal to prev"; cout.flush();
         try{
-            // orthogonalize to current projection dirns w[*, col<projection_dim]
-            project_orthogonal( init, weights, projection_dim );
+	  // orthogonalize to current projection dirns w[*, col<projection_dim]
+	  project_orthogonal( init, weights, projection_dim );
         }catch(std::runtime_error const& e){
-            cout<<e.what();
-            cout<<" Continuing anyway (just initializing a fresh \"random\" projection vector)"<<endl;
+	  cout<<e.what();
+	  cout<<" Continuing anyway (just initializing a fresh \"random\" projection vector)"<<endl;
         }
         double inorm = init.norm();
         if( init.norm() < 1.e-6 ) {cout<<" randomized"; init.setRandom(); init.normalize();}
@@ -97,8 +104,10 @@ void init_w( WeightVector& w,
     cout<<endl;
     assert( init.size() == d );
     assert( fabs(init.norm() - 1.0) < 1.e-6 );
-    w.init(init);
-    // w.setRandom(); // initialize to a random value
+    if (params.init_norm > 0){
+      init *= params.init_norm;
+    }
+    w.init(init);	
 }
 
     template<typename EigenType>

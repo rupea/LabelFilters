@@ -109,18 +109,27 @@ DEFUN_DLD (oct_find_w, args, nargout,
       tmp = parameters.contents("update_type");
       if (tmp.is_defined())
 	{
-	  if (tmp.string_value() == "minibatch")
-	    params.update_type = MINIBATCH_SGD;
-	  else if (tmp.string_value() == "safe") 
-	    {
-	      params.update_type = SAFE_SGD;
-	      params.batch_size = 1;
-	    }
-	  else 
-	    {
+	  if (tmp.is_numeric_type()){
+	    if (tmp.int_value() > 1){
 	      cerr << "ERROR: update_type value unrecognized" << endl;
 	      exit(-4);
-	    }
+	    }	    	       
+	    params.update_type=static_cast<enum Update_Type>(tmp.int_value());
+	  }
+	  else{
+	    if (tmp.string_value() == "minibatch")
+	      params.update_type = MINIBATCH_SGD;
+	    else if (tmp.string_value() == "safe") 
+	      {
+		params.update_type = SAFE_SGD;
+		params.batch_size = 1;
+	      }
+	    else 
+	      {
+		cerr << "ERROR: update_type value unrecognized" << endl;
+		exit(-4);
+	      }
+	  }
 	}
       tmp = parameters.contents("batch_size");
       if (tmp.is_defined())
@@ -140,19 +149,70 @@ DEFUN_DLD (oct_find_w, args, nargout,
       tmp = parameters.contents("eta_type");
       if (tmp.is_defined())
 	{
-	  if (tmp.string_value() == "const")
-	    params.eta_type = ETA_CONST;
-	  else if (tmp.string_value() == "sqrt") 
-	    params.eta_type = ETA_SQRT;
-	  else if (tmp.string_value() == "lin") 
-	    params.eta_type = ETA_LIN;
-	  else if (tmp.string_value() == "3_4")
-	    params.eta_type = ETA_3_4;
-	  else 
-	    {
+	  if (tmp.is_numeric_type()){
+	    if (tmp.int_value() > 3){
 	      cerr << "ERROR: eta_type value unrecognized" << endl;
 	      exit(-4);
+	    }	    	       
+	    params.eta_type=static_cast<enum Eta_Type>(tmp.int_value());
+	  }
+	  else{
+	    if (tmp.string_value() == "const")
+	      params.eta_type = ETA_CONST;
+	    else if (tmp.string_value() == "sqrt") 
+	      params.eta_type = ETA_SQRT;
+	    else if (tmp.string_value() == "lin") 
+	      params.eta_type = ETA_LIN;
+	    else if (tmp.string_value() == "3_4")
+	      params.eta_type = ETA_3_4;
+	    else 
+	      {
+		cerr << "ERROR: eta_type value unrecognized" << endl;
+		exit(-4);
+	      }
+	  }
+	}
+      tmp = parameters.contents("init_type");
+      if (tmp.is_defined())
+	{
+	  if (tmp.is_numeric_type()){
+	    if (tmp.int_value() > 3){
+	      cerr << "ERROR: init_type value unrecognized" << endl;
+	      exit(-4);
+	    }	    	       
+	    params.init_type=static_cast<enum Init_W_Type>(tmp.int_value());
+	  }
+	  else{
+	    if (tmp.string_value() == "zero"){
+	      params.init_type == INIT_ZERO;
+	      params.init_norm = -1; // do not renormalize by default
+	      params.init_orthogonal = false; // do not orthogonalize by default
 	    }
+	    else if (tmp.string_value() == "prev"){ 
+	      params.init_type = INIT_PREV;
+	      params.init_norm = -1; // do not renormalize by default
+	      params.init_orthogonal = false; // do not orthogonalize by default
+	    }
+	    else if (tmp.string_value() == "random") 
+	      params.init_type = INIT_RANDOM;
+	    else if (tmp.string_value() == "diff")
+	      params.init_type = INIT_DIFF;
+	    else 
+	      {
+		cerr << "ERROR: init_type value unrecognized" << endl;
+		exit(-4);
+	      }
+	  }
+	}
+      tmp = parameters.contents("init_norm");
+      if (tmp.is_defined())
+	{
+	  params.init_norm=tmp.double_value();
+	}      
+      tmp = parameters.contents("init_orthogonal");
+      if (tmp.is_defined())
+	{
+	  params.resume=tmp.bool_value();
 	}
       tmp = parameters.contents("min_eta");
       if (tmp.is_defined())
@@ -182,17 +242,26 @@ DEFUN_DLD (oct_find_w, args, nargout,
       tmp = parameters.contents("reorder_type");
       if (tmp.is_defined())
 	{
-	  if (tmp.string_value() == "avg_proj_means")
-	    params.reorder_type = REORDER_AVG_PROJ_MEANS;
-	  else if (tmp.string_value() == "proj_means") 
-	    params.reorder_type = REORDER_PROJ_MEANS;
-	  else if (tmp.string_value() == "range_midpoints") 
-	    params.reorder_type = REORDER_RANGE_MIDPOINTS;
-	  else 
-	    {
+	  if (tmp.is_numeric_type()){
+	    if (tmp.int_value() > 2){
 	      cerr << "ERROR: reorder_type value unrecognized" << endl;
 	      exit(-4);
-	    }
+	    }	    	       
+	    params.reorder_type=static_cast<enum Reorder_Type>(tmp.int_value());
+	  }
+	  else{
+	    if (tmp.string_value() == "avg_proj_means")
+	      params.reorder_type = REORDER_AVG_PROJ_MEANS;
+	    else if (tmp.string_value() == "proj_means") 
+	      params.reorder_type = REORDER_PROJ_MEANS;
+	    else if (tmp.string_value() == "range_midpoints") 
+	      params.reorder_type = REORDER_RANGE_MIDPOINTS;
+	    else 
+	      {
+		cerr << "ERROR: reorder_type value unrecognized" << endl;
+		exit(-4);
+	      }
+	  }
 	}
       tmp = parameters.contents("optimizeLU_epoch");
       if (tmp.is_defined())
@@ -212,7 +281,27 @@ DEFUN_DLD (oct_find_w, args, nargout,
       tmp = parameters.contents("reweight_lambda");
       if (tmp.is_defined())
 	{
-	  params.reweight_lambda=static_cast<enum Reweight_Type>(tmp.int_value());
+	  if (tmp.is_numeric_type()){
+	    if (tmp.int_value() > 2){
+	      cerr << "ERROR: reweight_lambda int value of " << tmp.int_value() << " unrecognized" << endl;
+	      exit(-4);
+	    }	    	       
+	    params.reweight_lambda=static_cast<enum Reweight_Type>(tmp.int_value());
+	  }else{
+	    if (tmp.string_value() == "none")
+	      params.reweight_lambda = REWEIGHT_NONE;
+	    else if (tmp.string_value() == "lambda") 
+	      params.reweight_lambda = REWEIGHT_LAMBDA;
+	    else if (tmp.string_value() == "all") 
+	      params.reweight_lambda = REWEIGHT_ALL;
+	    else 
+	      {
+		cerr << "ERROR: reweight_lambda value " << tmp.string_value() << " unrecognized" << endl;
+		exit(-4);
+	      }
+	  }
+	  
+	    
 	}
       tmp = parameters.contents("ml_wt_by_nclasses");
       if (tmp.is_defined())

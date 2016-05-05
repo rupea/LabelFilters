@@ -346,7 +346,7 @@ void solve_optimization(DenseM& weights, DenseM& lower_bounds,
     for(; projection_dim < no_projections; projection_dim++)
     {
         // XXX ohoh, if reoptimize_LU, then are some things already known?
-        init_w      ( w, x,y,nc, weights_avg,projection_dim);
+        init_w      ( w, x,y,nc, weights_avg,projection_dim, params);
         w.project   ( projection,x);        // project each example onto current projection dirn, w
         init_lu     ( l,u,projection, y,nc); // init l, u 
 

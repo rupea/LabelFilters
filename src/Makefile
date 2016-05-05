@@ -22,10 +22,10 @@ OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1
 endif
 
 HDF5_INC ?= -I/usr/include/hdf5/serial
-OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -std=c++11 $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
+OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -std=c++11 -march=native -ffast-math -m64 -pipe $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
 OCTAVE_LDFLAGS ?= -L../c
 OCTAVE_MEX ?= env CXXFLAGS="$(OCTAVE_CFLAGS)" LDFLAGS="$(OCTAVE_LDFLAGS)" CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
-LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -DNDEBUG -I$(OCT_INC) -I..
+LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -DNDEBUG $(OCT_INC) -I..
 
 
 NCPUS:=$(shell cat /proc/cpuinfo | grep '^processor' | wc -l)
@@ -35,7 +35,7 @@ export
 
 .PHONY: all clean octave libsvm liblinear lua libmcfilter
 
-all: octave libsvm liblinear
+all: octave libsvm liblinear standalone
 
 # lua and libmcfilter targets do not involve octave (just c++ and milde_core's lua)
 lua: libmcfilter | libmcfilter
@@ -43,11 +43,8 @@ lua: libmcfilter | libmcfilter
 libmcfilter:
 	$(MAKE) -C c $(JOBS) lib
 
-profile: octave.profile libsvm liblinear
-
-octave.profile:
-	cd octave && make profile
-
+standalone: 
+	cd c && make
 octave:
 	cd octave && make
 

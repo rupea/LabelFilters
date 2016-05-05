@@ -26,7 +26,7 @@ ifneq ($(wildcard /usr/include/octave-3.8.1),)
 OCTAVEDIR = /usr
 OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
 endif
-OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile
+OCTAVE_MEX = env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile
 OCTAVE_MEX_OPTION = --mex
 OCTAVE_MEX_EXT = mex
 #OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -I$(OCTAVEDIR)/include/octave-3.8.2/octave/ -I..

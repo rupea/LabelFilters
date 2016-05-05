@@ -597,7 +597,13 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     // if(0) ---> valgrind only 616 errors, 17 contexts, all assoc'd with Eigen::operator<< (likely ignorable?)
     if(1) for(; prjax < (int)nProj; ++prjax)
     {
-        init_w( w, x,y,nc, weights_avg,prjax, (prjax<reuse_dim) );
+      //        init_w( w, x,y,nc, weights_avg,prjax, (prjax<reuse_dim) );
+      if (prjax < reuse_dim){
+	w.init(weights_avg.col(prjax));
+      }
+      else{
+        init_w( w, x,y,nc, weights_avg,prjax, params);
+      }
         cout<<" start projection "<<prjax<<" w.norm="<<w.norm();
         if( w.size()<50U ){ w.toVectorXd(tmp); cout<<" w: "<<tmp.transpose(); } cout<<endl;
         xwProj.w_changed();                     // invalidate w-dependent stuff (projections)
