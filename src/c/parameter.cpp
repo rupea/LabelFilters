@@ -172,6 +172,10 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     WIDE(os,c2,right<<setw(11)<<"seed "<<left<<p.seed);
     WIDE(os,c3,right<<setw(15)<<"wt_by_nclasses "<<left<<p.ml_wt_by_nclasses);      // bool
     os<<endl;
+    WIDE(os, c1, right<<setw(14)<<"inittype "<<left<<tostring(p.init_type));
+    WIDE(os, c2, right<<setw(11)<<"initnnorm "<<left<<p.init_norm);
+    WIDE(os, c3, right<<setw(15)<<"initorthogonal "<<left<<p.init_orthogonal);   // bool
+    os<<endl;
     return os;
 }
 
