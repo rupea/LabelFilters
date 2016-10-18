@@ -68,13 +68,24 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 	  DotProductInnerVector(outs,w,x,i);
 	  // should preallocate to be more efficient
 	  PredVec* pv = predictions->NewPredVecAt(i,noClasses);
+	  if (prune)
+	    {
+	      pv->set_prune_params(keep_size,keep_thresh);
+	    }
 	  for (size_t c = 0; c < noClasses; c++)
 	    {
-	      pv->add_pred(static_cast<predtype> (outs.coeff(c)),c+start_class);
+	      if(prune)
+		{
+		  pv->add_and_prune(static_cast<predtype> (outs.coeff(c)),c+start_class);
+		}
+	      else
+		{
+		  pv->add_pred(static_cast<predtype> (outs.coeff(c)),c+start_class);
+		}
 	    }
 	  if (prune)
 	    {
-	      pv->prune(keep_size, keep_thresh);
+	      pv->free_reserved();
 	    }
 	}
       nact = n*noClasses;
@@ -100,17 +111,28 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 	  size_t nactive = act->count();
 	  totalactive += nactive;
 	  PredVec* pv = predictions->NewPredVecAt(i,nactive);
+	  if (prune)
+	    {
+	      pv->set_prune_params(keep_size,keep_thresh);
+	    }
 	  size_t c = act->find_first();	
 	  while (c < noClasses)
 	    {
 	      // could eliminate the multiplication for only one active class
 	      predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
-	      pv->add_pred(out,c+start_class);
+	      if(prune)
+		{
+		  pv->add_and_prune(out, c+start_class);
+		}
+	      else
+		{
+		  pv->add_pred(out ,c+start_class);
+		}
 	      c = act->find_next(c);
 	    }
 	  if (prune)
 	    {
-	      pv->prune(keep_size, keep_thresh);
+	      pv->free_reserved();
 	    }	
 	}
       nact = totalactive;
@@ -142,7 +164,7 @@ void predict( PredictionSet* predictions,
       cout << "Predicting " << n << "    " << noClasses << endl;
     }
   bool prune = !(keep_thresh == boost::numeric::bounds<predtype>::lowest() && keep_size == boost::numeric::bounds<size_t>::highest());
-
+      
   size_t i;
   if (active == NULL)
     {
@@ -155,25 +177,42 @@ void predict( PredictionSet* predictions,
       for (i = 0; i < n; i++)
 	{	  	
 	  //outs = x.row(i)*(w.cast<double>());	
+	  // if (i % 100 == 0) 
+	  //   {
+	  //     std::cerr << i << endl;
+	  //   }
 	  DotProductInnerVector(outs,w,x,i);
 	  // should preallocate to be more efficient	
 	  PredVec* pv;
 	  if (start_class == 0) // assumes chunk 0 is always the first
 	    {
 	      pv = predictions->NewPredVecAt(i,noClasses);
+	      if (prune)
+		{
+		  // should check somewhere that keep_size and keep_thresh is consistent for different chunks
+		  // maybe keep_sze and keep_thresh should be members of of PredictionSet
+		  pv->set_prune_params(keep_size,keep_thresh);
+		}
 	    }
 	  else
 	    {
 	      pv = predictions->GetPredVec(i);
 	      pv->reserve_extra(noClasses);
-	    }
+	    }	  
 	  for (size_t c = 0; c < noClasses; c++)
 	    {
-	      pv->add_pred(static_cast<predtype> (outs.coeff(c)),c+start_class);
+	      if (prune)
+		{
+		  pv->add_and_prune(static_cast<predtype> (outs.coeff(c)),c+start_class);
+		}
+	      else
+		{
+		  pv->add_pred(static_cast<predtype> (outs.coeff(c)),c+start_class);
+		}
 	    }
 	  if (prune)
 	    {
-	      pv->prune(keep_size, keep_thresh);
+	      pv->free_reserved();
 	    }
 	}
       nact = n*noClasses;
@@ -187,10 +226,7 @@ void predict( PredictionSet* predictions,
       ProfilerStart("projected_predict.profile");
       #endif
       assert(active->size() == n);
-      if(n>0)
-	{
-	  assert((*active)[0]->size() == noClasses);
-	}
+      assert(n<=0 || (*active)[0]->size() == noClasses);
       size_t totalactive = 0;
 #pragma omp parallel for default(shared) reduction(+:totalactive)
       for (i = 0; i < n; i++)
@@ -202,6 +238,12 @@ void predict( PredictionSet* predictions,
 	  if (start_class == 0) // assumes chunk 0 is always the first
 	    {
 	      pv = predictions->NewPredVecAt(i,nactive);
+	      if (prune)
+		{
+		  // should check somewhere that keep_size and keep_thresh is consistent for different chunks
+		  // maybe keep_sze and keep_thresh should be members of of PredictionSet
+		  pv->set_prune_params(keep_size,keep_thresh);
+		}
 	    }
 	  else
 	    {
@@ -213,16 +255,23 @@ void predict( PredictionSet* predictions,
 	    {
 	      // predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
 	      predtype out = static_cast<predtype>((x.row(i)*w.col(c).cast<double>())(0,0));
-	      pv->add_pred(out,c+start_class);
+	      if (prune)
+		{
+		  pv->add_and_prune(out,c+start_class);
+		}
+	      else
+		{
+		  pv->add_pred(out,c+start_class);
+		}
 	      c = act->find_next(c);
 	    }
 	  if (prune)
 	    {
-	      pv->prune(keep_size, keep_thresh);
+	      pv->free_reserved();
 	    }	
 	}
       nact = totalactive;
-
+      
       #ifdef PROFILE
       ProfilerStop();
       #endif

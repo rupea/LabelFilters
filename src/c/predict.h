@@ -3,6 +3,7 @@
 
 #include "typedefs.h"
 #include "PredictionSet.h"
+#include "filter.h"
 
 /** Given col-wise projection vectors, return the final bitmap of allowed classes.
  * \p no_active sum of <B>1</B>s count of final projection bitmap over all examples.<\br>
@@ -25,6 +26,19 @@
 ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& projections,
                                        const DenseColM& lmat, const DenseColM& umat,
                                        bool verbose);
+
+
+
+/** Given col-wise projection vectors, update the bitmap of allowed classes.
+ * \p active  bitmap of allowed classes to be updated. If it is nullptr it will be initialized.
+ * \p f       a Filter object (fast bitmap lookup) used to update the active classes. 
+ *
+ * - applying a Filter to the projection of an example gives a bitset
+ *   - with <B>1</B>s for each allowed class
+ *
+ * \return the total number of active classes in active (the total number of bits set to 1)
+ */
+size_t update_active(ActiveDataSet** active, Filter const& f, VectorXd const&  proj);
 
 /** For each row-wise example in matrix \c x, calculate the class filter.
  * \p no_active sum of <B>1</B>s count of final projection bitmap over all examples.<\br>

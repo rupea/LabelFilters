@@ -1,203 +1,197 @@
-function ova_filename = train_ova_db(input_params)
+# function to train an OVA model
 
-  filename_fields = strsplit(input_params.filename_fields);
-  filter_name_fields = strsplit(input_params.filter_name_fields);
+# ova_params - a struct that holds parameters for training the ova model. These parameters will be added to the EDB. 
+#              It should have a field named model_type that indicates the ova model (svm or nb for now)
+#              before adding to the EDB, details for the training data and filter (if any) will be appended 
 
-  ova_params = rmfield(input_params,["n_batches";"min_batch_size";"data_query";"data_file";"filter_query";"retrain";"filter_file";"filter_name";"filter_name_fields";"filename";"filename_fields"]);
+# additional_params - parameters that will not be included in the EDB. This include teh data query or data_file, 
+#                     filter_query/file, n_batches and min_batch_size for parallel training of SVMs, whether to retrain
+#                     the method, how to name the files, etc. 
+
+function ova_filename = train_ova_db(ova_params, additional_params)
   
-  if (!ova_params.keep_out)
-    ##threshold is irrelevant
-    ova_params = rmfield(ova_params,"threshold");
+  function s=combine_structs(varargin) 
+    for i=1:nargin 
+      a=varargin{i};
+      for [v,n]=a 
+	s.(n)=v; 
+      endfor 
+    endfor 
+  endfunction 
+
+
+  if (isfield(additional_params, "filename_fields"))
+    filename_fields = strsplit(additional_params.filename_fields);
+  else
+    filename_fields = {"__HASH"} #use the hash as a default file name
   endif
-
-  ova_params.type = "ova_model";
-  ova_params.model_type = "svm";
   
+  if (isfield(additional_params, "filter_name_fields"))
+    filter_name_fields = strsplit(additional_params.filter_name_fields);
+  else
+    filter_name_fields = {};
+  endif
+  
+  ova_params.type = "ova_model";
 
-  if (! isempty(input_params.data_query))
-    db_data_entries = ds_query(input_params.data_query);
+  
+  if (!isfield(ova_params,"keep_out") || !ova_params.keep_out)
+    ##threshold is irrelevant
+    if (isfield(ova_params, "threshold"))
+      ova_params = rmfield(ova_params,"threshold");
+    endif
+  endif  
+
+  db_data_entries = {};
+  if (isfield(additional_params,"data_query") && !isempty(additional_params.data_query))
+    db_data_entries = edb_query(additional_params.data_query);
     if (length(db_data_entries) == 1 )
       db_data_entries = db_data_entries{1};
-      input_params.data_file = db_data_entries.db_path;
-      ova_params.data = db_data_entries.params;
+      additional_params.data_file = db_data_entries.path;
+      ova_params.data = db_data_entries;
     elseif (length(db_data_entries) == 0)
       error("Query for the data file returned no matches");
     else
       error("Query for the data file returned more than one match");
     endif
+  elseif (isfield(additional_params,"data_file") && !isempty(additional_params.data_file))
+
+    ## no more data substructure because we don't support complex keys at this time. 
+    #ova_params.data.type = "local_file";
+    #ova_params.data.filename = additional_params.data_file;
+
+    ## store the filename in the data param instead 
+    ova_params.data = additional_params.data_file;
+
+    ## remove all the data components from the filed name since we do not have a db structure for data
+    if (any(strncmp(filename_fields,"data.",5)))
+      filename_fields = filename_fields(!strncmp(filename_fields,"data.",5));
+      ## no more data substructure because we don't support complex keys at this time. 
+      #filename_fields(end+1) = "data.type";
+    endif
   else
-    if (isempty(input_params.data_file))
-      error("No data file specified");
-    endif
-    ova_params.data.type = "local_file";
-    ova_params.data.filename = input_params.data_file;
-    
-    local_filename_fields = filename_fields(!strncmp(filename_fields,"data.",5));
-    time_field = any(strcmp(local_filename_fields,"__TIME"));
-    local_filename_fields = local_filename_fields(!strcmp(local_filename_fields,"__TIME"));
-    hash_field = any(strcmp(local_filename_fields,"__HASH"));
-    local_filename_fields = local_filename_fields(!strcmp(local_filename_fields,"__HASH"));
-    local_filename_fields(end+1) = "data.type";
-    if (time_field)
-      local_filename_fields(end+1) = "__TIME";
-    endif
-    if (hash_field)
-      local_filename_fields(end+1) = "__HASH";
-    endif
-    filename_fields = local_filename_fields;
+    error("No data file specified");
   endif
   
-  input_params.filter_str = input_params.filter_name;
-  if (! isempty(input_params.filter_query))
-    db_filter_entries = ds_query(input_params.filter_query);
+  db_filter_entries = {};
+  if (isfield(additional_params,"filter_query") && !isempty(additional_params.filter_query))
+    db_filter_entries = edb_query(additional_params.filter_query);
     if (length(db_filter_entries) == 1 )
       db_filter_entries = db_filter_entries{1};
-      input_params.filter_file = db_filter_entries.db_path;
-      ova_params.filter = db_filter_entries.params;
-      if (!isempty(input_params.filter_name))
-	input_params.filter_str = input_params.filter_name;
+      additional_params.filter_file = db_filter_entries.path;
+      ova_params.filter = db_filter_entries;
+      if (isfield(additional_params,"filter_name") && !isempty(additional_params.filter_name))
+	additional_params.filter_name = additional_params.filter_name;
       else
-	input_params.filter_str = ds_name(db_filter_entries.params, filter_name_fields);
+	additional_params.filter_name = edb_name(db_filter_entries, filter_name_fields, false);
       endif
     elseif (length(db_filter_entries) == 0)
       error("Query for the data file returned no matches");
     else
       error("Query for the data file returned more than one match");
     endif
-  elseif (!isempty(input_params.filter_file))  
-    ova_params.filter.type = "local_file";
-    ova_params.filter.filename = input_params.filter_file;
-    if (!exist(input_params.filter_file))
+  elseif (isfield(additional_params,"filter_file") && !isempty(additional_params.filter_file))  
+    ## no more filter substructure because we don't support complex keys at this time. 
+    ##ova_params.filter.type = "local_file";
+    ##ova_params.filter.filename = additional_params.filter_file;
+
+    ## store the filter filename in the filter param instead
+    ova_params.filter = additional_params.filter_file;
+
+    if (!exist(additional_params.filter_file))
       error("Required local filter file does not exist");
     endif
-    if (isempty(input_params.filter_name))
-      input_params.filter_str = "local_file";
+    if (!isfield(additional_params,"filter_name") || isempty(additional_params.filter_name))
+      additional_params.filter_name = "local_file";
     endif
   else
-    ova_params.filter.type = "no_filter";
-    if (isempty(input_params.filter_name))
-      input_params.filter_str = "full";
+    ## no more filter substructure because we don't support complex keys at this time. 
+    ##ova_params.filter.type = "no_filter";
+    ova_params.filter = "no_filter";
+
+    if (!isfield(additional_params,"filter_name") || isempty(additional_params.filter_name))
+      additional_params.filter_name = "full";
+    endif
+  endif
+
+  ## no more data substructure because we don't support complex keys at this time. 
+  #if (strcmp(ova_params.filter.type,"local_file") || strcmp(ova_params.filter.type,"no_filter"))
+  if (!isstruct(ova_params.filter))
+    ## remove all the filter components from the filed name since we do not have a db structure for filter
+    if (any(strncmp(filename_fields,"filter.",7)))
+      filename_fields = filename_fields(!strncmp(filename_fields,"filter.",7));
+      ## no more filter substructure because we don't support complex keys at this time. 
+      ## filename_fields(end+1) = "filter.type";
     endif
   endif
   
-  if (strcmp(ova_params.filter.type,"local_file") || strcmp(ova_params.filter.type,"no_filter"))
-    local_filename_fields = filename_fields(!strncmp(filename_fields,"filter.",7));
-    time_field = any(strcmp(local_filename_fields,"__TIME"));
-    local_filename_fields = local_filename_fields(!strcmp(local_filename_fields,"__TIME"));
-    hash_field = any(strcmp(local_filename_fields,"__HASH"));
-    local_filename_fields = local_filename_fields(!strcmp(local_filename_fields,"__HASH"));
-    local_filename_fields(end+1) = "filter.type";
-    if (time_field)
-      local_filename_fields(end+1) = "__TIME";
-    endif
-    if (hash_field)
-      local_filename_fields(end+1) = "__HASH";
-    endif
-    filename_fields = local_filename_fields;
-  endif
-  
-  
-  db_ova_entries = ds_query(ova_params); 
+  db_ova_entries = edb_query(ova_params); 
   if (length(db_ova_entries) > 1) 
     error("More than one existing db entry matches the ova parameters.");
   endif
   if (length(db_ova_entries) == 1)
     db_ova_entries = db_ova_entries{1};
-    if (input_params.retrain)
-      ds_unlink(db_ova_entreis.db_path);
-      ds_remove(ova_params);
-      unlink(db_ova_entries.params.filename);
+    if (additional_params.retrain)
+      edb_remove(db_ova_entries);
+      if (exist(db_ova_entries.path,"file"))
+	unlink(db_ova_entries.path);
+      endif
     else
-      ova_filename = db_ova_entries.params.filename;
+      ## the ova file is not acutally stored in the edb, so we do not need to download it.
+      ova_filename = db_ova_entries.filename;
       return;
     endif
   endif 
   
   ## get the data and the filter file if not already local
-  if (! isempty(input_params.data_query) && !exist(db_data_entries.db_path))
-    db_data_entries_get = ds_get(input_params.data_query);
-    ## need to check if nothing has changed in the db 
-    ## between the time we queried for the data file and we 
-    ## got the datafile
-    if (length(db_data_entreis_get) == 1 )
-      db_data_entreis_get = db_data_entreis_get{1};
-      if (!isequal(db_data_entries_get,db_data_entries))
-	exit("DB entry for the data has changed between querying and getting it.");
-      endif
-    elseif (length(db_data_entries_get) == 0)
-      error("The data file was removed from the DB");
-    else
-      error("Too many DB entries match the data file query");
+  if (length(db_data_entries)==1)
+    downloaded_ids = edb_download(db_data_entries); #download/update the local file if necessary
+    if (length(downloaded_ids) != 1)
+      error("Error downloading the data file from edb.");
     endif
   endif
-  
-  if (!isempty(input_params.filter_query) && !exist(db_filter_entries.db_path))
-    db_filter_entries_get = ds_get(input_params.filter_query);
-    ## need to check if nothing has changed in the db 
-    ## between the time we queried for the data file and we 
-    ## got the datafile
-    if (length(db_filter_entries_get) == 1 )
-      db_filter_entries_get = db_filter_entries_get{1};
-      if (!isequal(db_filter_entries_get,db_filter_entries))
-	exit("DB entry for the data has changed between querying and getting it.");
-      endif
-    elseif (length(db_filter_entries_get) == 0)
-      error("The data file was removed from the DB");
-    else
-      error("Too many DB entries match the data file query");
-    endif
-  endif
-  
-  
-  [data_dir, data_file] = fileparts(input_params.data_file);
-  if (isempty(data_dir))
-    data_dir = "./"
-  else
-    data_dir = [data_dir "/"];
-  endif
-  
-  
-  if (isempty(input_params.threshold))
-    thresh_str = "none";
-  else
-    thresh_str = num2str(input_params.threshold);
-  end
-  
-  if (isempty(input_params.filename)) 
-    input_params.filename = ["svm_results/" ds_name(ova_params, filename_fields)];
-  endif
-  
-  
-  if (!isempty(input_params.filename) && exist(input_params.filename,"file"))
-    ova_filename = input_params.filename;
-  else    
-    if (isempty(input_params.filter_name))
-      input_params.filter_str = [input_params.filter_str "__" ds_name(ova_params, {"__HASH"})];
-    endif      
-    ova_filename = ["svm_results/svm_" data_file "_C" num2str(ova_params.C) "_threshold" thresh_str "_projected_" input_params.filter_str ".mat"];  
-    mkdir("svm_results");  
-    perform_parallel_projected_multilabel_svm(data_file, input_params.C, [], data_dir, input_params.retrain, input_params.filter_file, input_params.filter_str, input_params.threshold, input_params.solver, input_params.solverparam, input_params.n_batches, input_params.min_batch_size, input_params.sparsemodel, input_params.keep_out, input_params.wfilemap);      
-  endif
-  
-  if (!isempty(input_params.filename) && !strcmp(input_params.filename,ova_filename))
-    movefile(ova_filename,input_params.filename,"f")
-    if (input_params.wfilemap)
-      movefile([ova_filename ".wmap"], [input_params.filename ".wmap"], "f");
-    endif
-    ova_filename = input_params.filename;
-  endif
-  
-  ova_params.filename = ova_filename;
 
-  if (exist(ova_params.filename,"file") && (!input_params.wfilemap || exist([ova_params.filename ".wmap"],"file")))
-    ## put a dummy file in the db
-    dbfile = [ova_params.filename ".dbstore"];
-    fid = fopen(dbfile,"w");
-    fputs(fid,ova_params.filename);
-    fclose(fid);  
-    ds_add(dbfile, ova_params);
+  if (length(db_filter_entries)==1)
+    downloaded_ids = edb_download(db_filter_entries); #download/update the local file if necessary
+    if (lenght(downloaded_ids) != 1)
+      error("Error downloading the filter file from edb.");
+    endif
   endif
   
-  ova_filename = ova_params.filename;
+ 
+  if (isempty(additional_params.filename))
+    additional_params.filename = [ova_params.model_type "_results/" edb_name(ova_params, filename_fields)];
+  endif
+  
+  
+  if (!isempty(additional_params.filename) && exist(additional_params.filename,"file") && (!ova_params.wfilemap || exist([additional_params.filename ".wmap"],"file")))
+    ova_filename = additional_params.filename;
+  else    
+    params = combine_structs(additional_params, ova_params);
+    if ( strcmp(ova_params.model_type,"svm") )
+      train_svm(params);
+    elseif ( strcmp(ova_params.model_type,"nb") )
+      if (!isfield(ova_params,"bias"))
+	ova_params.bias = 1; #indicate that there is a bias column, and what the bias should be
+      endif
+      train_nb(params);      
+    else
+      error(["Ova model type " ova_params.model_type " is not implemented."]);
+    endif
+  endif
+  
+  
+  if (exist(additional_params.filename,"file") && (!ova_params.wfilemap || exist([additional_params.filename ".wmap"],"file")))
+    ## put a dummy file in the db
+    dbfile = [additional_params.filename ".dbstore"];
+    fid = fopen(dbfile,"w");
+    fputs(fid,additional_params.filename);
+    fclose(fid);  
+    ova_params.filename = additional_params.filename;
+    edb_put(dbfile, ova_params);
+    ## no need to upload the file since it is just a dummy file
+  endif
+  
+  ova_filename = additional_params.filename;
   return;
 end

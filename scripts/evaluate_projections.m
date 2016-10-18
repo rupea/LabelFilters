@@ -15,7 +15,8 @@ addpath([srcdir "/octave/"])
 addpath([srcdir "/libsvm-3.17/matlab/"])
 addpath([srcdir "/liblinear-1.94/matlab/"])
 
-addpath("~/Research/mcfilter/ds_scripts")
+addpath("~/Research/mcfilter/edb_scripts")
+addpath("~/Research/mcfilter/edb_scripts/jsonlab-1.2")
 
 arg_list = argv();
 
@@ -27,7 +28,7 @@ input_params.compute_full = true;
 input_params.recompute = false;
 input_params.same_data = true;
 input_params.chunks = 1;
-input_params.ova_format = "binary";
+#input_params.ova_format = "binary";
 input_params.num_threads = 0;
 input_params.validation = false;
 input_params.allproj = false; 
@@ -48,19 +49,19 @@ struct_levels_to_print(10)
 
 input_params
 
-db_data_entries = ds_query(input_params.data_query)
+db_data_entries = edb_query(input_params.data_query)
 
 if(!input_params.same_data)
-  db_ova_entries = ds_query(input_params.ova_query);
+  db_ova_entries = edb_query(input_params.ova_query);
   if (!isempty(input_params.filter_query))
-    db_proj_entries = ds_query(input_params.filter_query);
+    db_proj_entries = edb_query(input_params.filter_query);
   else
     db_proj_entries = [];
   endif
 endif
 
 ## entry in the filter field if no filter is used
-fullproj.type = "no_filter"; 
+fullproj = "no_filter"; 
 
 clear perf_params;
 perf_params.type = "performances";
@@ -69,29 +70,35 @@ perf_params.validation = input_params.validation;
 perf_params.allproj = input_params.allproj;
 for data_entry = db_data_entries  
   data_entry = data_entry{1};
-  [foo, df] = fileparts(data_entry.db_path);
-  perf_params.data = data_entry.params;
+  [foo, df] = fileparts(data_entry.path);
+  perf_params.data = data_entry;
 
   if (input_params.same_data)
     clear strct;
-    strct.data = data_entry.params;
-    input_params.ova_query = [input_params.ova_query "&&" struct2query(strct)];
-    db_ova_entries = ds_query(input_params.ova_query)
+    strct.data = data_entry;
+    ova_query = [input_params.ova_query "&&" struct2query(strct)];
+    db_ova_entries = edb_query(ova_query)
   endif
 
   for ova_entry = db_ova_entries
     ova_entry = ova_entry{1};
-    ova_file = ova_entry.params.filename;
-    if (strcmp(input_params.ova_format,"binary"))
+    ova_file = ova_entry.filename;    
+    ova_format = "cellarray";
+    if (isfield(ova_entry, "wfilemap") && ova_entry.wfilemap)
+      ova_format = "binary";
       ova_file = [ova_file ".wmap"];
     endif
+    ova_bias = 0;
+    if (isfield(ova_entry, "bias"))
+      ova_bias = ova_entry.bias;
+    endif
     
-    perf_params.ova = ova_entry.params;
+    perf_params.ova = ova_entry;
 
     computed_proj = {};    
     if (!input_params.recompute)
-      db_perf_entries = ds_query(perf_params);
-      computed_proj = cellfun("getfield",db_perf_entries,{{1}},{"params"},{{1}},{"filter"},"UniformOutput",false);
+      db_perf_entries = edb_query(perf_params);
+      computed_proj = cellfun("getfield",db_perf_entries,{{1}},{"filter"},"UniformOutput",false);
     endif
     cf = input_params.compute_full;
     if (any(cellfun("isequal",computed_proj,{fullproj})))
@@ -102,10 +109,10 @@ for data_entry = db_data_entries
     
     if (input_params.same_data)
       clear strct;
-      strct.data_params = data_entry.params;
+      strct.data_params = data_entry;
       if (!isempty(input_params.filter_query))
 	input_params.filter_query = [input_params.filter_query "&&" struct2query(strct)];
-	db_proj_entries = ds_query(input_params.filter_query)
+	db_proj_entries = edb_query(input_params.filter_query)
       else
 	db_proj_entries = [];
       endif
@@ -114,11 +121,11 @@ for data_entry = db_data_entries
     proj_files = "";
     for proj_entry = db_proj_entries
       proj_entry = proj_entry{1};	
-      if (!any(cellfun("isequal",computed_proj,{proj_entry.params})))
-	if(!exist(proj_entry.db_path))
-	  ds_get(proj_entry.params);
+      if (!any(cellfun("isequal",computed_proj,{proj_entry})))
+	if(!exist(proj_entry.path))
+	  edb_download(proj_entry);
 	endif
-	proj_files = [proj_files " " proj_entry.db_path];
+	proj_files = [proj_files " " proj_entry.path];
       endif
     end
 
@@ -140,12 +147,11 @@ for data_entry = db_data_entries
       ## if there is some work to do 
       ## do this here to avoid downloading these big files if they 
       ## are not needed
-      if (!exist(data_entry.db_path,"file") )
-	if(!strcmp(data_entry.params.type, "local_file"))
-	  ds_get(data_entry.params);
-	else
-	  error(["Local file " data_entry.db_path " does not exist."])
-	endif
+      if(!strcmp(data_entry.type, "local_file"))
+	edb_download(data_entry);
+      endif
+      if (!exist(data_entry.path,"file") )
+	error(["File " data_entry.path " does not exist."])
       endif
       if (!exist(ova_file,"file"))
 	error(["Ova models file " ova_file " does not exist."])
@@ -168,7 +174,7 @@ for data_entry = db_data_entries
 	endif
       endif
 
-      eval_cmd = sprintf("%s/evaluate_projection %s --chunks %d --num_threads %d --ova_format %s -- %s %s", bindir, opt_str, input_params.chunks, input_params.num_threads, input_params.ova_format, data_entry.db_path, local_ova_file);
+      eval_cmd = sprintf("%s/evaluate_projection %s --chunks %d --num_threads %d --ova_format %s -b %g -- %s %s", bindir, opt_str, input_params.chunks, input_params.num_threads, ova_format, ova_bias, data_entry.path, local_ova_file);
       
       [status,output] = system(eval_cmd, 1);
       
@@ -176,20 +182,20 @@ for data_entry = db_data_entries
       
       for proj_entry = db_proj_entries
 	proj_entry = proj_entry{1};
-	if (!any(cellfun("isequal",computed_proj,{proj_entry.params})))
-	  perfs = parse_eval_output(output, proj_entry.db_path);      
-	  [foo, pf] = fileparts(proj_entry.db_path);
+	if (!any(cellfun("isequal",computed_proj,{proj_entry})))
+	  perfs = parse_eval_output(output, proj_entry.path);      
+	  [foo, pf] = fileparts(proj_entry.path);
 	  if (!exist("perfs","dir"))
 	    mkdir("perfs");
 	  endif
 	  
 	  newperf_params = perf_params;
-	  newperf_params.filter = proj_entry.params;
+	  newperf_params.filter = proj_entry;
 	  for [val,key] = perfs
 	    newperf_params.(key) = val;
 	  end
 	 
-	  outfile = ["perfs/" ds_name(newperf_params, file_name_fields)];	  
+	  outfile = ["perfs/" edb_name(newperf_params, file_name_fields)];
 	  
 	  outfid = fopen(outfile,"wt");
 	  for [val,key] = perfs
@@ -203,7 +209,7 @@ for data_entry = db_data_entries
 	  end
 	  fclose(outfid);
 	  
-	  ds_add(outfile, newperf_params);
+	  edb_put(outfile, newperf_params);
 	endif
       end
 
@@ -219,7 +225,7 @@ for data_entry = db_data_entries
 	  newperf_params.(key) = val;
 	end
 
-	outfile = ["perfs/" ds_name(newperf_params, file_name_fields)];	  
+	outfile = ["perfs/" edb_name(newperf_params, file_name_fields)];	  
 
 	outfid = fopen(outfile,"wt");
 	for [val,key] = perfs
@@ -233,7 +239,7 @@ for data_entry = db_data_entries
 	end
 	fclose(outfid);
 	
-	ds_add(outfile, newperf_params);
+	edb_put(outfile, newperf_params);
       endif
     endif
   end

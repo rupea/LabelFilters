@@ -1,4 +1,5 @@
 CXX ?= g++
+
 ifneq ($(wildcard /opt/boost-1.60),)
 BOOSTROOT?=/opt/boost-1.60
 BOOSTDIR :=$(BOOSTROOT)/include
@@ -7,7 +8,7 @@ ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
 BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
 endif
 BOOSTLIB ?= $(BOOSTDIR)/lib
-BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB)
+BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
 
 OPENMP ?= -fopenmp
@@ -18,53 +19,54 @@ OPENMP ?= -fopenmp
 #OPENMP:= -DMCTHREADS=0
 # allow STL experimental threads?
 
-CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG
-CPPFLAGS += -I$(BOOSTDIR) -std=c++11
+
 #CPPFLAGS += -fopenmp
-CPPFLAGS += -pipe
-CPPFLAGS += -ggdb3
 # testing...
 MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
 #CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I.
 
-ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
-OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
-OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
-endif
 ifneq ($(wildcard /usr/include/octave-3.8.2),)
 OCTAVEDIR ?= /usr
+endif
+ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
+OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
+endif
 OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
-endif
-ifneq ($(wildcard /usr/include/octave-3.8.1),)
-OCTAVEDIR = /usr
-OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
-endif
+OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.8.2
 
 OCTAVE_MEX ?= env CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
 OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 HDF5_INC ?= -I/usr/include/hdf5/serial
-OCTAVE_CFLAGS ?= -fPIC $(OCT_INC) $(HDF5_INC)
+#OCTAVE_CFLAGS ?= -fPIC $(OCT_INC) $(HDF5_INC)
 
-LDFLAGS ?= $(BOOSTLINK) -lboost_program_options
+CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
+
+LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK)
 # testing
 #LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
 
 PROFILE_OPENMP = $(OPENMP)
-PROFILEDIR = /home/mlshack/alex/Programs/gperftools-2.1/install
+PROFILEDIR = $(HOME)/Programs/gperftools-2.1/install
 PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
 PROFILE_CPPFLAGS+=-DMCTHREADS=1
 #PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
-all: learn_projection evaluate_projection run_LPSR demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve
+VPATH = ../c 
+
+#OCTAVE_LDFLAGS = 
+#OCTAVE_CFLAFS = 
+
+all: standalone octave
+
+standalone:  learn_projection evaluate_projection run_kmeans run_LPSR naive_bayes #demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve
+
+octave: oct_find_w.oct oct_normalize_data.oct oct_project_data.oct oct_predict_data.oct oct_evaluate_predictions.oct oct_get_projection_measures.oct oct_kmeans.oct  #oct_evaluate_model.oct oct_calc_objective.oct
+
+
 # For MiLDe, remove all "octave"-related targets, and ensure 'lib' target[s] are mode
 milde: lib demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve | lib
 
-profile_learnproj: 
-	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" learn_projection
-
-profile_evaluate: 
-	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" evaluate_projection
 
 learn_projection: learn_projection.o find_w.o find_w_detail.o optimizelu.o mcsolver.o printing.o EigenOctave.o utils.o parameter.o predict.o filter.o
 	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
@@ -78,11 +80,44 @@ run_kmeans: run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
 run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o predict.o filter.o
 	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
-profile_kmeans: 
-	@make CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" run_kmeans
+naive_bayes: naive_bayes.o EigenOctave.o utils.o
+	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
+
+
+oct_find_w.oct: oct_find_w.o find_w.o EigenOctave.o printing.o utils.o parameter.o find_w_detail.o optimizelu.o mcsolver.o 
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
+oct_normalize_data.oct: oct_normalize_data.o normalize.o EigenOctave.o printing.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
+oct_project_data.oct: oct_project_data.o EigenOctave.o filter.o utils.o
+	$(OCTAVE_MEX)  $(OCTAVE_LDFLAGS) $^
+
+oct_predict_data.oct: oct_predict_data.o EigenOctave.o filter.o utils.o PredictionSet.o predict.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
+# this functions is deprecated and will not compile. If needed, oct_evaluate_model.cpp needs to be updated 
+# to incorporate changes in the code
+# oct_evaluate_model.oct: oct_evaluate_model.o EigenOctave.o filter.o utils.o PredictionSet.o
+#	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
+oct_evaluate_predictions.oct: oct_evaluate_predictions.o EigenOctave.o utils.o PredictionSet.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
+oct_get_projection_measures.oct: oct_get_projection_measures.o EigenOctave.o utils.o filter.o
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
+# this functions is deprecated and will not compile. 
+# to incorporate changes in the code
+#oct_calc_objective.oct: find_w.o EigenOctave.o oct_calc_objective.o
+#	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
+oct_kmeans.oct: oct_kmeans.o utils.o printing.o EigenOctave.o normalize.o 
+	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+
 
 %.o: %.cpp
-	$(CXX) -o $@ $(CPPFLAGS) $(OCTAVE_CFLAGS) -c $<
+	$(CXX) -o $@ $(CPPFLAGS) -c $<
 
 
 ## extra stuff ######################### without octave ###################
@@ -485,12 +520,13 @@ x%.log:
 		echo ......... kcachegrind x$*.callgrind
 
 clean: 
-	rm -f *.o *.lo *-dbg.o *-dbg.lo *.2o *.3o *.4o *-prof.o libmcfilter*.a libmcfilter*.so \
-		learn_projection evaluate_projection run_kmeans demo-quick demo-proj1 demo-proj-dbg \
-		demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log run_LPSR \
+	rm -f *.oct *.o *.lo *-dbg.o *-dbg.lo *.2o *.3o *.4o *-prof.o libmcfilter*.a libmcfilter*.so \
+		learn_projection evaluate_projection run_kmeans run_LPSR naive_bayes \
+		demo-quick demo-proj1 demo-proj-dbg \
+		demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log \
 	       	demo-proj2-dbg demo-mcsolver demo-proj.native mcgen demo-proj[1-4] demo-prof xx a.out \
 		demo-parms
-	$(MAKE) -f Makefile.octave clean
+#	$(MAKE) -f Makefile.octave clean
 
 realclean: clean
 	rm -f *.log *.txt DenseM.bin *.soln *.repo boolmatrix.bin *.profile mcgen*.bin

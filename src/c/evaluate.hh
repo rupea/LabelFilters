@@ -4,6 +4,7 @@
  * inline template (not needed for library linking - libmcfilter includes DenseM & SparseM support)
  */
 
+#include "filter.h"
 #include "evaluate.h"
 #include "predict.hh"   // oh, actually need the inline defn of predict for library
 #include "utils.h"
@@ -21,7 +22,7 @@ void predict_chunk(predvec& predictions, VectorXsz& no_active,
 		   const size_t start_class, predtype thresh, int k,
 		   bool allproj, bool verbose)
 {
-  time_t start_filter, start_predict, stop;
+  time_t start, stop;
   int pred_k = k>10?k:10;
   size_t n = x.rows();
   size_t noClasses = ovaW_chunk.cols();
@@ -30,8 +31,7 @@ void predict_chunk(predvec& predictions, VectorXsz& no_active,
  
   // if calculatin predictions for all projections, start from the first one. 
   // Else go directly to the last one 
-  int sp = allproj?1:nproj; 
-  int np = nproj-sp+1; 
+  int np = allproj?nproj:1;
   assert(predictions.size() == np);
   assert(no_active.size() == np);
   assert(filter_time.size() == np);
@@ -47,65 +47,70 @@ void predict_chunk(predvec& predictions, VectorXsz& no_active,
       no_active[0] += n*noClasses;
     }
       
-
-  VectorXsz no_active_chunk(np);
   ActiveDataSet* active=NULL;
 
   // The predicions, times and number of active bits are stored in reverse order 
   // This way the results with all the filters in in the first position, result 
   // with only "sp" filters is in positions npredsets-1. 
 
-  // this does a lot of extra work by refiltersin with fewer projections, but I won't 
-  // worry about it now. Usually this functions will be called with allproj=false. 
-  for (int proj_no=sp; proj_no <= nproj; proj_no++)
+  double ftime = 0;
+  DenseM projections;
+
+  for (int proj_no=0; proj_no <  nproj; proj_no++)
     {
-      DenseColM wmat_truncated;
-      if (wmat)
+      if(wmat)
 	{
-	  wmat_truncated = wmat->leftCols(proj_no);
-	}
-      if (verbose)
-	{
-	  cout << "Filter chunk ... " << endl;
-	}
-      time(&start_filter);
-      if (wmat)
-	{
-	  // this initializes the filter every time. A production implementation
-	  // would only initialize the filter once, then pass all the data through it. 
-	  active = getactive (no_active_chunk, x, wmat_truncated, *lmat, *umat, verbose);
-	  if (proj_no == nproj)
+	  // init filter -- do not count this against the time 
+	  if(verbose)
 	    {
-	      // I get the number of active classes from getactive because 
-	      // I want to know how many classes were filtered by each projection
-	      // even if allproj is false. 
-	      // this shoudl be turned off when running in production mode since
-	      // counting in bitvectors is expensive (linear) 
-	      no_active += no_active_chunk.reverse();
+	      std::cout << "Initializing filter " << proj_no << std::endl;
 	    }
+
+	  VectorXd l = lmat->col(proj_no);
+	  VectorXd u = umat->col(proj_no);
+	  Filter f(l,u);	  
+
+	  if(verbose)
+	    {
+	      std::cout << "Applying filter " << proj_no << std::endl;
+	    }
+	  time(&start);	  
+	  VectorXd proj = x*wmat->col(proj_no);
+	  nact = update_active(&active, f, proj);
+	  time(&stop);
+	  ftime += difftime(stop,start);
+
+	  // I get the number of active classes here because 
+	  // I want to know how many classes were filtered by each projection
+	  // even if allproj is false. 
+	  // this shoudl be turned off when running in production mode since
+	  // counting in bitvectors is expensive (linear) 
+	  
+	  nact += n; // we had to do one dot product per example for the filter. 
+	  no_active[nproj - proj_no - 1] += nact;
 	}
-      time(&start_predict);
-      filter_time[nproj-proj_no] += difftime(start_predict,start_filter);	   
-      if (verbose)
-	{
-	  cout << "Done filter chunk." << endl;
-	  cout << "Predict chunk ... " << endl;
-	}
-      predict(predictions[nproj-proj_no], x, ovaW_chunk, active, nact, verbose, thresh, pred_k, start_class); 
       
-      if (verbose)
+      if (allproj || proj_no == nproj-1)
 	{
-	  cout << "Done predict chunk" << endl;
+	  filter_time[nproj - proj_no - 1] += ftime; 
+	  
+	  if(verbose)
+	    {
+	      std::cout << "Predicting..." << std::endl;
+	    }
+	  
+	  time(&start);
+	  predict(predictions[nproj - proj_no - 1], x, ovaW_chunk, active, nact, verbose, thresh, pred_k, start_class); 
+	  time(&stop);
+	  predict_time[nproj - proj_no - 1] += difftime(stop,start);
+	  total_time[nproj - proj_no -1] += predict_time[nproj - proj_no - 1] + filter_time[nproj - proj_no - 1]; 
 	}
-     
-      // delete active to free it up for the next chunk
-      time(&stop);
-      predict_time[nproj-proj_no] += difftime(stop,start_predict);
-      total_time[nproj-proj_no] += difftime(stop,start_filter);
+    }
+  if (active)
+    {
       free_ActiveDataSet(active);
     }
-}
-
+}    
 
 
 template <typename EigenType> inline

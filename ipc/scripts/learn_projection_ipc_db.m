@@ -4,17 +4,8 @@
 
 global __DS_VERBOSE = false;
 
-srcdir = "~/Research/mcfilter/src";
-
-#addpath("../scripts/")
-addpath([srcdir "/octave/"])
-addpath([srcdir "/libsvm-3.17/matlab/"])
-addpath([srcdir "/liblinear-1.94/matlab/"])
-
 addpath("~/Research/mcfilter/scripts")
-addpath("~/Research/mcfilter/ds_scripts")
 
-#addpath("~/Programs/gperftools-2.1/install/lib/")
 
 data_params.type = "data_file";
 data_params.original_train.name = "ipc";
@@ -65,13 +56,6 @@ proj_params.C1multiplier = false;
 
 ## process command line arguments
 arg_list = argv(); 
-firstarg = 1;
-database = "";
-if (!strncmp(arg_list{1},"-", 1))
-  database = arg_list{1};
-  firstarg = 2;
-endif 
-arg_list = arg_list(firstarg:end);
 proj_params=process_proj_params_args(arg_list, length(arg_list), proj_params);
 
 ## it would be nice to do this in the default params, but we would need 
@@ -89,12 +73,12 @@ if (isempty(proj_params.projection_file))
     mkdir("results");
   endif
 endif 
-if (isempty(proj_params.obj_plot_file))
-  proj_params.obj_plot_file = sprintf("obj_plots/objective_plot__%s__C1_%g__C2__%g__%s.pdf", proj_params.exp_name, proj_params.C1, proj_params.C2, time_str);
-  if (!exist("obj_plots","dir"))
-    mkdir("obj_plots");
-  endif
-endif 
+## if (isempty(proj_params.obj_plot_file))
+##   proj_params.obj_plot_file = sprintf("obj_plots/objective_plot__%s__C1_%g__C2__%g__%s.pdf", proj_params.exp_name, proj_params.C1, proj_params.C2, time_str);
+##   if (!exist("obj_plots","dir"))
+##     mkdir("obj_plots");
+##   endif
+## endif 
 if (isempty(proj_params.log_file))
   proj_params.log_file = sprintf("log_files/%s__C1_%g__C2_%g.log",proj_params.exp_name, proj_params.C1, proj_params.C2);
   if (!exist("log_files","dir"))

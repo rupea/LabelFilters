@@ -65,9 +65,7 @@ void addInnerVector (Eigen::Ref<Eigen::VectorXd> addto, const EigenType& addfrom
 template <typename EigenType>
 double DotProductInnerVector (const Eigen::Ref<const Eigen::VectorXf>& vec, const EigenType& mat, size_t outerIndex)
 {
-#ifndef NDEBUG
   assert(vec.size() == mat.innerSize());
-#endif
   double val = 0.0;
   typename EigenType::InnerIterator iter(mat,outerIndex); 
   for  (; iter; ++iter) 
@@ -81,9 +79,8 @@ double DotProductInnerVector (const Eigen::Ref<const Eigen::VectorXf>& vec, cons
 template <typename EigenType>
 void DotProductInnerVector (Eigen::Ref<Eigen::RowVectorXd> result, const Eigen::Ref<const DenseColM>& mat1, const EigenType& mat2, size_t outerIndex)
 {
-#ifndef NDEBUG
   assert(result.size() == mat1.cols());
-#endif
+
   size_t i;
   result.setZero();
   typename EigenType::InnerIterator iter(mat2,outerIndex); 
@@ -97,9 +94,8 @@ void DotProductInnerVector (Eigen::Ref<Eigen::RowVectorXd> result, const Eigen::
 template <typename EigenType>
 void DotProductInnerVector (Eigen::Ref<Eigen::VectorXd> result, const Eigen::Ref<const DenseColMf>& mat1, const EigenType& mat2, size_t outerIndex)
 {
-#ifndef NDEBUG
   assert(result.size() == mat1.cols());
-#endif
+
   for (size_t i=0;i<mat1.cols();++i)
     {
       result(i)=DotProductInnerVector(mat1.col(i),mat2,outerIndex);

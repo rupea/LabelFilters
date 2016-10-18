@@ -59,7 +59,8 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
     ("ova_format", po::value<string>()->default_value("binary"), "Format of the file with the ova models. One of \"cellarray\" or \"binary\"")
     ("out_file,o", po::value<string>(), "Output file. If not specified prints to stdout")
     ("chunks", po::value<int>()->default_value(1), "Number of chunks to split the ova file in. Used to deal with ova matrices that are too large to fit in memory. If chunks > 1 the chunks are reloaded for each projection file which leads to long load times. If chunks > 1, ova_format must be binary")
-    ("num_threads", po::value<int>()->default_value(0), "Number of threads to run on. 0 for using all available threads.");
+    ("num_threads", po::value<int>()->default_value(0), "Number of threads to run on. 0 for using all available threads.")
+    ("intercept,b", po::value<double>()->default_value(0), "Incercept constant added as the last column of the data. A 0 value means no intercept column is added.");
   
   po::options_description hidden_opt("Arguments");
   hidden_opt.add_options()
@@ -150,6 +151,8 @@ int main(int argc, char * argv[])
   bool allproj = vm.count("allproj")?true:false;
 
   int num_threads = vm["num_threads"].as<int>();
+  double bias = vm["intercept"].as<double>();
+
 #ifdef _OPENMP
   if (num_threads < 1)
     omp_set_num_threads(omp_get_max_threads());
@@ -294,7 +297,7 @@ int main(int argc, char * argv[])
 	}
     }
 
-  DenseColMf ovaW;
+  ovaDenseColM ovaW;
   int chunks = vm["chunks"].as<int>();
   assert(chunks > 0);
   if (chunks == 1)
@@ -311,7 +314,11 @@ int main(int argc, char * argv[])
 	  //Dense data
 	  dim = x_te.array_value().cols();
 	}
-      
+      if (bias) 
+	{
+	  dim++;
+	}
+
       if (vm["ova_format"].as<string>() == "cellarray")
 	{
 	  args(0) = vm["ova_file"].as<string>(); // ova file name
@@ -358,16 +365,15 @@ int main(int argc, char * argv[])
     {
       setnames.push_back("valid");
     }
-  
-
+    
   if(x_te.is_sparse_type())
     {
       // Sparse data
-      std::vector<SparseM*> x;
-      x.push_back(new SparseM(toEigenMat(x_te.sparse_matrix_value())));
+      std::vector<SparseM*> x;     
+      x.push_back(new SparseM(toEigenMat(x_te.sparse_matrix_value(), (SparseM::Scalar) bias)));
       if (validation)
 	{
-	  x.push_back(new SparseM(toEigenMat(x_va.sparse_matrix_value())));
+	  x.push_back(new SparseM(toEigenMat(x_va.sparse_matrix_value(), (SparseM::Scalar) bias)));
 	}	  
       // size_t reducedsize = 10000;
       // SparseM smallx = x.topLeftCorner(reducedsize,x.cols());
@@ -378,7 +384,7 @@ int main(int argc, char * argv[])
       for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
 	  cerr << "***********" << *pit << "************" << endl;
-	  load_projections(wmat, lmat, umat, *pit, verbose);
+	  load_projections(wmat, lmat, umat, *pit, (DenseColM::Scalar) bias, verbose);
 	  if (chunks == 1)
 	    {
 	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
@@ -408,16 +414,16 @@ int main(int argc, char * argv[])
     {
       // Dense data
       std::vector<DenseM*> x;
-      x.push_back(new DenseM(toEigenMat<DenseM>(x_te.array_value())));
+      x.push_back(new DenseM(toEigenMat<DenseM, NDArray>(x_te.array_value(), (DenseM::Scalar) bias)));
       if (validation)
 	{
-	  x.push_back(new DenseM(toEigenMat<DenseM>(x_va.array_value())));
+	  x.push_back(new DenseM(toEigenMat<DenseM, NDArray>(x_va.array_value(), (DenseM::Scalar) bias)));
 	}
 
       for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
 	  cerr << "***********" << *pit << "************" << endl;
-	  load_projections(wmat, lmat,umat,*pit,verbose);
+	  load_projections(wmat, lmat,umat,*pit, (DenseColM::Scalar) bias, verbose);
 	  if (chunks == 1)
 	    {
 	      evaluate_projection(x, y, ovaW, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);

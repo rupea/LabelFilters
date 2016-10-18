@@ -21,7 +21,15 @@ void read_binary(const char* filename, DenseColMf& m, const DenseColMf::Index ro
   ifstream in(filename, ios::in | ios::binary);
   if (in.is_open())
     {
-      m.resize(rows,cols);
+      try
+	{
+	  m.resize(rows,cols);
+	}
+      catch(std::exception& e)
+	{
+	  std::cerr << "Error allocating OVA matrix of size " << rows << "x" << cols << ". " << std::endl;
+	  throw;
+	}
       in.seekg(start_col*rows*sizeof(DenseColMf::Scalar));
       in.read((char*)m.data(), rows*cols*sizeof(DenseColMf::Scalar));
       if(!in)
