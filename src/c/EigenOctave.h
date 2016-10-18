@@ -12,7 +12,7 @@
 // TODO most of these have NOTHING to do with octave (move to EigenUtil.h or EigenIO.h ?)
 
 /** this DOES use octave */
-void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const std::string& filename, bool verbose);
+void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const std::string& filename, DenseColM::Scalar bias, bool verbose);
 
 inline void write_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const std::string& filename, bool verbose = false)
 {
@@ -33,9 +33,9 @@ int64NDArray toInt64Array(const VectorXsz& eigenVec);
 
 VectorXd toEigenVec(const FloatNDArray& data);
 
-template<typename DenseMatType> DenseMatType                           toEigenMat(const FloatNDArray& data);
-template<typename DenseMatType> DenseMatType                           toEigenMat(const NDArray& data);
-template<typename Scalar> Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data);
+template<typename DenseMatType, typename OctDenseMatType> DenseMatType toEigenMat(OctDenseMatType const& data, typename DenseMatType::Scalar bias=0.0);
+//template<typename DenseMatType> DenseMatType                           toEigenMat(const NDArray& data);
+template<typename Scalar> Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data, Scalar bias = 0.0);
 /** converts data from a cell array of vectors of the same length to
  * a eigen dense matrix, with each vector representing a column of the
  * matrix. Assumes the vectors are row vectors (maybe this can be relaxed)
@@ -45,45 +45,57 @@ void toEigenMat(DenseColMf& m, const Cell& data);
 
 // ------------------------- inline template impls ----------------------
 
-// templetize this and maybe use MatrixBase to avoid code dupplication
-template<typename DenseMatType> inline 
-DenseMatType toEigenMat(const FloatNDArray& data) {
+template<typename DenseMatType, typename OctDenseMatType> inline 
+  DenseMatType toEigenMat(OctDenseMatType const& data, typename DenseMatType::Scalar bias) {
   dim_vector datasize = data.dims();
 
-  DenseMatType m(datasize(0), datasize(1));
-  for (int i = 0; i < datasize(0); i++) {
-    for (int j = 0; j < datasize(1); j++) {
+  size_t rows = datasize(0);
+  size_t cols = datasize(1);
+  if(bias)
+    {
+      cols++;
+    }
+  DenseMatType m(rows,cols);
+  for (size_t i = 0; i < datasize(0); i++) {
+    for (size_t j = 0; j < datasize(1); j++) {
       m(i, j) = data(i, j);
     }
   }
-  return m;
-}
-
-// maybe use MatrixBase to avoid code dupplication
-template<typename DenseMatType> inline 
-DenseMatType toEigenMat(const NDArray& data) {
-  dim_vector datasize = data.dims();
-
-  DenseMatType m(datasize(0), datasize(1));
-  for (int i = 0; i < datasize(0); i++) {
-    for (int j = 0; j < datasize(1); j++) {
-      m(i, j) = data(i, j);
+  // add a constant entry at the last column to serve as a bias
+  if (bias)
+    {      
+      for (size_t i=0 ; i<datasize(0); i++)
+	{
+	  m(i,datasize(1)) = bias;
+	}
     }
-  }
   return m;
 }
+
+/* template<typename DenseMatType> inline  */
+/* DenseMatType toEigenMat(const NDArray& data) { */
+/*   dim_vector datasize = data.dims(); */
+
+/*   DenseMatType m(datasize(0), datasize(1)); */
+/*   for (int i = 0; i < datasize(0); i++) { */
+/*     for (int j = 0; j < datasize(1); j++) { */
+/*       m(i, j) = data(i, j); */
+/*     } */
+/*   } */
+/*   return m; */
+/* } */
 
 
 template<typename Scalar> inline
-Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data) {
+Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data, Scalar bias) {
   using namespace std;
   dim_vector datasize = data.dims();
   
   std::cout << data.rows() << ", " << data.cols() << std::endl;
   
-  int nr = data.rows();
-  int nc = data.cols();
-  int nnz = data.nnz();
+  size_t nr = data.rows();
+  size_t nc = data.cols();
+  size_t nnz = data.nnz();
   Scalar d;
 
   std::vector< Eigen::Triplet<Scalar> > tripletList;
@@ -97,6 +109,16 @@ Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& da
       }
     }
   }
+  
+  // add a constant entry at the last column to serve as an intercept
+  if (bias) 
+    {
+      for (size_t i = 0; i < nr; i++)
+	{
+	  tripletList.push_back(Eigen::Triplet<Scalar> (i, nc, bias));
+	}
+      nc++;
+    }
 
   Eigen::SparseMatrix<Scalar, Eigen::RowMajor>  m(nr, nc);
   m.setFromTriplets(tripletList.begin(), tripletList.end());

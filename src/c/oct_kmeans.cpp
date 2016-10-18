@@ -9,6 +9,7 @@
 #include "normalize.h"
 
 using Eigen::VectorXd;
+using namespace std;
 
 
 void print_usage()

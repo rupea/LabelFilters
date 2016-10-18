@@ -12,7 +12,7 @@ using namespace std;
 // TO DO: put protections when files are not available or the right 
 // variables are not in them.
 // now it crashes badly with a seg fault and can corrupt other processes
-void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, bool verbose)
+void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const string& filename, DenseColM::Scalar bias, bool verbose)
 {
   octave_value_list args; 
   args(0) = filename; // the projection filename 
@@ -31,6 +31,12 @@ void load_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, const s
     }
   
   wmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(1).string_value()).array_value());
+  // we have bias, and the projections do not have a bias added to them. We need to add a 0 row at the end.
+  if (bias)
+    {
+      wmat.conservativeResize(wmat.rows()+1,wmat.cols());
+      wmat.row(wmat.rows()-1).setZero();	
+    }
   lmat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(2).string_value()).array_value());
   umat = toEigenMat<DenseColM>(loaded(0).scalar_map_value().getfield(args(3).string_value()).array_value());
   args.clear();

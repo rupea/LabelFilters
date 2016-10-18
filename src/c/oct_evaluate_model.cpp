@@ -16,6 +16,7 @@
 #include "evaluate.h"
 
 //********** this has not been updated with all the parameters. 
+// deprecated function. It has not been updated to keep up with changes in the code wil not compile
 // Evaluation should be done through the stand alone executable rather than through octave.
 // the main reason for this is to save memory 
 

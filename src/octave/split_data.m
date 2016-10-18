@@ -18,9 +18,13 @@ function [y_tr, x_tr, y_te, x_te] = split_data(y,x,train_fraction, seed=0, strat
   perm=randperm(n);
   y_tr = y(perm(1:n_train),:);
   x_tr = x(perm(1:n_train),:);
-  y_te = y(perm((n_train+1):end),:);
-  x_te = x(perm((n_train+1):end),:);
-  
+  if (n_train < n)
+    y_te = y(perm((n_train+1):end),:);
+    x_te = x(perm((n_train+1):end),:);
+  else
+    y_te = [];
+    x_te = [];
+  endif
   rand("state",old_state);
 
 end
