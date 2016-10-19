@@ -23,6 +23,15 @@ std::array<char,4> MCxyData::magic_yBin    = {0,'Y','s','b'};
  */
 void MCsolver::chopProjections(size_t const nProj){
     cerr<<" chopProjections("<<nProj<<")"<<endl;
+    if (this->nProj < nProj)
+      {
+	cerr << "ERROR: chopProjectins does not currently support increassing the number projections" << endl;
+	exit(-1);
+      }
+    else
+      {
+	this->nProj = nProj;
+      }
     if(weights.cols() > nProj){
         cerr<<"Reducing weights from "<<weights.cols()<<" to "<<nProj<<" projections"<<endl;
         weights.conservativeResize(/*d*/weights.rows(), nProj);

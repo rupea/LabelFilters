@@ -1,3 +1,6 @@
+THIS_MAKEFILE = $(lastword $(MAKEFILE_LIST))
+MAKEFILE_DIR = $(abspath $(dir $(THIS_MAKEFILE)))
+
 CXX ?= g++
 
 ifneq ($(wildcard /opt/boost-1.60),)
@@ -23,7 +26,7 @@ OPENMP ?= -fopenmp
 #CPPFLAGS += -fopenmp
 # testing...
 MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
-#CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I.
+#CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I$(MAKEFILE_DIR)
 
 ifneq ($(wildcard /usr/include/octave-3.8.2),)
 OCTAVEDIR ?= /usr
@@ -147,7 +150,7 @@ CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh boolmatrix.h Ei
 # faster version (can run in parallel)
 check-headers chk-headers:
 	rm -f /tmp/*.chk
-	$(MAKE) -j10 $(patsubst %,/tmp/%.chk,$(CHECK_HEADERS))
+	$(MAKE) -f$(THIS_MAKEFILE) -j10 $(patsubst %,/tmp/%.chk,$(CHECK_HEADERS))
 check-oct-headers: EigenOctave.h
 	for header in $^; do \
 		echo "Checking standalone compile of $$header..."; \
@@ -157,12 +160,13 @@ check-oct-headers: EigenOctave.h
 
 LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp
 lib: hdr-stamp
-	$(MAKE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) libs-only demo-proj1 demo-quick; }
+	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1 demo-quick; }
 lib-clean:
 	rm -f libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so *.o *.lo
 hdr-stamp: erik/hdr-stamp
 erik/hdr-stamp: $(CHECK_HEADERS)
-	$(MAKE) lib-clean ####### && $(MAKE) -j15 lib || { reset; $(MAKE) lib; }
+	mkdir -p erik
+	$(MAKE) -f$(THIS_MAKEFILE) lib-clean ####### && $(MAKE) -f$(THIS_MAKEFILE) -j15 lib || { reset; $(MAKE) -f$(THIS_MAKEFILE) lib; }
 	touch $@
 libs-only: | hdr-stamp
 libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
@@ -170,14 +174,15 @@ libs-only: libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so
 
 test: lib demo-printing demo-io demo-norm do-tests mcgen mcgenx mcproj.log
 long: clean
-	{ $(MAKE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
-	&& $(MAKE) -j20 do-tests \
-	&& $(MAKE) -j20 demo-proj1 demo-proj-dbg demo-proj2-dbg \
-	&& { if [ -f dpa.log ]; then tail -n5 dpa.log; else $(MAKE) dpa.log; fi; } \
-	&& $(MAKE) dpb.log
+	mkdir -p erik
+	{ $(MAKE) -f$(THIS_MAKEFILE) -j20 demo-mcsolver && ./demo-mcsolver 2>&1 | tee dmc.log | (head -n5; echo "^^^... ... ...vvv"; tail -n20); } \
+	&& $(MAKE) -f$(THIS_MAKEFILE) -j20 do-tests \
+	&& $(MAKE) -f$(THIS_MAKEFILE) -j20 demo-proj1 demo-proj-dbg demo-proj2-dbg \
+	&& { if [ -f dpa.log ]; then tail -n5 dpa.log; else $(MAKE) -f$(THIS_MAKEFILE) dpa.log; fi; } \
+	&& $(MAKE) -f$(THIS_MAKEFILE) dpb.log
 	rm -f dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log
-	$(MAKE) -j6 dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log dpa7.log dpb7.log dpa8.log dpb8.log > erik/mk-long.log 2>&1
-	$(MAKE) long-compare
+	$(MAKE) -f$(THIS_MAKEFILE) -j6 dpa1.log dpb1.log dpa2.log dpb2.log dpa3.log dpb3.log dpa4.log dpb4.log dpa5.log dpb5.log dpa6.log dpb6.log dpa7.log dpb7.log dpa8.log dpb8.log > erik/mk-long.log 2>&1
+	$(MAKE) -f$(THIS_MAKEFILE) long-compare
 long-compare:
 	{ for n in "" 1 2 3 4 5 6 7 8; do \
 	  a=`tail dpa$$n.log | grep '^obj' | tail -n2 | head -n1`; \
@@ -245,6 +250,7 @@ dpb8.log: demo-proj2-dbg | libmcfilter-dbg.a dpa.log
 	@echo -e "\n$@ ..."
 	./$< 8 2>&1 | tee $@ | (head -n15; echo "^^^... tail $@ ...vvv"; tail -n5; echo "----    ----    ----"; )
 do-vg: demo-mcsolver
+	mkdir -p erik
 	valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver m 2>&1 | tee dmc-m.txt | tail
 	@echo ""
 	valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all -v ./demo-mcsolver o 2>&1 | tee dmc-o.txt | tail
@@ -256,7 +262,7 @@ do-vg: demo-mcsolver
 	  wait; \
 	done;
 	@echo DONE valgrind tests
-	$(MAKE) tail-vg
+	$(MAKE) -f$(THIS_MAKEFILE) tail-vg
 tail-vg:
 	tail -n1 erik/log-op0*.vg
 	tail -n1 erik/log-mp0*.vg
@@ -315,18 +321,18 @@ libmcfilter4.a: $(patsubst %.cpp,%.4o,$(LIB_CPPFILES))
 	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -c $<
 demo-proj1: | libmcfilter.a
 demo-proj1: erik/demo-proj.cpp libmcfilter.a
-	$(CXX) -o $@ $(CPPFLAGS) -I. -I.. $^ $(LDFLAGS)
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) -I$(MAKEFILE_DIR)/..  $(CPPFLAGS) $^ $(LDFLAGS)
 	@#/usr/bin/time -v ./$@ 2>&1 | tee $@.log
 demo-proj2: erik/demo-proj.cpp libmcfilter2.a
-	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ -DMCTHREADS=0 -I$(MAKEFILE_DIR) $(CPPFLAGS) $^ $(LDFLAGS)
 demo-proj3: erik/demo-proj.cpp libmcfilter3.a
-	$(CXX) -o $@ $(CPPFLAGS) -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
+	$(CXX) -o $@ -D_GLIBCXX_PARALLEL -I$(MAKEFILE_DIR) $(CPPFLAGS) $^ $(LDFLAGS) -lgomp
 demo-proj4: erik/demo-proj.cpp libmcfilter4.a
-	$(CXX) -o $@ $(CPPFLAGS) -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -I. $^ $(LDFLAGS) -lgomp
+	$(CXX) -o $@ -DMCTHREADS=0 -D_GLIBCXX_PARALLEL -I$(MAKEFILE_DIR)  $(CPPFLAGS) $^ $(LDFLAGS) -lgomp
 demo-prof: erik/demo-proj.cpp libmcfilter-prof.a
-	$(CXX) -o $@ $(PROFILE_CPPFLAGS) -I. $^ $(PROFILE_LDFLAGS)
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(PROFILE_CPPFLAGS) $^ $(PROFILE_LDFLAGS)
 demo-quad: erik/demo-quad.cpp
-	$(CXX) -o $@ $(CPPFLAGS) -I. $^
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(CPPFLAGS) $^
 do-proj: demo-proj1 demo-proj2 demo-proj3 demo-proj4
 	/usr/bin/time -v ./demo-proj1 2>&1 | tee demo-proj1.log
 	/usr/bin/time -v ./demo-proj2 2>&1 | tee demo-proj2.log
@@ -339,10 +345,10 @@ do-proj: demo-proj1 demo-proj2 demo-proj3 demo-proj4
 # With AVX2 on snake06 (no openMP) the following test takes ~ 64 s
 demo-proj-dbg: | libmcfilter-dbg.a
 demo-proj-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ -DUSE_MCSOLVER=0 $(CPPFLAGS) -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ -DUSE_MCSOLVER=0 -I$(MAKEFILE_DIR) $(CPPFLAGS) $^ $(LDFLAGS)
 demo-proj2-dbg: | libmcfilter-dbg.a
 demo-proj2-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ -DUSE_MCSOLVER=1 $(CPPFLAGS) -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ -DUSE_MCSOLVER=1 -I$(MAKEFILE_DIR) $(CPPFLAGS) $^ $(LDFLAGS)
 # The following test throws if the solution is not sufficiently close to the correct answer.
 # Note: inside eigen, there are signed vs. unsigned issues (error=sign-compare)
 # Warnings:
@@ -350,10 +356,10 @@ demo-proj2-dbg: erik/demo-proj.cpp libmcfilter-dbg.a
 # 	std::random* has internal 'maybe-uninitialized' issues
 demo-quick: | libmcfilter-dbg.a
 demo-quick: erik/demo-quick.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) $^ $(LDFLAGS)
 demo-mcsolver: | libmcfilter-dbg.a
 demo-mcsolver: erik/demo-mcsolver.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) $^ $(LDFLAGS)
 test-scaling.log: demo-mcsolver
 	@echo "Test simple problem with xscale 1.0 and 2.0" > $@
 	./demo-mcsolver -p0v >> $@
@@ -361,39 +367,40 @@ test-scaling.log: demo-mcsolver
 	./demo-mcsolver -p0vx >> $@
 	# 2 solutions in $@ should have {lb,ub} different by roughly a factor of 2.0
 demo-printing: erik/demo-printing.cpp
-	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 demo-parms: | libmcfilter-dbg.a
 demo-parms: erik/demo-parms.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ $(DBGFLAGS) -I. $^ $(LDFLAGS)
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) $^ $(LDFLAGS)
 
 demo-io: | libmcfilter-dbg.a
 demo-io: erik/demo-io.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 demo-norm: | libmcfilter-dbg.a
 demo-norm: erik/demo-norm.cpp libmcfilter-dbg.a
-	$(CXX) -o $@ $(DBGFLAGS) -I. $^
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 #static linkage : 2.6M executable
 #mcgen: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.
 mcgen: erik/mcgen.cpp
-	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^ $(BOOSTLIB)/libboost_program_options.a
+	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^ $(BOOSTLIB)/libboost_program_options.a
 # link with libmcfilter allows saving a .soln file ...
 mcgenx: | libmcfilter-dbg.a
 mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
-	$(CXX) -o $@ -DUSE_LIBMCFILTER $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+	$(CXX) -o $@ -DUSE_LIBMCFILTER -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a | libmcfilter-dbg.a
-	$(CXX) -o $@ $(DBGFLAGS) -I. -Wno-error=maybe-uninitialized $^
+	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) -Wno-error=maybe-uninitialized $^
 erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	# mcsolve0 is an initial version, before opt::MCsolveProgram was written
-	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+	mkdir -p erik
+	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
-	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcproj0: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
-	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcproj: mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
-	$(CXX) -o $@ $(DBGFLAGS) -Wno-error=maybe-uninitialized -I. $^
+	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 .PHONY: run-mcproj
 run-mcproj:
-	rm -f mcproj mcproj0; $(MAKE) hdr-stamp
+	rm -f mcproj mcproj0; $(MAKE) -f$(THIS_MAKEFILE) hdr-stamp
 	make -j20 mcproj mcproj0 mcgenx || { make mcproj mcproj0 mcgenx; }
 	./mcgenx > mcgenx.log 2>&1
 	./mcproj0 --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin > s0.log 2>&1 & \
@@ -462,12 +469,12 @@ mcproj4.log: mcgenx mcproj mcsolve
 		done; } 2>&1 | tee $@
 #shared linkage : 2.1M executable.. Not much savings.
 #mcgen: erik/mcgen.cpp | libmcfilter-dbg.so
-#	$(CXX) -o $@ -fPIC $(DBGFLAGS) -I. $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTLIB) -lboost_program_options -Wl,-rpath=$(BOOSTLIB) -Wl,-rpath=.
+#	$(CXX) -o $@ -fPIC -I$(MAKEFILE_DIR) $(DBGFLAGS) $< -Wl,-Bdynamic -L. -lmcfilter-dbg -L$(BOOSTLIB) -lboost_program_options -Wl,-rpath=$(BOOSTLIB) -Wl,-rpath=.
 
 #mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTLIB)/libboost_program_options.a -lprofiler /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0
 #mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTLIB)/libboost_program_options.a -lprofiler /usr/lib/debug/usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 -lpthread /usr/lib/x86_64-linux-gnu/libgomp.so.1.0.0 
 mcsolve-opt-prof: mcsolve.cpp libmcfilter-prof.a $(BOOSTLIB)/libboost_program_options.a -lprofiler
-	$(CXX) -o $@ $(CPPFLAGS) -Wno-error=maybe-uninitialized -I. -DPROFILE $^
+	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(CPPFLAGS) -DPROFILE $^
 
 #TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=100 --optlu=10 --treport=10 --proj=1 --threads=0
 TEST_ARGS:=--xfile=../../data/temp.test.svm --output=big.soln -B -S --C1=-1 --maxiter=1000000 --optlu=10000 --treport=50000 --proj=1 --threads=0
@@ -482,7 +489,7 @@ t%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
 		export OMP_NUM_THREADS=$*; export OMP_THREAD_LIMIT=16; export OMP_DYNAMIC=FALSE; \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
-		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		$(MAKE) -f$(THIS_MAKEFILE) hdr-stamp; $(MAKE) -f$(THIS_MAKEFILE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS); } 2>&1 | tee $@; \
 		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > t$*.callgrind 2> t$*.err; \
 		echo ......... kcachegrind t$*.callgrind
@@ -490,7 +497,7 @@ u%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
 		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=8; \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
-		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		$(MAKE) -f$(THIS_MAKEFILE) hdr-stamp; $(MAKE) -f$(THIS_MAKEFILE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
 		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > u$*.callgrind 2> u$*.err; \
 		echo ......... kcachegrind u$*.callgrind
@@ -498,7 +505,7 @@ v%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
 		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=FALSE; export OMP_THREAD_LIMIT=$*; \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
-		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		$(MAKE) -f$(THIS_MAKEFILE) hdr-stamp; $(MAKE) -f$(THIS_MAKEFILE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
 		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > v$*.callgrind 2> v$*.err; \
 		echo ......... kcachegrind v$*.callgrind
@@ -506,7 +513,7 @@ w%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
 		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=$$(($**2)); \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
-		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		$(MAKE) -f$(THIS_MAKEFILE) hdr-stamp; $(MAKE) -f$(THIS_MAKEFILE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
 		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > w$*.callgrind 2> w$*.err; \
 		echo ......... kcachegrind w$*.callgrind
@@ -514,7 +521,7 @@ x%.log:
 	export OMP_DISPLAY_ENV=VERBOSE; \
 		export OMP_NUM_THREADS=$*; export OMP_DYNAMIC=FALSE; export OMP_NESTED=TRUE; export OMP_THREAD_LIMIT=$$(($**4)); \
 		{ rm -f *.profile mcsolve mcsolve-opt-prof; \
-		$(MAKE) hdr-stamp; $(MAKE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
+		$(MAKE) -f$(THIS_MAKEFILE) hdr-stamp; $(MAKE) -f$(THIS_MAKEFILE) -j6 mcsolve mcsolve-opt-prof libmcfilter-prof.a; \
 		/usr/bin/time -v ./mcsolve-opt-prof $(TEST_ARGS) --update=SAFE; } 2>&1 | tee $@; \
 		google-pprof --callgrind ./mcsolve-opt-prof $(LEARNING_PROFILE) > x$*.callgrind 2> x$*.err; \
 		echo ......... kcachegrind x$*.callgrind
@@ -522,11 +529,11 @@ x%.log:
 clean: 
 	rm -f *.oct *.o *.lo *-dbg.o *-dbg.lo *.2o *.3o *.4o *-prof.o libmcfilter*.a libmcfilter*.so \
 		learn_projection evaluate_projection run_kmeans run_LPSR naive_bayes \
+		mcsolve mcdumpsoln mcgenx erik/mcsolve0 erik/hdr-stamp \
 		demo-quick demo-proj1 demo-proj-dbg \
 		demo-quick demo-printing demo-io demo-quick.log demo-printing.log demo-quick.log \
 	       	demo-proj2-dbg demo-mcsolver demo-proj.native mcgen demo-proj[1-4] demo-prof xx a.out \
 		demo-parms
-#	$(MAKE) -f Makefile.octave clean
 
 realclean: clean
 	rm -f *.log *.txt DenseM.bin *.soln *.repo boolmatrix.bin *.profile mcgen*.bin

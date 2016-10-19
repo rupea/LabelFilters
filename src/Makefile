@@ -74,10 +74,12 @@ PROFILE_TARGETS = $(patsubst %,profile_%,$(C_TARGETS))
 all: octave libsvm liblinear standalone
 
 $(C_TARGETS):
+	mkdir -p $(BINDIR)
 	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile $@
 
 #enable profiling
 $(PROFILE_TARGETS):
+	mkdir -p $(BINDIR)-profile
 	$(MAKE) -C $(BINDIR)-profile CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" -f../c/Makefile $(patsubst profile_%,%,$@) 
 
 # lua and libmcfilter targets do not involve octave (just c++ and milde_core's lua)
