@@ -38,7 +38,7 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
  *
  * \return the total number of active classes in active (the total number of bits set to 1)
  */
-size_t update_active(ActiveDataSet** active, Filter const& f, VectorXd const&  proj);
+size_t update_active(ActiveDataSet** active, Filter const& f, Eigen::VectorXd const&  proj);
 
 /** For each row-wise example in matrix \c x, calculate the class filter.
  * \p no_active sum of <B>1</B>s count of final projection bitmap over all examples.<\br>
@@ -70,8 +70,8 @@ ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
 /** predict, w/o PredictionSet.
  * \p w is a set of linear projection lines
  */
-template <typename Eigentype>
-PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
+template <typename Eigentype, typename ovaType>
+PredictionSet* predict ( Eigentype const& x, ovaType const& w,
                          ActiveDataSet const* active, size_t& nact,
                          bool verbose             = false,
                          predtype keep_thresh     = boost::numeric::bounds<predtype>::lowest(),
@@ -81,9 +81,9 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 /** predict, with PredictionSet.
  * \p w is a set of linear projection lines
  */
-template <typename Eigentype>
+template <typename Eigentype, typename ovaType>
 void predict( PredictionSet* predictions,
-              Eigentype const& x, DenseColMf const& w,
+              Eigentype const& x, ovaType const& w,
               ActiveDataSet const* active, size_t& nact,
               bool verbose             = false,
               predtype keep_thresh     = boost::numeric::bounds<predtype>::lowest(),

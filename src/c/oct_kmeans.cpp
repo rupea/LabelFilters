@@ -110,7 +110,7 @@ DEFUN_DLD (oct_kmeans, args, nargout,
 #endif  
 
   DenseColM centers;
-  VectorXi assignments;
+  Eigen::VectorXi assignments;
   
   if(args(0).is_sparse_type())
     {

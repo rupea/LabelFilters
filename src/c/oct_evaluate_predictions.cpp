@@ -61,7 +61,7 @@ DEFUN_DLD (oct_evaluate_predictions, args, nargout,
     {      
       FloatNDArray yVector = args(1).array_value(); // the label vector
       
-      VectorXd yVec = toEigenVec(yVector);
+      Eigen::VectorXd yVec = toEigenVec(yVector);
   
       y = labelVec2Mat(yVec);
       // multiclass data 

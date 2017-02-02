@@ -22,7 +22,7 @@ function [svm_filename] = train_svm(params)
   svm_filename = ["svm_results/svm_" data_file "_C" num2str(params.C) "_threshold" thresh_str "_projected_" params.filter_name ".mat"]  
 
   mkdir("svm_results");  
-  perform_parallel_projected_multilabel_svm(data_file, params.C, [], data_dir, params.retrain, params.filter_file, params.filter_name, params.threshold, params.solver, params.solverparam, params.n_batches, params.min_batch_size, params.sparsemodel, params.keep_out, params.wfilemap);      
+  perform_parallel_projected_multilabel_svm(data_file, params.C, [], data_dir, params.retrain, params.filter_file, params.filter_name, params.threshold, params.solver, params.solverparam, params.weights_threshold, params.n_batches, params.min_batch_size, params.sparsemodel, params.keep_out, params.wfilemap);
 
   if (!isempty(params.filename) && !strcmp(params.filename,svm_filename))
     movefile(svm_filename,params.filename,"f")

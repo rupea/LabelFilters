@@ -4,10 +4,11 @@
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #include <boost/dynamic_bitset.hpp>
+#include <boost/variant.hpp>
 #include <omp.h>                        // omp_get_max_threads
 
-using   Eigen::VectorXd;
-using   Eigen::VectorXi;
+//using   Eigen::VectorXd;
+//using   Eigen::VectorXi;
 //using   Eigen::RowVectorXd;
 //using   Eigen::ColVectorXd;
 typedef Eigen::Matrix<size_t, Eigen::Dynamic, 1> VectorXsz;
@@ -38,6 +39,12 @@ typedef Eigen::Matrix<ovaCoeffType, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMa
 typedef Eigen::Matrix<ovaCoeffType, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor> ovaDenseColM;
 typedef Eigen::Matrix<ovaCoeffType, 1, Eigen::Dynamic, Eigen::RowMajor> ovaDenseRowV;
 typedef Eigen::Matrix<ovaCoeffType, Eigen::Dynamic, 1, Eigen::ColMajor> ovaDenseColV;
+typedef Eigen::SparseMatrix<ovaCoeffType, Eigen::RowMajor> ovaSparseRowM;
+typedef Eigen::SparseMatrix<ovaCoeffType, Eigen::ColMajor> ovaSparseColM;
+
+
+typedef  boost::variant<ovaDenseColM, ovaSparseColM> ovaModel;
+
 
 
 #endif

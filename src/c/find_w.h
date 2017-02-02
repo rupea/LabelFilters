@@ -34,9 +34,9 @@
 
 template<typename EIGENTYPE>
 void solve_optimization(DenseM& weights, DenseM& lower_bounds,
-                        DenseM& upper_bounds, VectorXd& objective_val,
+                        DenseM& upper_bounds, Eigen::VectorXd& objective_val,
                         DenseM& weights_avg, DenseM& lower_bounds_avg,
-                        DenseM& upper_bounds_avg, VectorXd& objective_val_avg,
+                        DenseM& upper_bounds_avg, Eigen::VectorXd& objective_val_avg,
                         EIGENTYPE const& x,
                         SparseMb const& y,
                         param_struct const& params);
@@ -131,13 +131,13 @@ public:
 private:
     mutable std::array<char,4> magicEof1;                  ///< MCs{c|z}
 public:
-    //VectorXd& objective_val_avg; // hmmm. this is optional, I guess
+    //Eigen::VectorXd& objective_val_avg; // hmmm. this is optional, I guess
     //@}
     /// \name Len==LONG data.
     /// - Optional -- can be written/read as empty vectors
     /// - resized as neces
     //@{
-    VectorXd objective_val_avg;         ///< [ nClass ] objective values
+    Eigen::VectorXd objective_val_avg;         ///< [ nClass ] objective values
 private:
     mutable std::array<char,4> magicEof2;                  ///< MCs{c|z} no enum Len for ending here [yet]
 public:
@@ -145,7 +145,7 @@ public:
     DenseM weights;                     ///< final iteration data
     DenseM lower_bounds;                ///< final iteration data
     DenseM upper_bounds;                ///< final iteration data
-    VectorXd objective_val;             ///< final iteration data
+    Eigen::VectorXd objective_val;             ///< final iteration data
 private:
     mutable std::array<char,4> magicEof3;                  ///< MCsz
 public:

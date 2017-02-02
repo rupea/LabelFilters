@@ -1,4 +1,8 @@
 function [xout] = normalize_data(xin, normalization)
+  if (strcmp(normalization, "none"))
+    xout = xin;
+    return;
+  endif
   cellinput = true;
   if (!iscell(xin))
     xin = {xin};
@@ -15,7 +19,9 @@ function [xout] = normalize_data(xin, normalization)
     endif
     for i = 1:length(xin)      
       xout{i} = oct_normalize_data(xin{i},2);
-    end    
+    end
+  else
+    error(["Normlaization " normalization " is not implemented"]);
   end
 
   if (!cellinput)

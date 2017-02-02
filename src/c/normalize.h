@@ -37,24 +37,24 @@ void normalize_col(SparseM &mat);
 /** x MUST be Dense for assignment to x.row(r) to succeed.
  * Numerically stable and generic version of normalize_col(DenseM&). */
 template< typename DERIVED >
-void col_normalize( Eigen::DenseBase<DERIVED> & x, VectorXd & mean, VectorXd & stdev );
+void col_normalize( Eigen::DenseBase<DERIVED> & x, Eigen::VectorXd & mean, Eigen::VectorXd & stdev );
 
 /** remove mean and stdev, generic form of normalize_row(DenseM&) */
 template< typename DERIVED >
-void row_normalize( Eigen::DenseBase<DERIVED> & x, VectorXd & mean, VectorXd & stdev );
+void row_normalize( Eigen::DenseBase<DERIVED> & x, Eigen::VectorXd & mean, Eigen::VectorXd & stdev );
 
 /** disallow column-normalization for SparseM . \throw runtime_error always. */
 template< typename DERIVED > inline 
-void col_normalize( Eigen::SparseMatrixBase<DERIVED>& x, VectorXd & mean, VectorXd & stdev ){
+void col_normalize( Eigen::SparseMatrixBase<DERIVED>& x, Eigen::VectorXd & mean, Eigen::VectorXd & stdev ){
     throw std::runtime_error("Error: Sparse normalization not supported. x-->DenseM for column_normalize(x)");
 }
 
 /** Generic, dense, column-wise normalization, returning the removed mean and stdev [ejk] */
 template< typename DERIVED > inline
-void col_normalize( Eigen::DenseBase<DERIVED> & x, VectorXd & mean, VectorXd & stdev ){
+void col_normalize( Eigen::DenseBase<DERIVED> & x, Eigen::VectorXd & mean, Eigen::VectorXd & stdev ){
     int const verbose=0;
     if(verbose) std::cout<<" col_normalize(x,m,s) ... x"<<x<<std::endl;
-    VectorXd delta( x.cols() );
+    Eigen::VectorXd delta( x.cols() );
     { // compute mean and stdev of each row in one pass ...
         mean.resize( x.cols() );
         mean.setZero();
@@ -84,9 +84,9 @@ void col_normalize( Eigen::DenseBase<DERIVED> & x, VectorXd & mean, VectorXd & s
 }
 /** Generic, dense, row-wise normalization, returning the removed mean and stdev [ejk] */
 template< typename DERIVED > inline
-void row_normalize( Eigen::DenseBase<DERIVED> & x, VectorXd & mean, VectorXd & stdev ){
+void row_normalize( Eigen::DenseBase<DERIVED> & x, Eigen::VectorXd & mean, Eigen::VectorXd & stdev ){
     static int const verbose=0;
-    VectorXd delta( x.rows() );
+    Eigen::VectorXd delta( x.rows() );
     // column_mean_stdev ... method of normalize_col ...
     mean.resize( x.rows() );
     mean = x.rowwise().mean();
@@ -112,13 +112,13 @@ void row_normalize( Eigen::DenseBase<DERIVED> & x, VectorXd & mean, VectorXd & s
 
 #if 0 // perhaps harden this code a bit more (for var nans)
 template< typename DERIVED >
-void column_mean_stdev( Eigen::DenseBase<DERIVED> const& x, VectorXd & mean, VectorXd &var ){
+void column_mean_stdev( Eigen::DenseBase<DERIVED> const& x, Eigen::VectorXd & mean, Eigen::VectorXd &var ){
     mean.resize( x.cols() );
     mean.setZero();
     var.resize( x.cols() );
     var.setZero();
     size_t n=0U;
-    VectorXd delta( x.cols() );
+    Eigen::VectorXd delta( x.cols() );
     for(uint32_t r=0U; r<x.rows(); ++r){
         ++n;
         delta = x.row(r).transpose() - mean;

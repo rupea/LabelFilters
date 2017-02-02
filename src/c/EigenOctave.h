@@ -28,10 +28,10 @@ inline void read_projections(DenseColM& wmat, DenseColM& lmat, DenseColM& umat, 
 Matrix       toMatrix(const DenseM& data);
 SparseMatrix toMatrix(const SparseM &mat);
 
-int32NDArray toIntArray(const VectorXi& eigenVec);
+int32NDArray toIntArray(const Eigen::VectorXi& eigenVec);
 int64NDArray toInt64Array(const VectorXsz& eigenVec);
 
-VectorXd toEigenVec(const FloatNDArray& data);
+Eigen::VectorXd toEigenVec(const FloatNDArray& data);
 
 template<typename DenseMatType, typename OctDenseMatType> DenseMatType toEigenMat(OctDenseMatType const& data, typename DenseMatType::Scalar bias=0.0);
 //template<typename DenseMatType> DenseMatType                           toEigenMat(const NDArray& data);

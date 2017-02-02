@@ -356,12 +356,12 @@ class WeightVector
           //      : x.innerNonZeroPtr()[row] );
           //typename SMat::Index const outerMax = outer + nSparseRow;
           assert( x.isCompressed() );
-          typename SMat::Index const outerEnd = x.outerIndexPtr()[row+1];
+          typename SMat::StorageIndex const outerEnd = x.outerIndexPtr()[row+1];
           typename SMat::Scalar const * const __restrict__ vals = x.valuePtr();
-          typename SMat::Index  const * const __restrict__ idxs = x.innerIndexPtr();
+          typename SMat::StorageIndex  const * const __restrict__ idxs = x.innerIndexPtr();
 	  //#pragma omp simd
 //#pragma omp parallel for simd schedule(static,8192) reduction(+:ret)
-          for(typename SMat::Index i = outer; i < outerEnd; ++i){
+          for(typename SMat::StorageIndex i = outer; i < outerEnd; ++i){
               ret += vals[i] * my_weights.coeff( idxs[i] );
               // strictly speaking, _Scalar=complex might want complex conjugate:
               //ret += Eigen::numext::conj( x.valuePtr()[i] ) * my_weights.coeff( x.innerIndexPtr()[i] );
@@ -472,7 +472,7 @@ class WeightVector
   {
 #if 1
       // Ahaa. InnerIterator is there, but has was having type lookup issues
-      typedef typename Eigen::SparseMatrix<Scalar,_Flags,_Index> MatType;
+      typedef typename Eigen::MappedSparseMatrix<Scalar,_Flags,_Index> MatType;
       typename MatType::InnerIterator it(x, row);
       double norm_update = 0;
       double eta1 = eta/my_scale;

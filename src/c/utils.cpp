@@ -10,7 +10,7 @@
 // Assumes that the label vector contains labels from 1 to noClasses
 using namespace std;
 
-SparseMb labelVec2Mat (const VectorXd& yVec)
+SparseMb labelVec2Mat (const Eigen::VectorXd& yVec)
 {
   size_t const n = yVec.size();
   size_t const minclass = yVec.minCoeff();      // originally this was assumed to be '1'

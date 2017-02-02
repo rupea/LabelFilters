@@ -62,7 +62,7 @@ VPATH = ../c
 
 all: standalone octave
 
-standalone:  learn_projection evaluate_projection run_kmeans run_LPSR naive_bayes #demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve
+standalone:  learn_projection evaluate_projection run_kmeans naive_bayes #demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve run_LPSR
 
 octave: oct_find_w.oct oct_normalize_data.oct oct_project_data.oct oct_predict_data.oct oct_evaluate_predictions.oct oct_get_projection_measures.oct oct_kmeans.oct  #oct_evaluate_model.oct oct_calc_objective.oct
 
@@ -80,8 +80,8 @@ evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o Predic
 run_kmeans: run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
 	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
-run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o predict.o filter.o
-	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
+#run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o predict.o filter.o
+#	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
 naive_bayes: naive_bayes.o EigenOctave.o utils.o
 	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)

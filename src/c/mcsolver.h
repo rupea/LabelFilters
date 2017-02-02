@@ -43,7 +43,7 @@ private:
     std::vector<int> perm;  ///< forward permutation (ascending 'means') (old 'sorted_class')
     std::vector<int> rev;   ///< the reverse permutation (old 'class_order')
     /** produce new perm+rev according to ascending \c sortKey. */
-    void rank( VectorXd const& sortkey );
+    void rank( Eigen::VectorXd const& sortkey );
 };
 
 /** Some data is useful to maintain for post-processing operations
@@ -56,7 +56,7 @@ public:
     friend class MCupdate;      // perhaps temporarily
     MCpermState( size_t nClass );       ///< allocate 6 vectors of size nClass, nothing is 'ok'
     /** produce new perm+rev according to ascending \c sortKey. */
-    void rank( VectorXd const& sortkey ); // unperm, rerank, set flags
+    void rank( Eigen::VectorXd const& sortkey ); // unperm, rerank, set flags
 
     /// \name Various ways to initialize \c l and \c u
     //@{
@@ -74,7 +74,7 @@ public:
      *   - While doing so, return a \c means vector according to \c reorder
      *   - \c reorder == \c REORDER_AVG_PROJ_MEANS is treated as \c REORDER_PROJ_MEANS
      */
-    void init( /* inputs: */ VectorXd const& projection, SparseMb const& y, VectorXi const& nc );
+    void init( /* inputs: */ Eigen::VectorXd const& projection, SparseMb const& y, Eigen::VectorXi const& nc );
 
     /** If restarting from soln file, can also explicitly set initial state */
     template< typename EIGENTYPE1, typename EIGENTYPE2 >
@@ -87,13 +87,13 @@ public:
     }
 
     /** optimal settings for {l,u} */
-    void optimizeLU( VectorXd const& projection, SparseMb const& y, VectorXd const& wc,
-                     VectorXi const& nclasses, boolmatrix const& filtered,
+    void optimizeLU( Eigen::VectorXd const& projection, SparseMb const& y, Eigen::VectorXd const& wc,
+                     Eigen::VectorXi const& nclasses, boolmatrix const& filtered,
                      double const C1, double const C2,
                      param_struct const& params, bool print=false );
     /** optimal settings for {l,u}_avg */
-    void optimizeLU_avg( VectorXd const& projection_avg, SparseMb const& y, VectorXd const& wc,
-                         VectorXi const& nclasses, boolmatrix const& filtered,
+    void optimizeLU_avg( Eigen::VectorXd const& projection_avg, SparseMb const& y, Eigen::VectorXd const& wc,
+                         Eigen::VectorXi const& nclasses, boolmatrix const& filtered,
                          double const C1, double const C2,
                          param_struct const& params, bool print=false );
     //@}
@@ -115,19 +115,19 @@ public:
     //@{
     void mkok_lu();             ///< if nec. apply changes in sortlu* to l and u
     void mkok_lu_avg();
-    VectorXd& mkok_sortlu();
-    VectorXd& mkok_sortlu_avg();
+    Eigen::VectorXd& mkok_sortlu();
+    Eigen::VectorXd& mkok_sortlu_avg();
     //@}
 
     /** at report time, we \em might want a temporary sortlu list for the hinge loss calc.
      * This calculates and returns client-specified sortlu_avg vector.
      * Note this is const (after this, ok_sortlu_avg has NOT changed) */
-    void getSortlu_avg( VectorXd& sortlu_test ) const;
+    void getSortlu_avg( Eigen::VectorXd& sortlu_test ) const;
     /** Using \c this->perm, generate \c sorted {l,u} pair-vector from \c ll[],uu[] bounds. */
-    void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu ) const;
+    void toSorted( Eigen::VectorXd & sorted, Eigen::VectorXd const& ll, Eigen::VectorXd const& uu ) const;
 private:
-    void toLu( VectorXd & ll, VectorXd & uu, VectorXd const& sorted );
-    //void toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu );
+    void toLu( Eigen::VectorXd & ll, Eigen::VectorXd & uu, Eigen::VectorXd const& sorted );
+    //void toSorted( Eigen::VectorXd & sorted, Eigen::VectorXd const& ll, Eigen::VectorXd const& uu );
 private:
     //MCsoln & const mcs;
     bool ok_lu;                 ///< after init, one or two of ok_lu and ok_sortlu are always true
@@ -135,9 +135,9 @@ private:
     bool ok_sortlu;
     bool ok_sortlu_avg;
 
-    VectorXd l;                 ///< lower bounds in original class order
-    VectorXd u;                 ///< upper bounds in original class order
-    VectorXd sortlu;            ///< concatenated (l,u) pairs in \c Perm order
+    Eigen::VectorXd l;                 ///< lower bounds in original class order
+    Eigen::VectorXd u;                 ///< upper bounds in original class order
+    Eigen::VectorXd sortlu;            ///< concatenated (l,u) pairs in \c Perm order
 
     /** tricky dataflow here.
      * - During solve iteration, \c sortlu_avg \b accumulates values from sortlu.
@@ -149,11 +149,11 @@ private:
      *     - sortlu_avg no longer relevant
      *     - optimizeLU (or maybe copy {l,u}) --> \em final {l,u}_avg
      */
-    VectorXd sortlu_avg;
+    Eigen::VectorXd sortlu_avg;
     uint64_t nAccSortlu_avg;    ///< count of accumulations into sortlu_avg from sortlu
 
-    VectorXd l_avg;             ///< used as a convenient temporay,
-    VectorXd u_avg;             ///< sometimes shortly related to \c sortlu_avg
+    Eigen::VectorXd l_avg;             ///< used as a convenient temporay,
+    Eigen::VectorXd u_avg;             ///< sometimes shortly related to \c sortlu_avg
 };
 
 /** iteration state that does not need saving -- important stuff is in MCsoln */

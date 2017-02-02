@@ -21,9 +21,9 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
 
     for (int i = 0; i < projections.cols(); i++)
     {
-        VectorXd proj = projections.col(i);
-        VectorXd l = lmat.col(i);
-        VectorXd u = umat.col(i);
+        Eigen::VectorXd proj = projections.col(i);
+        Eigen::VectorXd l = lmat.col(i);
+        Eigen::VectorXd u = umat.col(i);
         if (0 && verbose) // debug only
         {
             cout<<"Init filter col i="<<i<<endl;
@@ -42,7 +42,7 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
     return active;
 }
 
-size_t update_active(ActiveDataSet** active, Filter const& f, VectorXd const&  proj)
+size_t update_active(ActiveDataSet** active, Filter const& f, Eigen::VectorXd const&  proj)
 { 
   size_t count = 0;
   size_t n = proj.size();  // # of examples

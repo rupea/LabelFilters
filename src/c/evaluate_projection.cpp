@@ -38,8 +38,9 @@ void print_usage(po::options_description opt)
   cerr << "  data_file: .mat file with the test data  (x_te, y_te)" << endl;
   cerr << "  ova_file : .mat file with the ova models in a cell array" <<endl;
   cerr << "                (only works with liblinear matlab models for now)" << endl;
-  cerr << "             or a binary file with the weights of the linear ova" << endl;
-  cerr << "                models concatenated in the order of the classes." << endl<< endl;
+  cerr << "             a dense binary file with the weights of the linear ova" << endl;
+  cerr << "                models concatenated in the order of the classes." << endl;
+  cerr << "             or a sparse binary file in compressed column format." << endl << endl;
   cerr << opt;
 }
 
@@ -56,16 +57,16 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
     ("top,k", po::value<int>()->default_value(1), "Minimum number of classes to pbe predicted positive. When threshold is not used, or not enough predictions are above the threshold, the classes with highest predicted values are used. Default 1.")
     ("full", "Evaluate the performance without projections")
     ("distributed", po::value<string>()->default_value("None"), "Whether it is ran on a distributed fasion. Possible values are: \"None\"")
-    ("ova_format", po::value<string>()->default_value("binary"), "Format of the file with the ova models. One of \"cellarray\" or \"binary\"")
+    ("ova_format", po::value<string>()->default_value("dense"), "Format of the file with the ova models. One of \"cellarray\", \"dense\", or \"sparse\"")
     ("out_file,o", po::value<string>(), "Output file. If not specified prints to stdout")
-    ("chunks", po::value<int>()->default_value(1), "Number of chunks to split the ova file in. Used to deal with ova matrices that are too large to fit in memory. If chunks > 1 the chunks are reloaded for each projection file which leads to long load times. If chunks > 1, ova_format must be binary")
+    ("chunks", po::value<int>()->default_value(1), "Number of chunks to split the ova file in. Used to deal with ova matrices that are too large to fit in memory. If chunks > 1 the chunks are reloaded for each projection file which leads to long load times. If chunks > 1, ova_format must be dense or sparse")
     ("num_threads", po::value<int>()->default_value(0), "Number of threads to run on. 0 for using all available threads.")
     ("intercept,b", po::value<double>()->default_value(0), "Incercept constant added as the last column of the data. A 0 value means no intercept column is added.");
   
   po::options_description hidden_opt("Arguments");
   hidden_opt.add_options()
     ("data_file", po::value<string>(), ".mat file with the test data  (x_te, y_te)")
-    ("ova_file", po::value<string>(), ".mat file with the ova models in a cell array (only works with liblinear matlab models for now) or a binary file with the weights of the linear ova models concatenated in the order of the classes.");
+    ("ova_file", po::value<string>(), ".mat file with the ova models in a cell array (only works with liblinear matlab models for now), a dense binary file with the weights of the linear ova models concatenated in the order of the classes or a sparse binary file in compressed column format.");
 
   po::positional_options_description pd;
   pd.add("data_file",1).add("ova_file",1);
@@ -95,7 +96,7 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
 
   if (vm.count("ova_format"))
     {
-      if (vm["ova_format"].as<string>() !="binary" && vm["ova_format"].as<string>() != "cellarray")
+      if (vm["ova_format"].as<string>() !="dense" && vm["ova_format"].as<string>() !="sparse" && vm["ova_format"].as<string>() != "cellarray")
 	{
 	  cerr << endl;
 	  cerr << "ERROR:Argument to ova_format unrecognized" << endl;
@@ -112,7 +113,7 @@ void parse_options(po::variables_map& vm, int argc, char* argv[])
       exit(-1);
     }
 
-  if (vm["chunks"].as<int>() > 1 && vm["ova_format"].as<string>() !="binary")
+  if (vm["chunks"].as<int>() > 1 && vm["ova_format"].as<string>() !="dense" && vm["ova_format"].as<string>() !="sparse" )
     {
       cerr << endl;
       cerr << "ERROR: Multiple chunks can only be used in conjunction with binary ova_format" << endl;
@@ -296,8 +297,9 @@ int main(int argc, char * argv[])
 	  thresh = vm["threshold"].as<predtype>();
 	}
     }
+  
+  ovaModel ovaW;
 
-  ovaDenseColM ovaW;
   int chunks = vm["chunks"].as<int>();
   assert(chunks > 0);
   if (chunks == 1)
@@ -332,15 +334,22 @@ int main(int argc, char * argv[])
 	    {
 	      cout << "success" << endl;
 	    }
-	  toEigenMat(ovaW, loaded(0).scalar_map_value().getfield(args(1).string_value()).cell_value());
+	  ovaW = ovaDenseColM();
+	  toEigenMat(boost::get<ovaDenseColM>(ovaW), loaded(0).scalar_map_value().getfield(args(1).string_value()).cell_value());
 	  
 	  args.clear();
 	  loaded.clear();
 	  Fclear();
 	}
-      else if (vm["ova_format"].as<string>() == "binary")
+      else if (vm["ova_format"].as<string>() == "dense")
 	{
-	  read_binary(vm["ova_file"].as<string>().c_str(), ovaW, dim, noClasses);
+	  ovaW = ovaDenseColM();
+	  read_dense_binary(vm["ova_file"].as<string>().c_str(), boost::get<ovaDenseColM>(ovaW), dim, noClasses);
+	}
+      else if (vm["ova_format"].as<string>() == "sparse")
+	{
+	  ovaW = ovaSparseColM();
+	  read_sparse_binary(vm["ova_file"].as<string>().c_str(), boost::get<ovaSparseColM>(ovaW), dim, noClasses);
 	}
       else
 	{ 
@@ -375,11 +384,6 @@ int main(int argc, char * argv[])
 	{
 	  x.push_back(new SparseM(toEigenMat(x_va.sparse_matrix_value(), (SparseM::Scalar) bias)));
 	}	  
-      // size_t reducedsize = 10000;
-      // SparseM smallx = x.topLeftCorner(reducedsize,x.cols());
-      // SparseMb smally = y.topLeftCorner(reducedsize, y.cols());
-      // x=smallx;
-      // y=smally;
       
       for (std::vector<string>::iterator pit = proj_files.begin(); pit !=proj_files.end(); ++pit)
 	{
@@ -391,7 +395,7 @@ int main(int argc, char * argv[])
 	    } 
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), vm["ova_format"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
 	    }	  
 	}      
       if (do_full)
@@ -402,7 +406,7 @@ int main(int argc, char * argv[])
 	    }
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", setnames, false,  verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), vm["ova_format"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", setnames, false,  verbose, out);
 	    }
 	}
       for (int set=0;set < x.size(); set++)
@@ -430,7 +434,7 @@ int main(int argc, char * argv[])
 	    } 
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), vm["ova_format"].as<string>(), chunks, &wmat, &lmat, &umat, thresh, k, *pit, setnames, allproj, verbose, out);
 	    }	  
 	}      
       if (do_full)
@@ -441,7 +445,7 @@ int main(int argc, char * argv[])
 	    }
 	  else
 	    {
-	      evaluate_projection_chunks(x, y, vm["ova_vile"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", setnames, false, verbose, out);
+	      evaluate_projection_chunks(x, y, vm["ova_file"].as<string>(), vm["ova_format"].as<string>(), chunks, NULL, NULL, NULL, thresh, k, "full", setnames, false, verbose, out);
 	    }
 	}
       for (int set=0;set < x.size(); set++)

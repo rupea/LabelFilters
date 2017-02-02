@@ -19,15 +19,24 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
     y=x;
     y.w = [];
   end
-
-  function cnt = writew(x,fid)
+  
+  function cnt = writew(x,fid)	   
     cnt = fwrite(fid,x.w,"single");
   end
-
+  
+  function ret = getSparse(x)
+    if (size(x.w,1)==1)   
+       x.w=x.w';
+    endif
+    [idx, foo, val] = find(x.w);
+    ret.cidx = length(idx);
+    ret.ridx = (idx - 1)';
+    ret.val = val';
+    ret.nrows = size(x.w,1);
+  end
+  
   wmapfilename = "";
   if (wfilemap)
-    ## we can not write a memory map of a sparse file
-    sparsemodel_final = false;
     wmapfilename = [filename ".wmap"] 
     wfile = fopen(wmapfilename, "w");        
   endif
@@ -47,7 +56,12 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
     out_final = [];
     out_final_tr = [];
   endif
-  
+
+  if (wfilemap && sparsemodel_final)
+     vals = [];
+     cidx = [0];
+     ridx = [];
+  endif
 
   for lbl_idx = 1 : nfiles
     load(cur_file(lbl_idx),"out","out_tr", "svm_models", "class_idx_start", "class_idx_end", "solver", "solverparams", "sparsemodel");
@@ -75,14 +89,28 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
     if (!wfilemap)
       svm_models_final(class_idx_start:class_idx_end) = svm_models;      
     else
-      cellfun("writew",svm_models, {wfile}); 
+      if (!sparsemodel_final)
+	cellfun("writew",svm_models, {wfile}); 
+      else
+	spvals = cellfun("getSparse", svm_models,"UniformOutput", false);
+	vals = [vals cat(2,cell2mat(spvals).val)];
+	ridx = [ridx cat(2,cell2mat(spvals).ridx)];
+	cidx = [cidx (cumsum(cat(2,cell2mat(spvals).cidx)) + cidx(end))];
+	nrows = spvals{1}.nrows;
+      end
       svm_models_final(class_idx_start:class_idx_end) = cellfun("removew",svm_models,"UniformOUtput",false);
-    endif
-    
+    endif    
   end
-
   display("Done loading...");
   
+  if (wfilemap && sparsemodel_final)
+     ncols = length(cidx) - 1;
+     fwrite(wfile, [ncols nrows] , "int32");
+     fwrite(wfile,cidx,"int32");
+     fwrite(wfile,ridx, "int32");
+     fwrite(wfile,vals,"single");	 
+  end
+
   if (keep_out)
     n = size(out_cell{1},1);
     n_tr = size(out_tr_cell{1},1);

@@ -8,7 +8,7 @@
 #include <boost/dynamic_bitset.hpp>
 
 
-inline ActiveDataSet* counting_heuristic(const SparseMb& y, const VectorXi& assignments, int k, int C, bool verbose)
+inline ActiveDataSet* counting_heuristic(const SparseMb& y, const Eigen::VectorXi& assignments, int k, int C, bool verbose)
 {
   using boost::dynamic_bitset;
 
@@ -58,7 +58,7 @@ ActiveDataSet* getactive_LPSR_counting(size_t& nact, const Eigentype& x, const D
 {
   size_t n = x.rows();
   ActiveDataSet* active = new ActiveDataSet(n);
-  VectorXi assignments(n);
+  Eigen::VectorXi assignments(n);
   
   cluster_test_kmeans(assignments,centers,x,spherical,verbose);
   nact = 0;
@@ -329,7 +329,7 @@ void train_LPSR(DenseColM& centers, ActiveDataSet*& active_classes,
 {
   size_t n = x.rows();
   int k = centers.cols();
-  VectorXi assignments(n);  
+  Eigen::VectorXi assignments(n);  
   run_kmeans(centers,assignments,x,iterations,spherical,verbose);
   if (verbose)
     {

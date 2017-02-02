@@ -7,7 +7,8 @@ function perform_projected_multilabel_svm_batch(data_file,data_dir,
 						C, class_idx_start,class_idx_end, ...
 						threshold = [], ...
 						solver="libsvm", solverparams = "-t 0", ...
-						sparsemodel = false, keep_out = true )
+						weights_threshold = -1, ...
+						sparsemodel = false, keep_out = false)
 
   %%loading data
   load([data_dir data_file ".mat"], "-v6");
@@ -112,6 +113,11 @@ function perform_projected_multilabel_svm_batch(data_file,data_dir,
     elseif (strcmp(solver,"liblinear"))
       model = train(tmpY, tmpX, svmparams);
     end
+    
+    # should put a check that we have trained a linear model 
+    if (weights_threshold > 0)
+       model.w(abs(model.w) < weights_threshold) = 0;
+    endif
     
     svmparams = "";
 

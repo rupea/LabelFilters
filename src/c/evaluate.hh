@@ -11,14 +11,14 @@
 #include "EigenIO.h"
 
 
-template <typename EigenType> inline
+template <typename EigenType, typename ovaType> inline
 void predict_chunk(predvec& predictions, VectorXsz& no_active,
 		   doublevec& filter_time, doublevec& predict_time,
 		   doublevec& total_time,
 		   const EigenType& x, 
 		   const DenseColM* wmat, const DenseColM* lmat,
 		   const DenseColM* umat,		   
-		   const DenseColMf& ovaW_chunk, 
+		   const ovaType& ovaW_chunk, 
 		   const size_t start_class, predtype thresh, int k,
 		   bool allproj, bool verbose)
 {
@@ -66,8 +66,8 @@ void predict_chunk(predvec& predictions, VectorXsz& no_active,
 	      std::cout << "Initializing filter " << proj_no << std::endl;
 	    }
 
-	  VectorXd l = lmat->col(proj_no);
-	  VectorXd u = umat->col(proj_no);
+	  Eigen::VectorXd l = lmat->col(proj_no);
+	  Eigen::VectorXd u = umat->col(proj_no);
 	  Filter f(l,u);	  
 
 	  if(verbose)
@@ -75,7 +75,7 @@ void predict_chunk(predvec& predictions, VectorXsz& no_active,
 	      std::cout << "Applying filter " << proj_no << std::endl;
 	    }
 	  time(&start);	  
-	  VectorXd proj = x*wmat->col(proj_no);
+	  Eigen::VectorXd proj = x*wmat->col(proj_no);
 	  nact = update_active(&active, f, proj);
 	  time(&stop);
 	  ftime += difftime(stop,start);
@@ -112,11 +112,10 @@ void predict_chunk(predvec& predictions, VectorXsz& no_active,
     }
 }    
 
-
 template <typename EigenType> inline
 void evaluate_projection(const std::vector<EigenType*>& x, 
 			 const std::vector<SparseMb*>& y, 
-			 const DenseColMf& ovaW,
+			 const ovaModel& ovaW,
 			 const DenseColM* wmat, const DenseColM* lmat,
 			 const DenseColM* umat,
 			 predtype thresh, int k, const string& projname,
@@ -159,19 +158,16 @@ void evaluate_projection(const std::vector<EigenType*>& x,
   
   // make preditions for each dataset
   for (int set=0;set < nrSets; set++)
-    {  
-      predict_chunk(*(predictions[set]), *(no_active[set]), *(filter_time[set]), *(predict_time[set]), *(total_time[set]), *(x[set]), wmat, lmat, umat, ovaW, 0, thresh, k, allproj, verbose);
-
+    { 
+      boost::apply_visitor(predict_chunk_visitor<EigenType>(*(predictions[set]), *(no_active[set]), *(filter_time[set]), *(predict_time[set]), *(total_time[set]), *(x[set]), wmat, lmat, umat, 0, thresh, k, allproj, verbose), ovaW);	
     }
-     
-
+  
   //evaluate performances and write them to a file for each dataset
   if (verbose)
     {
       cout << "Evaluate... " << endl;
     }
   
-
   std::vector<double> MicroF1(allproj?nproj:1), MacroF1(allproj?nproj:1);
   std::vector<double> MacroF1_2(allproj?nproj:1);
   std::vector<double> MicroPrecision(allproj?nproj:1), MacroPrecision(allproj?nproj:1);
@@ -215,10 +211,29 @@ void evaluate_projection(const std::vector<EigenType*>& x,
     }
 }
 
+
+/*
+template<typename EigenType>
+evaluate_projection_visitor<EigenType>::evaluate_projection_visitor(const std::vector<EigenType*>& x, 
+			    const std::vector<SparseMb*>& y, 
+			    const DenseColM* wmat, const DenseColM* lmat,
+			    const DenseColM* umat,
+			    predtype thresh, int k, const string& projname,
+			    const std::vector<std::string>& setnames,
+			    bool allproj, bool verbose, ostream& out) : 
+  x(x), y(y), wmat(wmat), lmat(lmat), umat(umat), thresh(thresh), k(k), projname(projname), setnames(setnames), allproj(allproj), verbose(verbose), out(out) {};
+
+template <typename EigenType> template<typename ovaType>
+void evaluate_projection_visitor<EigenType>::operator() (const ovaType& ovaW) const
+{
+  evaluate_projection(x, y, ovaW, wmat, lmat, umat, thresh, k, projname, setnames, allproj, verbose, out);
+}
+*/
+
 template <typename EigenType> inline
 void evaluate_projection_chunks(const std::vector<EigenType*>& x, 
 				const std::vector<SparseMb*>& y, 
-				const string& ova_file, int chunks,
+				const std::string& ovaFile, const std::string& ovaFormat, int chunks,
 				const DenseColM* wmat, const DenseColM* lmat,
 				const DenseColM* umat,
 				predtype thresh, int k, const string& projname,
@@ -236,13 +251,6 @@ void evaluate_projection_chunks(const std::vector<EigenType*>& x,
   std::vector<doublevec*> filter_time(nrSets);
   std::vector<doublevec*> predict_time(nrSets);
   std::vector<VectorXsz*> no_active(nrSets);
-
-  std::vector<double> MicroF1(allproj?nproj:1), MacroF1(allproj?nproj:1);
-  std::vector<double> MacroF1_2(allproj?nproj:1);
-  std::vector<double> MicroPrecision(allproj?nproj:1), MacroPrecision(allproj?nproj:1);
-  std::vector<double> MicroRecall(allproj?nproj:1), MacroRecall(allproj?nproj:1);
-  std::vector<double> Top1(allproj?nproj:1), Top5(allproj?nproj:1), Top10(allproj?nproj:1);
-  std::vector<double> Prec1(allproj?nproj:1), Prec5(allproj?nproj:1), Prec10(allproj?nproj:1);
 
   // initialization for each dataset
   for (int set=0;set < nrSets; set++)
@@ -269,9 +277,10 @@ void evaluate_projection_chunks(const std::vector<EigenType*>& x,
   size_t dim = x[0]->cols();
   size_t noClasses = y[0]->cols();
   size_t start_class = 0;  
+
   { // have an internal block so that ovaW goes out of scope at the end of it 
     // and memory is released
-    DenseColMf ovaW;
+    ovaModel ovaW;
     DenseColM lmat_chunk;
     DenseColM umat_chunk;
     
@@ -281,13 +290,26 @@ void evaluate_projection_chunks(const std::vector<EigenType*>& x,
 	if (verbose)
 	  {
 	    cout << "Load chunk ... " << endl;
+	  }	  
+	if (ovaFormat == "dense")
+	  {
+	    ovaW = ovaDenseColM();
+	    read_dense_binary(ovaFile.c_str(), boost::get<ovaDenseColM>(ovaW), dim, chunk_size, start_class);
 	  }
-	read_binary(ova_file.c_str(), ovaW, dim, chunk_size, start_class);
+	else if (ovaFormat == "sparse")
+	  {
+	    ovaW = ovaSparseColM();
+	    read_sparse_binary(ovaFile.c_str(), boost::get<ovaSparseColM>(ovaW), dim, chunk_size, start_class);
+	  }
+	else
+	  { 
+	    cerr << "Ova file format is unrecognized or incompatible with reading the ova model in chunks" << endl;
+	    exit(-1);
+	  }	 	  
 	if (verbose)
 	  {
 	    cout << "Done load chunk. " << endl;
-	  }
-	
+	  }	  
 	
 	if (wmat)
 	  {
@@ -295,18 +317,25 @@ void evaluate_projection_chunks(const std::vector<EigenType*>& x,
 	    lmat_chunk = lmat->block(start_class,0,chunk_size,lmat->cols());
 	    umat_chunk = umat->block(start_class,0,chunk_size,umat->cols());
 	  }		
-
+	
 	// make preditions for each dataset	
 	for (int set=0; set < nrSets; set++)
-	  {  	    
-	    predict_chunk(*(predictions[set]), *(no_active[set]), *(filter_time[set]), *(predict_time[set]), *(total_time[set]), *(x[set]), wmat, &lmat_chunk, &umat_chunk, ovaW, start_class, thresh, k, allproj, verbose);	
+	  {
+	    boost::apply_visitor(predict_chunk_visitor<EigenType>(*(predictions[set]), *(no_active[set]), *(filter_time[set]), *(predict_time[set]), *(total_time[set]), *(x[set]), wmat, &lmat_chunk, &umat_chunk, start_class, thresh, k, allproj, verbose), ovaW);	
 	  }
 	start_class = start_class+chunk_size;           
       }
   } // we don't need ovaW any more
   assert(start_class == noClasses);
   
-
+  
+  std::vector<double> MicroF1(allproj?nproj:1), MacroF1(allproj?nproj:1);
+  std::vector<double> MacroF1_2(allproj?nproj:1);
+  std::vector<double> MicroPrecision(allproj?nproj:1), MacroPrecision(allproj?nproj:1);
+  std::vector<double> MicroRecall(allproj?nproj:1), MacroRecall(allproj?nproj:1);
+  std::vector<double> Top1(allproj?nproj:1), Top5(allproj?nproj:1), Top10(allproj?nproj:1);
+  std::vector<double> Prec1(allproj?nproj:1), Prec5(allproj?nproj:1), Prec10(allproj?nproj:1);
+  
   //evaluate performances and write them to a file for each dataset
   if (verbose)
     {

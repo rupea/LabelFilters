@@ -35,8 +35,8 @@ ActiveDataSet* getactive( VectorXsz& no_active, const Eigentype& x,
 }
 
 
-template <typename Eigentype> inline
-PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
+template <typename Eigentype, typename ovaType> inline
+PredictionSet* predict ( Eigentype const& x, ovaType const& w,
                          ActiveDataSet const* active, size_t& nact,
                          bool verbose             /*= false*/,
                          predtype keep_thresh     /*= boost::numeric::bounds<predtype>::lowest()*/,
@@ -65,7 +65,8 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
       for (i = 0; i < n; i++)
 	{	  	
 	  //outs = x.row(i)*(w.cast<double>());	
-	  DotProductInnerVector(outs,w,x,i);
+	  //DotProductInnerVector(outs,w,x,i);
+	  DotProductInnerVector(outs,x,i,w);
 	  // should preallocate to be more efficient
 	  PredVec* pv = predictions->NewPredVecAt(i,noClasses);
 	  if (prune)
@@ -119,7 +120,8 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 	  while (c < noClasses)
 	    {
 	      // could eliminate the multiplication for only one active class
-	      predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
+	      //predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
+	      predtype out = static_cast<predtype>(DotProductInnerVector(x, i, w, c));
 	      if(prune)
 		{
 		  pv->add_and_prune(out, c+start_class);
@@ -146,9 +148,9 @@ PredictionSet* predict ( Eigentype const& x, DenseColMf const& w,
 
 
 /** Beware: \c w here is a linear xform that gets pre-applied to x. */
-template <typename Eigentype> inline
+template <typename Eigentype, typename ovaType> inline
 void predict( PredictionSet* predictions,
-              Eigentype const& x, DenseColMf const& w,
+              Eigentype const& x, ovaType const& w,
               ActiveDataSet const* active, size_t& nact,
               bool verbose             /*= false*/,
               predtype keep_thresh     /*= boost::numeric::bounds<predtype>::lowest()*/,
@@ -181,7 +183,11 @@ void predict( PredictionSet* predictions,
 	  //   {
 	  //     std::cerr << i << endl;
 	  //   }
-	  DotProductInnerVector(outs,w,x,i);
+	  //	  DotProductInnerVector(outs,w,x,i);
+	  
+	  //outs = x.row(i)*(w.template cast<double>());	
+	  DotProductInnerVector(outs,x,i,w);	  
+
 	  // should preallocate to be more efficient	
 	  PredVec* pv;
 	  if (start_class == 0) // assumes chunk 0 is always the first
@@ -254,7 +260,8 @@ void predict( PredictionSet* predictions,
 	  while (c < noClasses)
 	    {
 	      // predtype out = static_cast<predtype>(DotProductInnerVector(w.col(c),x,i));
-	      predtype out = static_cast<predtype>((x.row(i)*w.col(c).cast<double>())(0,0));
+	      predtype out = static_cast<predtype>(DotProductInnerVector(x,i,w,c));
+	      //predtype out = static_cast<predtype>((x.row(i)*w.col(c).cast<double>())(0,0));
 	      if (prune)
 		{
 		  pv->add_and_prune(out,c+start_class);

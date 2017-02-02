@@ -73,7 +73,7 @@ SparseMatrix toMatrix(const SparseM &mat) {
   return m;
 }
 
-int32NDArray toIntArray(const VectorXi& eigenVec) 
+int32NDArray toIntArray(const Eigen::VectorXi& eigenVec) 
 {
   int32NDArray v(dim_vector(eigenVec.size(),1));
   for (size_t i = 0; i < eigenVec.size(); i++) {
@@ -91,7 +91,7 @@ int64NDArray toInt64Array(const VectorXsz& eigenVec)
   return v;
 }
 
-VectorXd toEigenVec(const FloatNDArray& data) {
+Eigen::VectorXd toEigenVec(const FloatNDArray& data) {
   dim_vector datasize = data.dims();
   int dim = datasize(0);
   int idx = 0;
@@ -99,7 +99,7 @@ VectorXd toEigenVec(const FloatNDArray& data) {
     dim = datasize(1);
     idx = 1;
   }
-  VectorXd v(dim);
+  Eigen::VectorXd v(dim);
   for (int i = 0; i < dim; i++) {
     if (idx == 0)
       v[i] = data(i, 0);

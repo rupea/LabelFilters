@@ -22,7 +22,7 @@ void print_usage()
   cout << "     u - the upper bounds" << endl;
 }
 
-void update_active(boolmatrix& active, bool all_active, const VectorXd& projection, const VectorXd& l, const VectorXd& u)
+void update_active(boolmatrix& active, bool all_active, const Eigen::VectorXd& projection, const Eigen::VectorXd& l, const Eigen::VectorXd& u)
 {
   int noClasses = l.size();			
   if (all_active)
@@ -163,9 +163,9 @@ DEFUN_DLD (oct_project_data, args, nargout,
   for (int i = 0; i < projections.cols(); i++)
     {
       cout << i << endl;
-      VectorXd proj = projections.col(i);
-      VectorXd l = lmat.col(i);
-      VectorXd u = umat.col(i);
+      Eigen::VectorXd proj = projections.col(i);
+      Eigen::VectorXd l = lmat.col(i);
+      Eigen::VectorXd u = umat.col(i);
       cout << "init filter" << endl;
       Filter f(l,u);      
       cout << i << "  update filter" << endl; 
@@ -187,9 +187,9 @@ DEFUN_DLD (oct_project_data, args, nargout,
   // for (int i = 0; i < projections.cols(); i++)
   //   {
   //     cout << i << endl;
-  //     VectorXd proj = projections.col(i);
-  //     VectorXd l = lmat.col(i);
-  //     VectorXd u = umat.col(i);
+  //     Eigen::VectorXd proj = projections.col(i);
+  //     Eigen::VectorXd l = lmat.col(i);
+  //     Eigen::VectorXd u = umat.col(i);
   //     cout << i << "  update filter" << endl; 
   //     update_active(active, i==0, projections.col(i), lmat.col(i), umat.col(i));
   //     cout << i << " active  " << active.count() << " out of " << active.rows()*active.cols() << " (" << active.count()*1.0/(active.rows()*active.cols()) << ")" << endl; 

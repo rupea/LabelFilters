@@ -15,9 +15,9 @@
 
 using namespace std;
 
-void read_binary(const char* filename, DenseColMf& m, const DenseColMf::Index rows, const DenseColMf::Index cols, const DenseColMf::Index start_col)
+void read_dense_binary(const char* filename, ovaDenseColM& m, const DenseColMf::Index rows, const DenseColMf::Index cols, const DenseColMf::Index start_col)
 {
-  assert(sizeof(DenseColMf::Scalar) == 32);
+  assert(sizeof(DenseColMf::Scalar) == 4);
   ifstream in(filename, ios::in | ios::binary);
   if (in.is_open())
     {
@@ -36,6 +36,80 @@ void read_binary(const char* filename, DenseColMf& m, const DenseColMf::Index ro
 	{
 	  cerr << "Error reading file " << filename << ". Only " << in.gcount() << " bytes read out of " << rows*cols*sizeof(DenseColMf::Scalar) << endl;
 	  exit(-1);
+	}
+      in.close();
+    }
+  else
+    {
+      cerr << "Trouble opening file " << filename << endl;
+      exit(-1);
+    }
+}
+
+// reads a sparse matrix stored in Compressed Column (row) format.
+// index type is assumed to be 32 bit integers 
+// value type is assumed to be 32 bit floats(this could be stored in a header)
+// first two index types store the outer and inner dimensions
+// Next is an array of outer+1  index types representing the outer index
+// Next is an array of index types representing the inner indices
+// Next is an array of index types representing the values.
+void read_sparse_binary(const char* filename, ovaSparseColM& m, const ovaSparseColM::StorageIndex rows, const ovaSparseColM::StorageIndex cols, const ovaSparseColM::StorageIndex start_col /*=0*/)
+{
+  assert(sizeof(ovaSparseColM::Scalar) == 4);
+  assert(sizeof(ovaSparseColM::StorageIndex) == 4);
+  ifstream in(filename, ios::in | ios::binary);
+  if (in.is_open())
+    {
+      try
+	{
+	  m.resize(rows,cols);
+	}
+      catch(std::exception& e)
+	{
+	  std::cerr << "Error allocating OVA matrix of size " << rows << "x" << cols << ". " << std::endl;
+	  throw;
+	}
+      ovaSparseColM::StorageIndex nouter=0;  // nr of outer dimensions cols in a clumn major matrix
+      ovaSparseColM::StorageIndex ninner=0;   // n of row in a rowmajor matrix      
+      in.read((char*)(&nouter), sizeof(ovaSparseColM::StorageIndex));
+      in.read((char*)(&ninner), sizeof(ovaSparseColM::StorageIndex));
+      // read col  outer indices starting from the start_col
+      in.seekg((2+start_col)*sizeof(ovaSparseColM::StorageIndex));
+      ovaSparseColM::StorageIndex* outerIndexPtr = m.outerIndexPtr();
+      in.read((char*)outerIndexPtr, (cols+1)*sizeof(ovaSparseColM::StorageIndex));
+      if (!in) 
+	{
+	  cerr << "Error reading the outer index array from " << filename << ". Only " << in.gcount() << " bytes read out of " << cols*sizeof(ovaSparseColM::StorageIndex);
+	  exit(-1);
+	}
+      //skip the rest of the outer indices
+      in.seekg((2+nouter)*sizeof(ovaSparseColM::StorageIndex));
+      ovaSparseColM::StorageIndex totalNZ = 0; 
+      in.read((char*)(&totalNZ), sizeof(ovaSparseColM::StorageIndex));
+      //read the inner indices 
+      ovaSparseColM::StorageIndex nnz = outerIndexPtr[cols]-outerIndexPtr[0];
+      m.resizeNonZeros(nnz);
+      in.seekg((2+nouter+1+outerIndexPtr[0])*sizeof(ovaSparseColM::StorageIndex));
+      in.read((char*)m.innerIndexPtr(), nnz*sizeof(ovaSparseColM::StorageIndex));
+      if (!in) 
+	{
+	  cerr << "Error reading the inner index array from " << filename << ". Only " << in.gcount() << " bytes read out of " << nnz*sizeof(ovaSparseColM::StorageIndex);
+	  exit(-1);
+	}
+      // skip over the last innerindices and the first values until getting to the desired chunk
+      in.seekg((2+nouter+1+totalNZ)*sizeof(ovaSparseColM::StorageIndex)+outerIndexPtr[0]*sizeof(ovaSparseColM::Scalar));
+      //read the values
+      in.read((char*)m.valuePtr(), nnz*sizeof(ovaSparseColM::Scalar));
+      if (!in) 
+	{
+	  cerr << "Error reading the values array from " << filename << ". Only " << in.gcount() << " bytes read out of " << nnz*sizeof(ovaSparseColM::Scalar);
+	  exit(-1);
+	}
+      // set the outerindices to start form 0. Do it in reverse order so that outerIndexPtr[0] is not overwritten
+      // until the end
+      for (ovaSparseColM::StorageIndex i=cols; i>=0; i--)
+	{	  
+	  outerIndexPtr[i] -= outerIndexPtr[0];
 	}
       in.close();
     }
