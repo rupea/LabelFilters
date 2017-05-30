@@ -2,16 +2,16 @@
 ### Project training points on a learned w and filter the instances before training the svm for each class. If project_file==[] no projection is done.
 
 
-function perform_projected_multilabel_svm_batch(data_file,data_dir,
-						projection_file, project_str, ...
+function perform_projected_multilabel_svm_batch(out_file, data_file, ...
+						projection_file, ...
 						C, class_idx_start,class_idx_end, ...
 						threshold = [], ...
-						solver="libsvm", solverparams = "-t 0", ...
-						weights_threshold = -1, ...
+						solver="liblinear", solverparams = "-s 3", ...
+						weights_threshold = 0, ...
 						sparsemodel = false, keep_out = false)
 
   %%loading data
-  load([data_dir data_file ".mat"], "-v6");
+  load(data_file, "-v6");
 
   if (isempty(projection_file)),
     projection = false;
@@ -25,24 +25,9 @@ function perform_projected_multilabel_svm_batch(data_file,data_dir,
     end
   end
   
-  
-  if ( ~projection )
-    if (~exist("project_str","var") || isempty(project_str)) || strcmp(project_str,"")
-      project_str = "full";
-    end
-  end
-
   n = size(x_tr,1);
   m = size(x_te,1);
   svm_models = cell(class_idx_end-class_idx_start+1,1);
-
-  if (isempty(threshold))
-    thresh_str = "none";
-  elseif (ischar(threshold))
-    thresh_str = threshold;
-  else
-    thresh_str = num2str(threshold);
-  endif
   
   if (keep_out)
     if (isempty(threshold))
@@ -117,6 +102,12 @@ function perform_projected_multilabel_svm_batch(data_file,data_dir,
     # should put a check that we have trained a linear model 
     if (weights_threshold > 0)
        model.w(abs(model.w) < weights_threshold) = 0;
+       ## s = sum(abs(model.w))
+       ## sm  = sort(abs(model.w), "descend");
+       ## i = find(cumsum(sm)/s > weights_threshold,1)
+       ## sm(i)       
+       ## cumsum(sm)(i)
+       ## model.w(abs(model.w) < sm(i)) = 0;
     endif
     
     svmparams = "";
@@ -157,15 +148,14 @@ function perform_projected_multilabel_svm_batch(data_file,data_dir,
     endif
     
     if (sparsemodel)
-      model.w = sparse(model.w);
+      model.w = sparse(model.w');
     endif
 
     svm_models{out_idx} = model;
       
   end
   
-  filename = ["svm_results/svm_" data_file "_C" num2str(C) "_" num2str(class_idx_start) "_" num2str(class_idx_end) "_threshold" thresh_str "_projected_" project_str ".mat"];
-  save(filename, "-v6", "out", "out_tr", "svm_models", "class_idx_start", "class_idx_end", "solver", "solverparams", "sparsemodel");
+  save(out_file, "-v6", "out", "out_tr", "svm_models", "class_idx_start", "class_idx_end", "solver", "solverparams", "sparsemodel");
       
   return;
 end

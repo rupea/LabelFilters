@@ -32,7 +32,7 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
     ret.cidx = length(idx);
     ret.ridx = (idx - 1)';
     ret.val = val';
-    ret.nrows = size(x.w,1);
+    ret.nfeats = size(x.w,1);
   end
   
   wmapfilename = "";
@@ -58,9 +58,10 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
   endif
 
   if (wfilemap && sparsemodel_final)
-     vals = [];
-     cidx = [0];
-     ridx = [];
+     vals = {};
+     cidx = {[0]};
+     ridx = {};
+     ncols = 0;
   endif
 
   for lbl_idx = 1 : nfiles
@@ -93,10 +94,11 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
 	cellfun("writew",svm_models, {wfile}); 
       else
 	spvals = cellfun("getSparse", svm_models,"UniformOutput", false);
-	vals = [vals cat(2,cell2mat(spvals).val)];
-	ridx = [ridx cat(2,cell2mat(spvals).ridx)];
-	cidx = [cidx (cumsum(cat(2,cell2mat(spvals).cidx)) + cidx(end))];
-	nrows = spvals{1}.nrows;
+	vals = {vals{} cat(2,cell2mat(spvals).val)};
+	ridx = {ridx{} cat(2,cell2mat(spvals).ridx)};
+	cidx = {cidx{} (cumsum(cat(2,cell2mat(spvals).cidx)) + cidx{end}(end))};
+	nrows = spvals{1}.nfeats;
+	ncols = ncols + length(svm_models);
       end
       svm_models_final(class_idx_start:class_idx_end) = cellfun("removew",svm_models,"UniformOUtput",false);
     endif    
@@ -104,11 +106,16 @@ function [out_final, out_final_tr, svm_models_final] = multilabel_svm_merge_batc
   display("Done loading...");
   
   if (wfilemap && sparsemodel_final)
-     ncols = length(cidx) - 1;
-     fwrite(wfile, [ncols nrows] , "int32");
-     fwrite(wfile,cidx,"int32");
-     fwrite(wfile,ridx, "int32");
-     fwrite(wfile,vals,"single");	 
+     fwrite(wfile, [ncols nrows] , "int64");
+     for c = cidx
+       fwrite(wfile,c{},"int64");
+     end
+     for r = ridx 
+       fwrite(wfile,r{}, "int64");
+     end
+     for v = vals 
+       fwrite(wfile,v{},"single");	 
+     end
   end
 
   if (keep_out)

@@ -53,10 +53,12 @@ void read_dense_binary(const char* filename, ovaDenseColM& m, const DenseColMf::
 // Next is an array of outer+1  index types representing the outer index
 // Next is an array of index types representing the inner indices
 // Next is an array of index types representing the values.
+
+// to do , store the size of the index typte and the size of the scalar type in the file
 void read_sparse_binary(const char* filename, ovaSparseColM& m, const ovaSparseColM::StorageIndex rows, const ovaSparseColM::StorageIndex cols, const ovaSparseColM::StorageIndex start_col /*=0*/)
 {
   assert(sizeof(ovaSparseColM::Scalar) == 4);
-  assert(sizeof(ovaSparseColM::StorageIndex) == 4);
+  assert(sizeof(ovaSparseColM::StorageIndex) == 8);
   ifstream in(filename, ios::in | ios::binary);
   if (in.is_open())
     {
@@ -69,7 +71,7 @@ void read_sparse_binary(const char* filename, ovaSparseColM& m, const ovaSparseC
 	  std::cerr << "Error allocating OVA matrix of size " << rows << "x" << cols << ". " << std::endl;
 	  throw;
 	}
-      ovaSparseColM::StorageIndex nouter=0;  // nr of outer dimensions cols in a clumn major matrix
+      ovaSparseColM::StorageIndex nouter=0;  // nr of outer dimensions cols in a column major matrix
       ovaSparseColM::StorageIndex ninner=0;   // n of row in a rowmajor matrix      
       in.read((char*)(&nouter), sizeof(ovaSparseColM::StorageIndex));
       in.read((char*)(&ninner), sizeof(ovaSparseColM::StorageIndex));

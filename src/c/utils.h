@@ -62,12 +62,12 @@ void addInnerVector (Eigen::Ref<Eigen::VectorXd> addto, const EigenType& addfrom
     }  
 }
 
-template <typename Scalar1, typename Scalar2> inline
-  double DotProductInnerVector (const Eigen::SparseMatrix<Scalar1, Eigen::RowMajor>& rowmat, const Eigen::Index row, const Eigen::SparseMatrix<Scalar2, Eigen::ColMajor>& colmat, const Eigen::Index col)
+template <typename Scalar1, typename IndexType1,  typename Scalar2, typename IndexType2> inline
+  double DotProductInnerVector (const Eigen::SparseMatrix<Scalar1, Eigen::RowMajor, IndexType1>& rowmat, const Eigen::Index row, const Eigen::SparseMatrix<Scalar2, Eigen::ColMajor, IndexType2>& colmat, const Eigen::Index col)
 {
   assert(rowmat.cols()==colmat.rows());
-  typename Eigen::SparseMatrix<Scalar1, Eigen::RowMajor>::InnerIterator iter1(rowmat,row);
-  typename Eigen::SparseMatrix<Scalar2, Eigen::ColMajor>::InnerIterator iter2(colmat,col);
+  typename Eigen::SparseMatrix<Scalar1, Eigen::RowMajor, IndexType1>::InnerIterator iter1(rowmat,row);
+  typename Eigen::SparseMatrix<Scalar2, Eigen::ColMajor, IndexType2>::InnerIterator iter2(colmat,col);
   double ans = 0.0;
   while (iter1 && iter2)
     {
@@ -89,11 +89,11 @@ template <typename Scalar1, typename Scalar2> inline
   return ans;
 }
 
-template <typename Scalar1, typename Scalar2> inline
-  double DotProductInnerVector (const Eigen::Matrix<Scalar1, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& rowmat, const Eigen::Index row, const Eigen::SparseMatrix<Scalar2, Eigen::ColMajor>& colmat, const Eigen::Index col)
+template <typename Scalar1, typename Scalar2, typename IndexType2> inline
+  double DotProductInnerVector (const Eigen::Matrix<Scalar1, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor>& rowmat, const Eigen::Index row, const Eigen::SparseMatrix<Scalar2, Eigen::ColMajor, IndexType2>& colmat, const Eigen::Index col)
 {
   assert(rowmat.cols()==colmat.rows());
-  typename Eigen::SparseMatrix<Scalar2, Eigen::ColMajor>::InnerIterator iter2(colmat,col);
+  typename Eigen::SparseMatrix<Scalar2, Eigen::ColMajor, IndexType2>::InnerIterator iter2(colmat,col);
   double ans = 0.0;
   for  (; iter2; ++iter2) 
     {
@@ -102,15 +102,17 @@ template <typename Scalar1, typename Scalar2> inline
   return ans;
 }
 
-template <typename Scalar1, typename Scalar2>
-  double DotProductInnerVector (const Eigen::SparseMatrix<Scalar1, Eigen::RowMajor>& rowmat, const Eigen::Index row, const Eigen::Matrix<Scalar2, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>& colmat, const Eigen::Index col)
+template <typename Scalar1, typename IndexType1, typename Scalar2>
+  double DotProductInnerVector (const Eigen::SparseMatrix<Scalar1, Eigen::RowMajor, IndexType1>& rowmat, const Eigen::Index row, const Eigen::Matrix<Scalar2, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor>& colmat, const Eigen::Index col)
 {
   assert(rowmat.cols()==colmat.rows());
-  typename Eigen::SparseMatrix<Scalar1, Eigen::RowMajor>::InnerIterator iter1(rowmat,row);
+  typename Eigen::SparseMatrix<Scalar1, Eigen::RowMajor, IndexType1>::InnerIterator iter1(rowmat,row);
   double ans = 0.0;
   for  (; iter1; ++iter1) 
     {
-      ans += colmat.coeff(iter1.index(),col)*iter1.value();
+      double c = colmat.coeff(iter1.index(),col);
+      ans += c*iter1.value();
+      //      ans += colmat.coeff(iter1.index(),col)*iter1.value();
     }  
   return ans;
 }

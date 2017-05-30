@@ -216,7 +216,7 @@ int main(int argc, char * argv[])
 
   
   octave_value x_te,y_te, x_va, y_va;
-    
+  
   octave_value_list args(3); 
   args(0)=vm["data_file"].as<string>();
   args(1)="x_te"; 
@@ -258,7 +258,6 @@ int main(int argc, char * argv[])
       args.clear();
       loaded.clear();
     }
-  
   std::vector<SparseMb*> y;
   if (y_te.is_sparse_type())
     {
@@ -299,7 +298,6 @@ int main(int argc, char * argv[])
     }
   
   ovaModel ovaW;
-
   int chunks = vm["chunks"].as<int>();
   assert(chunks > 0);
   if (chunks == 1)

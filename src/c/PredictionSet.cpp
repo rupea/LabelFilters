@@ -471,7 +471,7 @@ void PredictionSet::TopMetrics(double& Prec1, double& Top1,
 		my_top10 += (tp>0);
 	      }
 	  }
-	//k is at least 1
+	//k is at least 1 (tested for empty preds vector above)
 	if (k < 5)
 	  {
 	    my_prec5 += tp*1.0/k;

@@ -1,4 +1,4 @@
-function [xout,yout,map,map_ignored] = remove_rare_classes(xin,yin,min_ex_per_class, mapin=[], min_ex_in_all_sets = true)
+function [xout,yout,map,map_ignored] = remove_rare_classes(xin,yin,min_ex_per_class, max_classes = -1, mapin=[], min_ex_in_all_sets = true, eliminate_ex_with_no_labels = true)
   cellinput = true;
   if (!iscell(xin))
     yin = {yin};
@@ -20,11 +20,20 @@ function [xout,yout,map,map_ignored] = remove_rare_classes(xin,yin,min_ex_per_cl
     map_ignored = [];
     new_l = 1;
     l_ignored = 1;
-    for l = unique(cat(1,yin{:}))'
-      if (sum(y==l) >= min_ex_per_class)
+    
+    [ex_per_class, classes] = table(y);
+    nclasses = lenght(classes);
+    if (max_classes <= 0)
+      max_classes = nclasses;
+    endif
+    rnks = ranks(ex_per_class + rand(1,nclasses)/100); # randomly break ties
+    sel = (ex_per_class >= min_ex_per_class) & (rnks > nclasses - max_classes);
+    for k = 1:nclasses
+      l = classes(k);
+      if sel(k)
 	for i=1:length(yin)
 	  yout{i}(yin{i}==l,1)=new_l;
-	end	
+	endfor	
 	if (isempty(mapin))
 	  map(new_l) = l;
 	else
@@ -45,25 +54,38 @@ function [xout,yout,map,map_ignored] = remove_rare_classes(xin,yin,min_ex_per_cl
     end
     
     ## eliminate the examples that have had the labels removed
+    if (elminate_ex_with_no_label)
+      error("Can not have examples with no label in multi-class scenario");
+    endif
     for i=1:length(yout)
       yout{i} = yout{i}(yout{i} != -999);
       xout{i} = xin{i}(yout{i} != -999,:);
     end
-
+    
   else
     ## multi label problem. Labels are in a matrix        
     ex_per_class=sum(y,1);
+    nclasses = size(y,2);
+    if (max_classes <= 0 )
+      max_classes = nclasses;
+    endif
+    rnks = ranks(ex_per_class + rand(1,nclasses)/100); # randomly break ties
+    sel = (ex_per_class >= min_ex_per_class) & (rnks > nclasses - max_classes);
     if (isempty(mapin))
       mapin = 1:size(y,2);
-    endif
-    map_ignored = mapin(ex_per_class < min_ex_per_class);
-    map = mapin(ex_per_class >= min_ex_per_class);
+    endif    
+    map = mapin(sel);
+    map_ignored = mapin(!sel);
     for i=1:length(yin)
-      yout{i} = yin{i}(:,ex_per_class >= min_ex_per_class);
+      yout{i} = yin{i}(:,sel);
       ## take out instances that do not have a class associated with them any more    
-      n_classes=sum(yout{i},2);
-      yout{i} = yout{i}(n_classes > 0,:); 
-      xout{i} = xin{i}(n_classes > 0,:);
+      if (eliminate_ex_with_no_labels)
+	classes_per_ex=sum(yout{i},2);
+	yout{i} = yout{i}(classes_per_ex > 0,:); 
+	xout{i} = xin{i}(classes_per_ex > 0,:);
+      else
+	xout{i} = xin{i};
+      endif
     end
   endif
   if (!cellinput)

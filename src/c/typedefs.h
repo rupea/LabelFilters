@@ -39,8 +39,8 @@ typedef Eigen::Matrix<ovaCoeffType, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMa
 typedef Eigen::Matrix<ovaCoeffType, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor> ovaDenseColM;
 typedef Eigen::Matrix<ovaCoeffType, 1, Eigen::Dynamic, Eigen::RowMajor> ovaDenseRowV;
 typedef Eigen::Matrix<ovaCoeffType, Eigen::Dynamic, 1, Eigen::ColMajor> ovaDenseColV;
-typedef Eigen::SparseMatrix<ovaCoeffType, Eigen::RowMajor> ovaSparseRowM;
-typedef Eigen::SparseMatrix<ovaCoeffType, Eigen::ColMajor> ovaSparseColM;
+typedef Eigen::SparseMatrix<ovaCoeffType, Eigen::RowMajor, int64_t> ovaSparseRowM;
+typedef Eigen::SparseMatrix<ovaCoeffType, Eigen::ColMajor, int64_t> ovaSparseColM;
 
 
 typedef  boost::variant<ovaDenseColM, ovaSparseColM> ovaModel;

@@ -33,9 +33,9 @@ int64NDArray toInt64Array(const VectorXsz& eigenVec);
 
 Eigen::VectorXd toEigenVec(const FloatNDArray& data);
 
-template<typename DenseMatType, typename OctDenseMatType> DenseMatType toEigenMat(OctDenseMatType const& data, typename DenseMatType::Scalar bias=0.0);
+template<typename DenseMatType, typename OctDenseMatType> DenseMatType toEigenMat(OctDenseMatType const& data, typename DenseMatType::Scalar bias=0);
 //template<typename DenseMatType> DenseMatType                           toEigenMat(const NDArray& data);
-template<typename Scalar> Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data, Scalar bias = 0.0);
+template<typename Scalar> Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& data, Scalar bias = 0);
 /** converts data from a cell array of vectors of the same length to
  * a eigen dense matrix, with each vector representing a column of the
  * matrix. Assumes the vectors are row vectors (maybe this can be relaxed)
@@ -109,7 +109,6 @@ Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& da
       }
     }
   }
-  
   // add a constant entry at the last column to serve as an intercept
   if (bias) 
     {
@@ -119,10 +118,10 @@ Eigen::SparseMatrix<Scalar, Eigen::RowMajor> toEigenMat(const Sparse<Scalar>& da
 	}
       nc++;
     }
-
+  cout << nc << endl;
   Eigen::SparseMatrix<Scalar, Eigen::RowMajor>  m(nr, nc);
   m.setFromTriplets(tripletList.begin(), tripletList.end());
-  cout << "data is read to Eigen ... \n";
+  cout << "data is read to Eigen ... " << endl;
   return m;
 };
 
