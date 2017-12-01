@@ -1,6 +1,7 @@
 
 #include "mcprojProg.hpp"
 #include "mcsolveProg.hpp"
+#include "mcxydata.h"
 #include "printing.hh"
 #include "normalize.h"
 #include "mcpredict.hh"
@@ -27,7 +28,7 @@ namespace opt {
         : ::opt::MCprojArgs( argc, argv )
         , soln()
         , solveProg(nullptr)           // empty shared pointer
-        , xy( new MCxyData() )
+        , xy( new ::MCxyData() )
         , feasible()
         //, projFeasible()
     {
@@ -118,30 +119,25 @@ namespace opt {
             }
         }
 #endif
-        if( xy->sparseOk && xnorm )
-            throw std::runtime_error("sparse --xfile does not support --xnorm");
-        if( xy->denseOk ){
-            if( A::xnorm ){
-                VectorXd xmean;
-                VectorXd xstdev;
-                if(verbose>=1){
-                    if( xy->xDense.size() < 50U ) cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
-                    cout<<" xnorm!"<<endl;
-                }
-#if 1
-                col_normalize(xy->xDense,xmean,xstdev);
-                if(verbose>=1){
-                    cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
-                    cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
-                }
-#else
-                normalize_col(xy->xDense);
-#endif
-            }
-        }
-        if( A::xunit ){
-            xy->xrunit();
-        }
+	if( A::xnorm ){
+	  if (!xy->denseOk)	throw std::runtime_error("sparse --xfile does not support --xnorm");      
+	  // SHOULD USE THE MEAN/SDEV CALCULATED FOR THE TRAINIGN SET, NOT THE ONES FOR THE PROJECTION SET!!!
+	  ::Eigen::VectorXd xmean;
+	  ::Eigen::VectorXd xstdev;
+	  if(verbose>=1){
+	    cout<<" xnorm!"<<endl;
+	  }
+	  xy->xstdnormal(xmean, xstdev, true, true, false);
+	  if(verbose>=1){
+	    cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
+	    cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
+	  }
+	}
+	
+	if( A::xunit ){
+	  xy->xunitnormal();
+	}
+
         if( A::xscale != 1.0 ){
             xy-> xscale( A::xscale );
         }

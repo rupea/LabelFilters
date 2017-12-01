@@ -1,5 +1,8 @@
+#ifndef __MCUPDATE_H
+#define __MCUPDATE_H
 
-#include "mcsolver.hh"
+
+//#include "mcsolver.hh" -- circular inclusion 
 
 struct MCupdate
 {
@@ -24,7 +27,7 @@ struct MCupdate
                 assert( luPerm.ok_sortlu_avg );
             }
             VectorXd& sortedLU                          = luPerm.sortlu;
-            VectorXd& sortedLU_avg                      = luPerm.sortlu_avg;
+            VectorXd& sortedLU_acc                      = luPerm.sortlu_acc;
             std::vector<int> const& sorted_class        = luPerm.perm;
             std::vector<int> const& class_order         = luPerm.rev;
 
@@ -43,14 +46,14 @@ struct MCupdate
             // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU
             assert( luPerm.ok_sortlu_avg == true ); // accumulator begins at all zeros, so true
             if (params.update_type == SAFE_SGD) {
-                update_safe_SGD(w, sortedLU, sortedLU_avg,
+                update_safe_SGD(w, sortedLU, sortedLU_acc,
                                 x, y, xSqNorms,
                                 C1, C2, lambda, t, eta_t, nTrain, // nTrain is just x.rows()
                                 nclasses, maxclasses, sorted_class, class_order, filtered,
                                 sc_chunks, sc_chunk_size, sc_remaining,
                                 params);
             } else if (params.update_type == MINIBATCH_SGD) {
-                update_minibatch_SGD(w, sortedLU, sortedLU_avg,
+                update_minibatch_SGD(w, sortedLU, sortedLU_acc,
                                      x, y, C1, C2, lambda, t, eta_t, nTrain, batch_size,
                                      nclasses, maxclasses, sorted_class, class_order, filtered,
                                      sc_chunks, sc_chunk_size, sc_remaining,
@@ -58,12 +61,13 @@ struct MCupdate
                                      idx_locks, sc_locks,
                                      params);
             }
-            luPerm.chg_sortlu();        // sortlu change ==> ok_lu now false
             // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU_avg
             if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch){
-                assert( luPerm.ok_sortlu_avg == true );
-                ++luPerm.nAccSortlu_avg;
-                luPerm.chg_sortlu_avg();      // ==> {l,u}_avg are no longer OK reflections of accumulated sortlu_avg
+                ++luPerm.nAccSortlu;
             }
+            luPerm.chg_sortlu();        // sortlu change ==> ok_lu now false
         }
 };
+
+
+#endif //__MCUPDATE_H

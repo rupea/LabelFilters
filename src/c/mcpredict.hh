@@ -63,7 +63,7 @@ private:
     DenseM lSlope;      ///< 1.0/(mid-lb)
     DenseM uSlope;      ///< 1.0/(ub-mid)
     //@}
-    VectorXd scDbl;       ///< for ONE example [ nClass ]
+  Eigen::VectorXd scDbl;       ///< for ONE example [ nClass ]
 };
 
 #if 0

@@ -26,6 +26,8 @@
  * class_samples -- default 0 (I am not sure this should be here, but the user
  *                  has the option to set it to 100 or 1000 if learning is too slow) 
  * 
+ * verbose -- default 1. Set to 0 to have no output
+ *
  * Development options:
  *   update_type — default safe 
  *   batch_size — default 1 (max(1000,nExamples) for minibatch update)
@@ -165,6 +167,7 @@ typedef struct
   Init_W_Type init_type; // how to initialize w
   bool init_orthogonal; // initialize w to be orthogonal on previous projections?
   double init_norm;  // initialize w to this norm. If negative, no renormalization is performed. 
+  int verbose; // verbosity level 
   //@}
   /// \group Compile-time options
   //@{
@@ -217,6 +220,7 @@ inline param_struct set_default_params()
   def.init_type = INIT_DIFF;
   def.init_norm = 10; // no good reason for using 10. 
   def.init_orthogonal = false;
+  def.verbose = 1; // print output
   // Compile-time options
 #if GRADIENT_TEST
   def.finite_diff_test_epoch=0;

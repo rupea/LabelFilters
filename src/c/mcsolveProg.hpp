@@ -3,13 +3,15 @@
 /** \file
  * Encapsulate original standalone mcsolve/mcproj into library.
  */
-#include "find_w.h"
+#include "mcsolver.h"
 #include "parameter-args.h"
 #include <memory>
 
+class MCxyData; 
+
 namespace opt {
 
-    class MCprojProgram; // fwd decl, just in case.
+  class MCprojProgram; // fwd decl, just in case.
 
     /** high level MCsolver api, as used in mcsolve executable */
     class MCsolveProgram : private ::opt::MCsolveArgs, public ::MCsolver {
@@ -71,8 +73,8 @@ namespace opt {
         void quadx();
         //::MCsolver const& solver() const {return *this;}
     private:
-        MCprojProgram * projProg;
-        std::shared_ptr<MCxyData> xy;
+      MCprojProgram * projProg;
+      std::shared_ptr<::MCxyData> xy;
     };
 
 }//opt::

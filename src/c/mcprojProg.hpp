@@ -3,12 +3,14 @@
 /** \file
  * Encapsulate original standalone mcsolve/mcproj into library.
  */
-#include "find_w.h"
+#include "mcsoln.h"
 #include "parameter-args.h"
 
 #include <vector>
 #include <boost/dynamic_bitset.hpp>
 #include <memory>
+
+class MCxyData;
 
 namespace opt {
 
@@ -54,7 +56,7 @@ namespace opt {
         MCsoln soln;                                    ///< required, from A::solnFile
         //std::shared_ptr<MCsolveProgram> solveProg;      ///< \em linked external solver [opt.] unowned ptr.
         MCsolveProgram * solveProg;
-        std::shared_ptr<MCxyData> xy;
+      std::shared_ptr<::MCxyData> xy;
         /** \b Final projection data [output].
          * For each example row of \c x{Dense|Sparse},
          * raw output is a bitset of feasible classes.

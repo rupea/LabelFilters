@@ -3,9 +3,9 @@
 //#include "Eigen/Dense"
 //#include "Eigen/Sparse"
 //#include "constants.h"
-//#include "typedefs.h"
+#include "typedefs.h"
 //#include "printing.h"
-//#include <iostream>
+#include <iostream>
 //#include <math.h>
 //
 #if !defined(PRINT_M)

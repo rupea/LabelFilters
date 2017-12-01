@@ -14,6 +14,7 @@
 #include <exception>
 #include <cstdint>
 using namespace std;
+using namespace Eigen;
 
 /** given a d-dimensional \c corner, and a list of d d-dimensional
  * edge vectors, return a skewed d-dimensional hyperrectangle \c rect.

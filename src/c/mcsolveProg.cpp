@@ -1,6 +1,6 @@
-
 #include "mcsolveProg.hpp"
 #include "mcprojProg.hpp"
+#include "mcxydata.h"
 #include "printing.hh"
 #include "normalize.h"
 
@@ -19,288 +19,281 @@ namespace opt {
      *   - 2. if --solnFile, adopt parms from a previous run
      *   - 3. else use library defaults
      */
-    MCsolveProgram::MCsolveProgram( int argc, char**argv
-                                    , int const verbose/*=0*/
-                                    , param_struct const* const defparms/*=nullptr*/ )
-        : ::opt::MCsolveArgs( argc, argv )
-            , ::MCsolver( solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
-            , projProg()                // empty shared ptr
-            , xy( new MCxyData() )
-    {
-        // defaults: if given explicitly as \c defparms
-        if( defparms ){
-            cout<<" reparse cmdline, this time with supplied defaults"<<endl;
-            A::parms = *defparms;
-            parse(argc,argv);
-        }else if( solnFile.size() ){
-                cout<<" reparse cmdline, this time with "<<solnFile<<" parms as defaults"<<endl;
-                A::parms = S::getParms();   // solnFile parms provide new "default" settings
-                parse(argc,argv);           // so must parse args again for cmdline overrides
-        }else{
-            if( A::parms.resume ) throw std::runtime_error(" --resume needs --solnfile=... or explicit default parms");
-            if( A::parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu needs --solnfile=... or explicit default parms");
-        }
-        if(verbose>=1){
-            cout<<" +MCsolveProgram --xfile="<<A::xFile <<" --yFile="<<A::yFile;
-            if(A::solnFile.size()) cout<<" --solnFile="<<A::solnFile;
-            if(A::outFile.size()) cout<<" --output="<<A::outFile;
-            if(A::outBinary) cout<<" -B";
-            if(A::outText)   cout<<" -T";
-            if(A::outShort)  cout<<" -S";
-            if(A::outLong)   cout<<" -L";
-            if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
-            //if(A::threads)   cout<<" --threads="<<A::threads;
-            if(A::xnorm)     cout<<" --xnorm";
-            if(A::xunit)     cout<<" --xunit";
-            if(A::xscale!=1.0) cout<<" --xscale="<<A::xscale;
-            cout<<endl;
-        }
+  MCsolveProgram::MCsolveProgram( int argc, char**argv
+				  , int const verbose/*=0*/
+				  , param_struct const* const defparms/*=nullptr*/ )
+    : ::opt::MCsolveArgs( argc, argv )
+    , ::MCsolver( solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
+    , projProg()                // empty shared ptr
+    , xy( new ::MCxyData() )
+  {
+    // defaults: if given explicitly as \c defparms
+    if( defparms ){
+      cout<<" reparse cmdline, this time with supplied defaults"<<endl;
+      A::parms = *defparms;
+      parse(argc,argv);
+    }else if( solnFile.size() ){
+      cout<<" reparse cmdline, this time with "<<solnFile<<" parms as defaults"<<endl;
+      A::parms = S::getParms();   // solnFile parms provide new "default" settings
+      parse(argc,argv);           // so must parse args again for cmdline overrides
+    }else{
+      if( A::parms.resume ) throw std::runtime_error(" --resume needs --solnfile=... or explicit default parms");
+      if( A::parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu needs --solnfile=... or explicit default parms");
     }
-    MCsolveProgram::~MCsolveProgram(){
-        if( projProg && projProg->solveProg ){  // reset known shared_ptr to me [circular]
-            //projProg->solveProg.reset();
-            projProg->solveProg = nullptr;
-        }
+    if(verbose>=1){
+      cout<<" +MCsolveProgram --xfile="<<A::xFile <<" --yFile="<<A::yFile;
+      if(A::solnFile.size()) cout<<" --solnFile="<<A::solnFile;
+      if(A::outFile.size()) cout<<" --output="<<A::outFile;
+      if(A::outBinary) cout<<" -B";
+      if(A::outText)   cout<<" -T";
+      if(A::outShort)  cout<<" -S";
+      if(A::outLong)   cout<<" -L";
+      if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
+      //if(A::threads)   cout<<" --threads="<<A::threads;
+      if(A::xnorm)     cout<<" --xnorm";
+      if(A::xunit)     cout<<" --xunit";
+      if(A::xscale!=1.0) cout<<" --xscale="<<A::xscale;
+      cout<<endl;
     }
-    void MCsolveProgram::tryRead( int const verb/*=0*/ ){
-        int const verbose = A::verbose + verb;
-        if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
-        // read the following MCsolveProgram data:
-        //DenseM  xDense;
-        //bool    denseOk=false;
-        //SparseM xSparse;
-        //bool    sparseOk=false;
-        if( yFile.size() == 0 && xFile.size() != 0 ){
-            try{
-                ifstream xfs;
-                // try to read a text libsvm format -- xy->y labels, then SparseX data
-                xfs.open(xFile);
-                if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-                detail::eigen_read_libsvm( xfs, xy->xSparse, xy->y );
-                xy->sparseOk = true;
-                xfs.close();
-            }catch(std::exception const& e){
-                cerr<<" --xFile="<<xFile<<" and no --yFile: libsvm format input error!"<<endl;
-                throw;
-            }
-        }
-        if(!xy->sparseOk){
-            xy->xread(xFile);
-        }
-        if(xnorm && xy->sparseOk){
-            xy->xDense = DenseM( xy->xSparse );     // convert sparse --> dense
-            xy->xSparse.resize(0,0);
-            xy->sparseOk = false;
-            xy->denseOk = true;
-        }
-        // read SparseMb xy->y;
-        if(yFile.size()){
-            xy->yread(yFile);
-            if( !(xy->y.size() > 0) ) throw std::runtime_error("trouble reading y data");
-        }
+  }
+  MCsolveProgram::~MCsolveProgram(){
+    if( projProg && projProg->solveProg ){  // reset known shared_ptr to me [circular]
+      //projProg->solveProg.reset();
+      projProg->solveProg = nullptr;
+    }
+  }
+  void MCsolveProgram::tryRead( int const verb/*=0*/ ){
+    int const verbose = A::verbose + verb;
+    if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
+    // read the following MCsolveProgram data:
+    //DenseM  xDense;
+    //bool    denseOk=false;
+    //SparseM xSparse;
+    //bool    sparseOk=false;
+    if( yFile.size() == 0 && xFile.size() != 0 ){
+      try{
+	ifstream xfs;
+	// try to read a text libsvm format -- xy->y labels, then SparseX data
+	xfs.open(xFile);
+	if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
+	detail::eigen_read_libsvm( xfs, xy->xSparse, xy->y );
+	xy->sparseOk = true;
+	xfs.close();
+      }catch(std::exception const& e){
+	cerr<<" --xFile="<<xFile<<" and no --yFile: libsvm format input error!"<<endl;
+	throw;
+      }
+    }
+    if(!xy->sparseOk){
+      xy->xread(xFile);
+    }
+    if(xnorm && xy->sparseOk){
+      xy->xDense = DenseM( xy->xSparse );     // convert sparse --> dense
+      xy->xSparse.resize(0,0);
+      xy->sparseOk = false;
+      xy->denseOk = true;
+    }
+    // read SparseMb xy->y;
+    if(yFile.size()){
+      xy->yread(yFile);
+      if( !(xy->y.size() > 0) ) throw std::runtime_error("trouble reading y data");
+    }
 #ifndef NDEBUG
-        assert( xy->denseOk || xy->sparseOk );
-        if( xy->denseOk ){
-            assert( xy->xDense.rows() == xy->y.rows() );
-        }else{ //xy->sparseOk
-            assert( xy->xSparse.rows() == xy->y.rows() );
-            // col-norm DISALLOWED
-        }
+    assert( xy->denseOk || xy->sparseOk );
+    if( xy->denseOk ){
+      assert( xy->xDense.rows() == xy->y.rows() );
+    }else{ //xy->sparseOk
+      assert( xy->xSparse.rows() == xy->y.rows() );
+      // col-norm DISALLOWED
+    }
 #endif
-        if( xy->sparseOk && xnorm )
-            throw std::runtime_error("sparse --xfile does not support --xnorm");
-        if( xy->denseOk ){
-            if( A::xnorm ){
-                VectorXd xmean;
-                VectorXd xstdev;
-                if(verbose>=1){
-                    if( xy->xDense.size() < 50U ) cout<<"xy->xDense ORIG:\n"<<xy->xDense<<endl;
-                    cout<<" xnorm!"<<endl;
-                }
-#if 1
-                col_normalize(xy->xDense,xmean,xstdev);
-                if(verbose>=1){
-                    cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
-                    cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
-                }
-#else
-                normalize_col(xy->xDense);
-#endif
-            }
-        }
-        if( A::xunit ){
-            xy->xrunit();
-        }
-        if( A::xscale != 1.0 ){
-            xy -> xscale( A::xscale );
-        }
-
-        if(verbose>=1){
-            if( xy->denseOk ){
-                cout<<"--------- xy->xDense"<<prettyDims(xy->xDense)<<":\n";
-                if(xy->xDense.size()<1000||verbose>=3) cout<<xy->xDense<<endl;
-            }else{ //xy->sparseOk
-                cout<<"--------- xy->xSparse"<<prettyDims(xy->xSparse)<<":\n";
-                if(xy->xSparse.size()<1000||verbose>=3) cout<<xy->xSparse<<endl;
-                //if( xnorm ){ cout<<" xnorm!"<<endl; col_normalize(xy->xSparse,xmean,xstdev); }
-                // col-norm DISALLOWED
-                if( xnorm ) throw std::runtime_error("sparse --xfile does not support --xnorm");
-            }
-            if( xy->y.size() <= 0 ) cout<<"xy->y: (no validation data)"<<endl;
-            else{
-                cout<<"--------- xy->y"<<prettyDims(xy->y)<<":\n";
-                if(xy->y.size()<1000||verbose>=3) cout<<xy->y<<endl;
-            }
-        }
-    }
-    /** \sa mcsolver.hh for \ref MCsolver::solve implementation.
-     * \ref MCsolver::solve is a compact rewrite of the original
-     * \ref solve_optimization routine. */
-    void MCsolveProgram::trySolve( int const verb/*=0*/ ){
-        int const verbose = A::verbose + verb;
-        if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(xy->denseOk?"dense":xy->sparseOk?"sparse":"HUH?")<<endl;
-        if( xy->denseOk ){
-            S::solve( xy->xDense, xy->y, &(A::parms) );
-        }else if( xy->sparseOk ){
-            // normalization NOT YET SUPPORTED for sparse
-            S::solve( xy->xSparse, xy->y, &(A::parms) );
-        }else{
-            throw std::runtime_error("neither sparse nor dense training x was available");
-        }
-        // S::solve uses A::parms for the run, and will update S:parms to record
-        // how the next outFile (.soln) was obtained.
-#if 0
-        // --- post-processing --- opportunity to add 'easy' stuff to MCsoln ---
-        if( xy->denseOk ){
-            S::setQuantiles( xy->xDense, xy->y );
-        }else if( xy->sparseOk ){
-            S::setQuantiles( xy->xSparse, xy->y );
-        }
-        // ---------------------------------------------------------------------
-#endif
-    }
-    void MCsolveProgram::trySave( int const verb/*=0*/ ){
-        int const verbose = A::verbose + verb;
-        if(verbose>=1) cout<<"MCsolveProgram::trySave()"<<endl;
-        MCsoln & soln = S::getSoln();
-        if( A::outFile.size() ){
-            if(verbose>=1){
-                cout<<" Writing MCsoln";
-                if( A::solnFile.size() ) cout<<" initially from "<<A::solnFile;
-                cout<<" to "<<A::outFile<<endl;
-            }
-            soln.fname = A::solnFile;
-            { // should I have an option to print the soln to cout? NAAH
-                ofstream ofs;
-                try{
-                    ofs.open(A::outFile);
-                    if( ! ofs.good() ) throw std::runtime_error("trouble opening outFile");
-                    soln.write( ofs, (A::outBinary? MCsoln::BINARY: MCsoln::TEXT)
-                                ,    (A::outShort ? MCsoln::SHORT : MCsoln::LONG) );
-                    if( ! ofs.good() ) throw std::runtime_error("trouble writing outFile");
-                    ofs.close();
-                }catch(std::exception const& e){
-                    cerr<<" trouble writing "<<A::outFile<<" : "<<e.what()<<endl;
-                    ofs.close();
-                    throw;
-                }catch(...){
-                    cerr<<" trouble writing "<<A::outFile<<" : unknown exception"<<endl;
-                    ofs.close();
-                    throw;
-                }
-                if(verbose>=1) cout<<"\tmcdumpsoln -p < "<<A::outFile<<" | less    # to prettyprint the soln"<<endl;
-            }
-        }
-    }
-    void MCsolveProgram::savex( std::string fname ) const {
-        xy-> xwrite( fname ); // handles "current" x format (sparse/dense)
-    }
-    void MCsolveProgram::savey( std::string fname ) const {
-        xy-> ywrite( fname ); // only binary save here, inefficient :(
+    if( A::xnorm ){
+      if (!xy->denseOk)	throw std::runtime_error("sparse --xfile does not support --xnorm");      
+      ::Eigen::VectorXd xmean;
+      ::Eigen::VectorXd xstdev;
+      if(verbose>=1){
+	cout<<" xnorm!"<<endl;
+      }
+      xy->xstdnormal(xmean, xstdev, true, true, false);
+      if(verbose>=1){
+	cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
+	cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
+      }
     }
     
-    /** transform EVERY row of x by adding the "quadratic dimensions".
-     * i.e. append the data values of the outer product of the row vectors.
-     * Should use full parallelism for this! \throw if no data.
-     * \sa MCxyData::quadx(). */
-    void MCsolveProgram::quadx() {
-        xy->quadx();                    // autoscale
+    if( A::xunit ){
+      xy->xunitnormal();
     }
-                
-    /** print some smaller valid intervals, and return number of
-     * classes with vanishing intervals. */
-    static size_t printNarrowIntervals( std::ostream&  os, size_t const maxNarrow,
-                                        DenseM const& l, DenseM const& u, size_t const p ){
-        vector<size_t> narrow;
-        size_t wrong=0U;
-        for(size_t c=0U; c<l.rows(); ++c){
-            if( l.coeff(c,p) > u.coeff(c,p) ){
-                ++wrong;
-                continue;
-            }
-            double width = u.coeff(c,p) - l.coeff(c,p);
-            //cout<<"."; cout.flush();
-            if( narrow.size() < maxNarrow
-                || width <= u.coeff(narrow.back(),p)-l.coeff(narrow.back(),p))
-            {
-                //cout<<" c="<<c<<" wid:"<<width;
-                if( narrow.size() >= maxNarrow )
-                    narrow.pop_back();
-#if 1 // WORKS
-                size_t big=0U;
-                for( ; big<narrow.size(); ++big ){
-                    if( u.coeff(narrow[big],p)-l.coeff(narrow[big],p) > width )
-                        break;
-                }
-                //cout<<" big="<<big;
-                if( big < narrow.size() ){
-                    narrow.push_back(0); // likely in wrong postion
-                    for(size_t b=narrow.size()-1U; b>big; --b)
-                        narrow[b] = narrow[b-1];
-                    narrow[big] = c;
-                }else{
-                    narrow.push_back(c);
-                }
-#else // problems with STL way ...
-                auto iter = lower_bound(narrow.begin(),narrow.end(), width,
-                                        [narrow,u,l,p](size_t const& a, double w) {
-                                        size_t const na = narrow[a];
-                                        double const wa = u.coeff(na,p) - l.coeff(na,p);
-                                        return wa < w;
-                                        });
-                {
-                    cout<<" narrow: ";
-                    for(size_t i=0U; i<narrow.size(); ++i){
-                        size_t cls=narrow[i];
-                        cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
-                            <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
-                        //cout<<endl;
-                    }
-                    cout<<endl;
-                }
-                narrow.insert(iter,c); // insert before 'iter'
+    if( A::xscale != 1.0 ){
+      xy -> xscale( A::xscale );
+    }
+    
+    if(verbose>=1){
+      if( xy->denseOk ){
+	cout<<"--------- xy->xDense"<<prettyDims(xy->xDense)<<":\n";
+	if(xy->xDense.size()<1000||verbose>=3) cout<<xy->xDense<<endl;
+      }else{ //xy->sparseOk
+	cout<<"--------- xy->xSparse"<<prettyDims(xy->xSparse)<<":\n";
+	if(xy->xSparse.size()<1000||verbose>=3) cout<<xy->xSparse<<endl;
+	//if( xnorm ){ cout<<" xnorm!"<<endl; col_normalize(xy->xSparse,xmean,xstdev); }
+	// col-norm DISALLOWED
+	if( xnorm ) throw std::runtime_error("sparse --xfile does not support --xnorm");
+      }
+      if( xy->y.size() <= 0 ) cout<<"xy->y: (no validation data)"<<endl;
+      else{
+	cout<<"--------- xy->y"<<prettyDims(xy->y)<<":\n";
+	if(xy->y.size()<1000||verbose>=3) cout<<xy->y<<endl;
+      }
+    }
+  }
+  /** \sa mcsolver.hh for \ref MCsolver::solve implementation.
+   * \ref MCsolver::solve is a compact rewrite of the original
+   * \ref solve_optimization routine. */
+  void MCsolveProgram::trySolve( int const verb/*=0*/ ){
+    int const verbose = A::verbose + verb;
+    if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(xy->denseOk?"dense":xy->sparseOk?"sparse":"HUH?")<<endl;
+    if( xy->denseOk ){
+      S::solve( xy->xDense, xy->y, &(A::parms) );
+    }else if( xy->sparseOk ){
+      // normalization NOT YET SUPPORTED for sparse
+      S::solve( xy->xSparse, xy->y, &(A::parms) );
+    }else{
+      throw std::runtime_error("neither sparse nor dense training x was available");
+    }
+    // S::solve uses A::parms for the run, and will update S:parms to record
+    // how the next outFile (.soln) was obtained.
+#if 0
+    // --- post-processing --- opportunity to add 'easy' stuff to MCsoln ---
+    if( xy->denseOk ){
+      S::setQuantiles( xy->xDense, xy->y );
+    }else if( xy->sparseOk ){
+      S::setQuantiles( xy->xSparse, xy->y );
+    }
+    // ---------------------------------------------------------------------
 #endif
-                if(0){
-                    cout<<"--> narrow: ";
-                    for(size_t i=0U; i<narrow.size(); ++i){
-                        size_t cls=narrow[i];
-                        cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
-                            <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
-                        //cout<<endl;
-                    }
-                    cout<<endl;
-                }
-            }
-        }
-        cout<<" Some narrow non-zero intervals were:"<<endl;
-        for(size_t i=0U; i<narrow.size(); ++i){
-            size_t cls=narrow[i];
-            cout<<" class "<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)<<", "
-                <<u.coeff(cls,p)<<" } width "<<u.coeff(cls,p)-l.coeff(cls,p)<<endl;
-        }
-        return wrong;
+  }
+  void MCsolveProgram::trySave( int const verb/*=0*/ ){
+    int const verbose = A::verbose + verb;
+    if(verbose>=1) cout<<"MCsolveProgram::trySave()"<<endl;
+    MCsoln & soln = S::getSoln();
+    if( A::outFile.size() ){
+      if(verbose>=1){
+	cout<<" Writing MCsoln";
+	if( A::solnFile.size() ) cout<<" initially from "<<A::solnFile;
+	cout<<" to "<<A::outFile<<endl;
+      }
+      soln.fname = A::solnFile;
+      { // should I have an option to print the soln to cout? NAAH
+	ofstream ofs;
+	try{
+	  ofs.open(A::outFile);
+	  if( ! ofs.good() ) throw std::runtime_error("trouble opening outFile");
+	  soln.write( ofs, (A::outBinary? MCsoln::BINARY: MCsoln::TEXT)
+		      ,    (A::outShort ? MCsoln::SHORT : MCsoln::LONG) );
+	  if( ! ofs.good() ) throw std::runtime_error("trouble writing outFile");
+	  ofs.close();
+	}catch(std::exception const& e){
+	  cerr<<" trouble writing "<<A::outFile<<" : "<<e.what()<<endl;
+	  ofs.close();
+	  throw;
+	}catch(...){
+	  cerr<<" trouble writing "<<A::outFile<<" : unknown exception"<<endl;
+	  ofs.close();
+	  throw;
+	}
+	if(verbose>=1) cout<<"\tmcdumpsoln -p < "<<A::outFile<<" | less    # to prettyprint the soln"<<endl;
+      }
     }
-
+  }
+  void MCsolveProgram::savex( std::string fname ) const {
+    xy-> xwrite( fname ); // handles "current" x format (sparse/dense)
+  }
+  void MCsolveProgram::savey( std::string fname ) const {
+    xy-> ywrite( fname ); // only binary save here, inefficient :(
+  }
+  
+  /** transform EVERY row of x by adding the "quadratic dimensions".1,
+   * i.e. append the data values of the outer product of the row vectors.
+   * Should use full parallelism for this! \throw if no data.
+   * \sa MCxyData::quadx(). */
+  void MCsolveProgram::quadx() {
+    xy->quadx();                    // autoscale
+  }
+  
+  /** print some smaller valid intervals, and return number of
+   * classes with vanishing intervals. */
+  static size_t printNarrowIntervals( std::ostream&  os, size_t const maxNarrow,
+				      DenseM const& l, DenseM const& u, size_t const p ){
+    vector<size_t> narrow;
+    size_t wrong=0U;
+    for(size_t c=0U; c<l.rows(); ++c){
+      if( l.coeff(c,p) > u.coeff(c,p) ){
+	++wrong;
+	continue;
+      }
+      double width = u.coeff(c,p) - l.coeff(c,p);
+      //cout<<"."; cout.flush();
+      if( narrow.size() < maxNarrow
+	  || width <= u.coeff(narrow.back(),p)-l.coeff(narrow.back(),p))
+	{
+	  //cout<<" c="<<c<<" wid:"<<width;
+	  if( narrow.size() >= maxNarrow )
+	    narrow.pop_back();
+#if 1 // WORKS
+	  size_t big=0U;
+	  for( ; big<narrow.size(); ++big ){
+	    if( u.coeff(narrow[big],p)-l.coeff(narrow[big],p) > width )
+	      break;
+	  }
+	  //cout<<" big="<<big;
+	  if( big < narrow.size() ){
+	    narrow.push_back(0); // likely in wrong postion
+	    for(size_t b=narrow.size()-1U; b>big; --b)
+	      narrow[b] = narrow[b-1];
+	    narrow[big] = c;
+	  }else{
+	    narrow.push_back(c);
+	  }
+#else // problems with STL way ...
+	  auto iter = lower_bound(narrow.begin(),narrow.end(), width,
+				  [narrow,u,l,p](size_t const& a, double w) {
+				    size_t const na = narrow[a];
+				    double const wa = u.coeff(na,p) - l.coeff(na,p);
+				    return wa < w;
+				  });
+	  {
+	    cout<<" narrow: ";
+	    for(size_t i=0U; i<narrow.size(); ++i){
+	      size_t cls=narrow[i];
+	      cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
+		  <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
+	      //cout<<endl;
+	    }
+	    cout<<endl;
+	  }
+	  narrow.insert(iter,c); // insert before 'iter'
+#endif
+	  if(0){
+	    cout<<"--> narrow: ";
+	    for(size_t i=0U; i<narrow.size(); ++i){
+	      size_t cls=narrow[i];
+	      cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
+		  <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
+	      //cout<<endl;
+	    }
+	    cout<<endl;
+	  }
+	}
+    }
+    cout<<" Some narrow non-zero intervals were:"<<endl;
+    for(size_t i=0U; i<narrow.size(); ++i){
+      size_t cls=narrow[i];
+      cout<<" class "<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)<<", "
+	  <<u.coeff(cls,p)<<" } width "<<u.coeff(cls,p)-l.coeff(cls,p)<<endl;
+    }
+    return wrong;
+  }
+  
     static size_t printWideIntervals( std::ostream&  os, size_t const maxWide,
                                         DenseM const& l, DenseM const& u, size_t const p ){
         int const verbose=0;

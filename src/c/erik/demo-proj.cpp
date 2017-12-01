@@ -1,6 +1,7 @@
 /** \file
  * learn projections using only C++ */
 #include "../find_w.h"
+#include "../mcsolver.h"
 #include "utils.h"              // labelVec2Mat
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -11,6 +12,7 @@
 #include <stdlib.h>
 #include <fstream>
 using namespace std;
+using namespace Eigen;
 
 #define TESTNUM 0
 //#define PROBLEM 2U
@@ -172,7 +174,8 @@ int main(int argc,char** argv)
     params.no_projections = 4U;
     params.max_iter=100000U;              // default 1e6 takes 10-15 minutes
     apply_testnum(params);
-
+    //    params.report_epoch = 1000;
+    //    params.verbose = 0;
     int const rand_seed = 117;
     int const p = params.no_projections;
     //int const d = 12345U;       // x training data dimensionality ~ 440 s runtime

@@ -5,6 +5,7 @@
 #include <iostream>
 
 using namespace std;
+using namespace Eigen;
 
 void projectionsToBitsets( DenseM const& projections,
                            MCsoln const& s,

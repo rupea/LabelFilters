@@ -146,7 +146,7 @@ class WeightVector
   {
     reset_alpha();
     my_weights*=my_scale;
-    my_alpha /= my_scale; // my_alpha is set to0 by reset_alpha if averaging is on. It will be set to my_scale if averaging is off.
+    my_alpha /= my_scale; // my_alpha is set to 0 by reset_alpha if averaging is on. It will be set to my_scale if averaging is off.
     my_scale = 1.0;
   }
 

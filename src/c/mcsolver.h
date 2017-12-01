@@ -3,7 +3,7 @@
 /** \file
  * helper classes to make MCsolver::solve more readable
  */
-#include "find_w.h"
+#include "mcsoln.h"
 #include "boolmatrix.h"
 
 /** MCPRM 0 = no MCpermState.
@@ -23,6 +23,104 @@ class Perm;             ///< an internal detail class -- no user access
 class MCpermState;      ///< track which versions of {l,u}{,_avg} and sortedLU{,_avg} are official
 class MCiterBools;      ///< t4_XXX bools for "Should we {params.XXX} at iteration MCsoln::t?"
 class MCupdateState;    ///< utility constants/variables passed to update routine
+
+/** Provide a simpler API for solving.
+ * - The long \c solve template is now in a 'detail' header,
+ * - The library explicitly instiates for input data \c DenseM and SparseM.
+ * - So no long headers are required to compile if you link with the library.
+ *
+ * - \b NOTE: eventually, one might move some of the other utility routines here ?
+ */
+class MCsolver : protected MCsoln
+      //, private MCpermState      // during iteration, sometimes we work with sortedLU_*, other times need l,u
+      //, private MCiterBools      // utility bools, now easy to ref in details of solve(..)
+{
+public:
+
+    /** Initialize with given input data.
+     * If resume data is OK (readable, compatible with x, y) invoke
+     * solve_optimization with appropriate initialization.
+     *
+     * TODO: fix \b \c solve_optimization so proper resume can be done.
+     *       Initially just copy solve_optimization code until we can
+     *       deprecate the original (which is needed for the octave api).
+     */
+    MCsolver( char const* const solnfile = nullptr );
+    ~MCsolver();
+
+    param_struct const& getParms() const {return this->parms;}
+    MCsoln       const& getSoln()  const {return *this;}
+    MCsoln            & getSoln()        {return *this;}
+    void read( std::istream& is )
+    { MCsoln::read(is); }
+    void write( std::ostream& os, enum Fmt fmt=BINARY, enum Len len=SHORT ) const
+    { MCsoln::write(os,fmt,len); }
+
+    /** solve for MCFilter's optimal multi-class discriminating projections.
+     * \p x     training data, row-wise examples of dimension MCsoln::d
+     * \p y     data classes, (should this be a vector? why a bool matrix?)
+     * \p parms [opt.] parameters that overwrite MCsoln::parms
+     * - if constructed with a solnfile, \throw if x/y dimensions are bad
+     *   - o/w use x and y dims to initialize MCsoln data
+     * - if \c p==nullptr, then use existing MCsoln::parms
+     * \sa vectorToLabel to convert from y VectorXi of class numbers.
+     * \internal
+     * - Is there any benefit from y as vector of class numbers?
+     *
+     * - NOTE: EIGENTYPE \c DenseM and \c SparseM are provided by the default library.
+     *   - Please only include \c find_w_detail.hh for \em strange 'x' types.
+     */
+    template< typename EIGENTYPE >
+        void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* const params_arg = nullptr );
+
+#if 0
+    /** TBD - For each projection add a \b median value for each class label.
+     * This augments {l,u} bounds information, and can be used to provide a
+     * \e crude non-binary score for each class.
+     *
+     * This is a quick'n'easy \e built-in alternative to using a more powerful
+     * decision mechanism, like Alex's original one-vs-all SVM to continue the
+     * label-filtering process.
+     *
+     * <B>Begin with just setting the medians </B>
+     * This could be \em extended to track a set of quantiles.
+     * Quantiles could be compactly stored as \c true_lower,
+     * \c true_upper bounds, followed by byte-values[16?]
+     * for the approx positions of intermediate quantiles.
+     */
+    template< typename EIGENTYPE >
+        setQuantiles( EIGENTYPE const& x, SparseMb const& y );
+#endif
+
+    enum Trim { TRIM_LAST, TRIM_AVG };
+    /** Free memory by moving selected {w,l,u} data into {w,l,u}_avg.
+     * - After a \c solve, or a \c read we may have:
+     *   - {w,l,u} of last iteration (and objective_val)
+     *   - and {w,l,u}_avg of the time-averaged solution (and objective_val_avg)
+     * - But only one set of these is required to \b use the MCsoln
+     * - So after \c solve (or maybe \c read),
+     *   - you might \c write the LONG/SHORT MCsoln to disk
+     *   - and then call trim(...) to free some memory
+     * \post MCsoln is a model of SHORT data -- only {w,l,u}_avg might contain data
+     *
+     * \note While there may be some issue of whether to use w_avg or w, it seems
+     * that the correct function for l and u should be to calculate the \b exact
+     * lower and upper boundaries for whatever projection axes we choose.
+     * This then requires a post-processing pass over the data, during which
+     * other easy trivial operations can be done --- like producing an auxiliary
+     * class median vector that can be quite useful as a built-in poor-man's
+     * nearest-neighbour predictor (for extremely small extra storage).
+     * \detail
+     * - rename 'postSolve', if it does more than just Trim?
+     */
+    void trim( enum Trim const kp = TRIM_AVG );
+
+private:
+    /** twice, we need to chop unused projections from the solution */
+    void setNProj(uint32_t const nProj, bool, bool);
+    int getNthreads( param_struct const& params ) const;
+};
+
 
 /** Maintain a class-permutation and its inverse permutation */
 class Perm {
@@ -98,17 +196,16 @@ public:
                          param_struct const& params, bool print=false );
     //@}
 
-
+    // Accumulate the current sortlu into sortlu_acc and increaset nAccSortlu
+    //    void accumulate_sortlu();
+    
     /** \name Inform about things that have changes (track valid form of items) */
     //@{
     /** update step typically modifies sortlu boundaries (invalidating {l,u}). */
     void chg_sortlu();            // flag a possible change to sortlu, ok_lu --> false
-    /** update step occasionally modify sortlu_avg boundaries (invalidating {l,u}_avg). */
-    void chg_sortlu_avg();
 
     /** optimizeLU, on the other hand, changes {l,u}* (invalidating sortlu*). */
-    void chg_lu();
-    void chg_lu_avg();
+    //    void chg_lu();
     //@}
 
     /** \name ensure something is up-to-date before some function call */
@@ -119,10 +216,6 @@ public:
     Eigen::VectorXd& mkok_sortlu_avg();
     //@}
 
-    /** at report time, we \em might want a temporary sortlu list for the hinge loss calc.
-     * This calculates and returns client-specified sortlu_avg vector.
-     * Note this is const (after this, ok_sortlu_avg has NOT changed) */
-    void getSortlu_avg( Eigen::VectorXd& sortlu_test ) const;
     /** Using \c this->perm, generate \c sorted {l,u} pair-vector from \c ll[],uu[] bounds. */
     void toSorted( Eigen::VectorXd & sorted, Eigen::VectorXd const& ll, Eigen::VectorXd const& uu ) const;
 private:
@@ -139,37 +232,34 @@ private:
     Eigen::VectorXd u;                 ///< upper bounds in original class order
     Eigen::VectorXd sortlu;            ///< concatenated (l,u) pairs in \c Perm order
 
-    /** tricky dataflow here.
-     * - During solve iteration, \c sortlu_avg \b accumulates values from sortlu.
-     * - Data flow:
-     *   - sortlu --> sortlu_avg   (accumulate during gradient update)
-     *     - sortlu_avg --> {l,u}_avg only if req'd for REORDER_AVG_PROJ_MEANS
-     *       - if reorder, then go back: {l,u}_avg --> sortlu_avg (if req'd)
-     *   - Then near \em end, I might expect
-     *     - sortlu_avg no longer relevant
-     *     - optimizeLU (or maybe copy {l,u}) --> \em final {l,u}_avg
-     */
-    Eigen::VectorXd sortlu_avg;
-    uint64_t nAccSortlu_avg;    ///< count of accumulations into sortlu_avg from sortlu
+    // accumulate sortlu for using with average gradient.  
+    Eigen::VectorXd sortlu_acc;
+    uint64_t nAccSortlu;    ///< count of accumulations into sortlu_acc from sortlu
 
     Eigen::VectorXd l_avg;             ///< used as a convenient temporay,
     Eigen::VectorXd u_avg;             ///< sometimes shortly related to \c sortlu_avg
+    Eigen::VectorXd sortlu_avg;        // average value of sortlu over the accumulation period. 
+
 };
 
 /** iteration state that does not need saving -- important stuff is in MCsoln */
 struct MCiterBools
 {
-    /** constructor includes "print some progress" block to cout */
-    MCiterBools( uint64_t const t, param_struct const& params );
-    bool const reorder;              ///< true if param != 0 && t%param==0
-    bool const report;               ///< true if param != 0 && t%param==0
-    bool const report_avg;           ///< true if param != 0 && t%param==0
-    bool const optimizeLU;           ///< true if param != 0 && t%param==0
-    bool const doing_avg_epoch;      ///< avg_epoch && t >= avg_epoch
+  /** constructor includes "print some progress" block to cout */
+  MCiterBools( uint64_t const t, param_struct const& params );
+  bool const reorder;              ///< true if param != 0 && t%param==0
+  bool const report;               ///< true if param != 0 && t%param==0
+  bool const report_avg;           ///< true if param != 0 && t%param==0
+  bool const optimizeLU;           ///< true if param != 0 && t%param==0
+  bool const doing_avg_epoch;      ///< avg_epoch && t >= avg_epoch
+  bool const progress;             ///< params.verbose >= 1 && !params.report_epoch && t % 1000 == 0
 #if GRADIENT_TEST
-    bool const finite_diff_test;     ///< true if param != 0 && t%param==0
+  bool const finite_diff_test;     ///< true if param != 0 && t%param==0
 #endif
 };
+
+//forward declaration is enough
+struct MutexType;
 
 /** solver update step may parallelize by \em chunking the computation. */
 struct MCupdateChunking{

@@ -46,23 +46,37 @@ void init_w( WeightVector& w,
     assert( projection_dim <= weights.cols() );
     VectorXd init(d);
 
-    cout<<" init_w : weights.cols()="<<weights.cols()<<" projection_dim="<<projection_dim; cout.flush();
-    
+    if (params.verbose >= 1)
+      {
+	cout<<" init_w : weights.cols()="<<weights.cols()<<" projection_dim="<<projection_dim; cout.flush();
+      }
     switch (params.init_type){
     case INIT_ZERO:
-      cout << " zero"; cout.flush();
+      if (params.verbose >= 1)
+	{
+	  cout << " zero"; cout.flush();
+	}
       init.setZero();
       break;      
     case INIT_PREV:
-      cout<<" initializing with weights.col("<<projection_dim<<")"<<endl;
+      if (params.verbose >= 1)
+	{
+	  cout<<" initializing with weights.col("<<projection_dim<<")"<<endl;
+	}
       init = weights.col(projection_dim);
       break;
     case INIT_RANDOM:      
-      cout<<" random"; cout.flush();
+      if (params.verbose >= 1)
+	{
+	  cout<<" random"; cout.flush();
+	}
       init.setRandom(); init.normalize();
       break;      
     case INIT_DIFF:
-      cout<<" vector-between-2-classes"; cout.flush();
+      if (params.verbose >= 1)
+	{
+	  cout<<" vector-between-2-classes"; cout.flush();
+	}
       // initialize w as vector between the means of two random classes.
       // should find cleverer initialization schemes
       tries=0;
@@ -83,8 +97,7 @@ void init_w( WeightVector& w,
       }
       break;
     default:
-      cerr << "ERROR: initilization type not recognized" << endl;
-      exit(-1);
+      throw std::runtime_error("ERROR: initilization type not recognized");
     }
     
     if (params.init_orthogonal)
@@ -94,14 +107,32 @@ void init_w( WeightVector& w,
 	  // orthogonalize to current projection dirns w[*, col<projection_dim]
 	  project_orthogonal( init, weights, projection_dim );
         }catch(std::runtime_error const& e){
-	  cout<<e.what();
-	  cout<<" Continuing anyway (just initializing a fresh \"random\" projection vector)"<<endl;
+	  cerr<<e.what();
+	  cerr<<" Continuing anyway (just initializing a fresh \"random\" projection vector)"<<endl;
         }
         double inorm = init.norm();
-        if( init.norm() < 1.e-6 ) {cout<<" randomized"; init.setRandom(); init.normalize();}
-        else                      {cout<<" orthogonalized"; init *= (1.0 / inorm);}
-    }
-    cout<<endl;
+        if( init.norm() < 1.e-6 ) 
+	  {
+	    if (params.verbose >= 1)
+	      {
+		cout<<" randomized"; 
+	      }
+	    init.setRandom(); 
+	    init.normalize();
+	  }
+        else
+	  {
+	    if (params.verbose >= 1)
+	      {
+		cout<<" orthogonalized";
+	      }
+	    init *= (1.0 / inorm);
+	  }
+      }
+    if (params.verbose >= 1)
+      {
+	cout<<endl;
+      }
     assert( init.size() == d );
     assert( fabs(init.norm() - 1.0) < 1.e-6 );
     if (params.init_norm > 0){
@@ -287,7 +318,6 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     }
 #if MCPRM>0
     if (accumulate_sortedLU) {
-        if(t==params.avg_epoch) std::cout<<" ACC "; std::cout.flush();
         //++luPerm.nAccSortlu_avg;
     }
 #endif
@@ -449,7 +479,6 @@ void update_minibatch_SGD(WeightVector& w, VectorXd& sortedLU, VectorXd& sortedL
       // it might become too big!, but through division it
       //might become too small
       sortedLU_avg += sortedLU;
-      if(t==params.avg_epoch) std::cout<<" ACC "; std::cout.flush();
 #if MCPRM>0
       //++luPerm.nAccSortlu_avg;
 #endif

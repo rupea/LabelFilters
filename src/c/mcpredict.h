@@ -1,7 +1,7 @@
 #ifndef MCPREDICT_H
 #define MCPREDICT_H
 
-#include "find_w.h"
+#include "mcsoln.h"
 
 /** Simplest projector returns the final bitset for each input example.
  * - It calculates \c projections=(x*s.weights_avg).transpose().
