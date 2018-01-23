@@ -35,7 +35,6 @@
  *   reorder_epoch — default 10^6/batch_size
  *   reorder_type — default avg_proj_means  
  *   optimizeLU_epoch — default max_iter 
- *   report_avg_epoch — default 0
  *   min_eta — default 0
  *   eta_type — default 3_4  ( default sqrt if avg_epoch == 0) 
  *   remove_constraints — default 1
@@ -156,7 +155,7 @@ typedef struct
   uint32_t avg_epoch;      ///< the iteration at which averaging starts (0=none)
   uint32_t reorder_epoch;  ///<number of iterations between class reorderings (0=none)
   uint32_t report_epoch;   ///<number of iterations between computation and objective value report (expensive: calculated on whole training set) (0=none)
-  uint32_t report_avg_epoch; ///<number of iterations between computation and objective value report for averaged w (expensive: calculated on whole training set). Even more expensive if optimizeLU_epoch > 0. (0=none)
+  uint32_t report_avg_epoch;   ///<number of iterations between computation and objective value report (expensive: calculated on whole training set) (0=none)
   uint32_t optimizeLU_epoch; ///< number of iterations between full optimizations of the lower and upper bounds
   bool remove_constraints; ///< whether to remove the constraints for instances that fall outside the class boundaries in previous projections.
   bool remove_class_constraints; ///< whether to remove the constraints for examples that fell outside their own class boundaries in previous projections.
@@ -210,8 +209,8 @@ inline param_struct set_default_params()
   def.reorder_epoch=1000;
   def.reorder_type = REORDER_AVG_PROJ_MEANS; // defaults to REORDER_PROJ_MEANS if averaging is off
   def.report_epoch=1000000;
+  def.report_avg_epoch=0;
   def.avg_epoch=0;
-  def.report_avg_epoch=0; // this is expensive so the default is 0
   def.reweight_lambda = REWEIGHT_ALL;   // <-- changed - was marked NOT YET DONE?
   def.remove_constraints = true;
   def.remove_class_constraints = false;

@@ -10,7 +10,7 @@
 /** non-templated workhorse.
  * \p active            output [ nExamples x nClass ] bitsets
  * \p projections       input [ nProj x nClass ] row-wise example projection values.
- *                      NB: \b Transpose of x * weights_avg
+ *                      NB: \b Transpose of x * weights
  * \p s                 class {l,u} bounds used to evaluate projection values.
  *
  * \sa getactive
@@ -29,9 +29,9 @@ template<typename EigenType> inline
 std::vector<boost::dynamic_bitset<>> project( EigenType const& x, MCsoln const& s )
 {
     using namespace std;
-    assert( x.cols() == s.weights_avg.rows() );
-    DenseM const projections = (x * s.weights_avg).transpose();
-    cout<<"project(x,MCsoln): x"<<prettyDims(x)<<", w"<<prettyDims(s.weights_avg)<<", projections"<<prettyDims(projections)<<endl;
+    assert( x.cols() == s.weights.rows() );
+    DenseM const projections = (x * s.weights).transpose();
+    cout<<"project(x,MCsoln): x"<<prettyDims(x)<<", w"<<prettyDims(s.weights)<<", projections"<<prettyDims(projections)<<endl;
     if(0){
         for(uint32_t i=0; i<x.rows(); ++i){
             {
@@ -85,8 +85,8 @@ std::vector<SimpleProjectionScores> project( EigenType const& x,
                                              MCsoln const& s,
                                              uint32_t const targetSize )
 {
-    assert( x.cols() == s.weights_avg().rows() );
-    DenseM const projections = (x * s.weights_avg).transpose();
+    assert( x.cols() == s.weights().rows() );
+    DenseM const projections = (x * s.weights).transpose();
     std::vector<SimpleProjectionScores> sps;
     projectionsToScores( projections, s, targetSize, sps );
     return sps;

@@ -183,11 +183,11 @@ namespace opt {
             ActiveDataSet * ads=nullptr;
             if( xy->denseOk ){
                 ads = getactive( no_active, xy->xDense,
-                                 soln.weights_avg, soln.lower_bounds_avg, soln.upper_bounds_avg,
+                                 soln.weights, soln.lower_bounds, soln.upper_bounds,
                                  /*verbose=*/true );
             }else{
                 ads = getactive( no_active, xy->xSparse,
-                                 soln.weights_avg, soln.lower_bounds_avg, soln.upper_bounds_avg,
+                                 soln.weights, soln.lower_bounds, soln.upper_bounds,
                                  /*verbose=*/true );
             }
             assert( ads != nullptr );

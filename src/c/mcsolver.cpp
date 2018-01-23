@@ -23,24 +23,25 @@ std::array<char,4> MCxyData::magic_yBin    = {0,'Y','s','b'};
 
 
 // Complete some of the class declarations before instantiating MCsolver
-MCsolver::MCsolver(char const* const solnfile /*= nullptr*/)
-  : MCsoln()
+MCsolver::MCsolver()
+  : MCsoln(),objective_val()
     // private "solve" variables here TODO
 {
-  if( solnfile ){
-    ifstream ifs(solnfile);
-    if( ifs.good() ) try{
-	cout<<" reading "<<solnfile<<endl;
-	this->read( ifs );
-	this->pretty( cout );
-	cout<<" reading "<<solnfile<<" DONE"<<endl;
-      }catch(std::exception const& e){
-	ostringstream err;
-	err<<"ERROR: unrecoverable error reading MCsoln from file "<<solnfile;
-	throw(runtime_error(err.str()));
-      }
-  }
+  // if( solnfile ){
+  //   ifstream ifs(solnfile);
+  //   if( ifs.good() ) try{
+  // 	cout<<" reading "<<solnfile<<endl;
+  // 	this->read( ifs );
+  // 	this->pretty( cout );
+  // 	cout<<" reading "<<solnfile<<" DONE"<<endl;
+  //     }catch(std::exception const& e){
+  // 	ostringstream err;
+  // 	err<<"ERROR: unrecoverable error reading MCsoln from file "<<solnfile;
+  // 	throw(runtime_error(err.str()));
+  //     }
+  // }
 }
+
 MCsolver::~MCsolver()
 {
   //cout<<" ~MCsolver--TODO: where to write the MCsoln ?"<<endl;
@@ -56,23 +57,23 @@ void MCsolver::solve( SparseM const& x, SparseMb const& y, param_struct const* c
 template
 void MCsolver::solve( ExtConstSparseM const& x, SparseMb const& y, param_struct const* const params_arg );
 
-void MCsolver::trim( enum Trim const kp ){
-  if( kp == TRIM_LAST ){
-    // If have some 'last' data, swap {w,l,u} into {w,l,u}_avg
-    if( weights.size() != 0 ){
-      weights_avg.swap(weights);
-      lower_bounds_avg.swap(lower_bounds);
-      upper_bounds_avg.swap(upper_bounds);
-    }
-  }
-  // ** ALL ** the non-SHORT MCsoln memory is freed
-  // NOTE: in Eigen. resize always reallocates memory, so resize(0) WILL free memory.
-  objective_val_avg.resize(0);
-  weights.resize(0,0);
-  lower_bounds.resize(0,0);
-  upper_bounds.resize(0,0);
-  objective_val.resize(0);
-}
+// void MCsolver::trim( enum Trim const kp ){
+//   if( kp == TRIM_LAST ){
+//     // If have some 'last' data, swap {w,l,u} into {w,l,u}_avg
+//     if( weights.size() != 0 ){
+//       weights_avg.swap(weights);
+//       lower_bounds_avg.swap(lower_bounds);
+//       upper_bounds_avg.swap(upper_bounds);
+//     }
+//   }
+//   // ** ALL ** the non-SHORT MCsoln memory is freed
+//   // NOTE: in Eigen. resize always reallocates memory, so resize(0) WILL free memory.
+//   objective_val_avg.resize(0);
+//   weights.resize(0,0);
+//   lower_bounds.resize(0,0);
+//   upper_bounds.resize(0,0);
+//   objective_val.resize(0);
+// }
 
 
 /** Set solution sizes for nProj projections.
@@ -88,48 +89,36 @@ void MCsolver::setNProj(uint32_t const nProj, bool keep_weights, bool keep_LU)
   if (keep_weights)
     {
       weights.conservativeResize(d, nProj);
-      weights_avg.conservativeResize(d, nProj);
       for (uint32_t col= this->nProj; col < nProj; col++)
 	{
 	  weights.col(col).setZero();
-	  weights_avg.col(col).setZero();
 	}
     }  
   else
     {
       weights.resize(d, nProj);
-      weights_avg.resize(d, nProj);
       weights.setZero();
-      weights_avg.setZero();
     }      
-      
-
+  
+  
   if (keep_LU)
     {
       lower_bounds.conservativeResize(nClass, nProj);
       upper_bounds.conservativeResize(nClass, nProj);
-      lower_bounds_avg.conservativeResize(nClass, nProj);
-      upper_bounds_avg.conservativeResize(nClass, nProj);
       for (uint32_t col= this->nProj; col < nProj; col++)
 	{
 	  lower_bounds.col(col).setZero();
 	  upper_bounds.col(col).setZero();
-	  lower_bounds_avg.col(col).setZero();
-	  upper_bounds_avg.col(col).setZero();
 	}
     }	
   else
     {
       lower_bounds.conservativeResize(nClass, nProj);
       upper_bounds.conservativeResize(nClass, nProj);
-      lower_bounds_avg.conservativeResize(nClass, nProj);
-      upper_bounds_avg.conservativeResize(nClass, nProj);
       lower_bounds.setZero();
       upper_bounds.setZero();
-      lower_bounds_avg.setZero();
-      upper_bounds_avg.setZero();
     }
-     
+  
   this->nProj = nProj;
 }
 

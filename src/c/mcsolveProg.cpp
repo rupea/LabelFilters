@@ -23,31 +23,45 @@ namespace opt {
 				  , int const verbose/*=0*/
 				  , param_struct const* const defparms/*=nullptr*/ )
     : ::opt::MCsolveArgs( argc, argv )
-    , ::MCsolver( solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
+    , ::MCsolver() // solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
     , projProg()                // empty shared ptr
     , xy( new ::MCxyData() )
   {
     // defaults: if given explicitly as \c defparms
     if( defparms ){
-      cout<<" reparse cmdline, this time with supplied defaults"<<endl;
       A::parms = *defparms;
       parse(argc,argv);
-    }else if( solnFile.size() ){
-      cout<<" reparse cmdline, this time with "<<solnFile<<" parms as defaults"<<endl;
-      A::parms = S::getParms();   // solnFile parms provide new "default" settings
-      parse(argc,argv);           // so must parse args again for cmdline overrides
+    }    
+    if( solnFile.size() ){
+      ifstream ifs(solnFile.c_str());
+      if( ifs.good() ) try{
+	  if (A::parms.verbose >= 1 ) 
+	    cout<<" reading "<<solnFile<<endl;
+	  S::read( ifs );
+	  if (A::parms.verbose >= 1 ) 
+	    {
+	      S::pretty( cout, A::parms.verbose );
+	      cout<<" Done reading "<<solnFile<<endl;
+	    }
+	}catch(std::exception const& e){
+	  ostringstream err;
+	  err<<"ERROR: unrecoverable error reading MCsoln from file "<<solnFile << endl;
+	  throw(runtime_error(err.str()));
+	}
+      // if (A::parms.verbose >= 1 ) 
+      // 	cout<<" Using parameters from "<<solnFile<<" as defaults"<<endl;
+      // A::parms = S::getParms();   // solnFile parms provide new "default" settings
+      // parse(argc,argv);           // so must parse args again for cmdline overrides
     }else{
       if( A::parms.resume ) throw std::runtime_error(" --resume needs --solnfile=... or explicit default parms");
       if( A::parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu needs --solnfile=... or explicit default parms");
     }
-    if(verbose>=1){
+    if(A::parms.verbose>=1){
       cout<<" +MCsolveProgram --xfile="<<A::xFile <<" --yFile="<<A::yFile;
       if(A::solnFile.size()) cout<<" --solnFile="<<A::solnFile;
       if(A::outFile.size()) cout<<" --output="<<A::outFile;
       if(A::outBinary) cout<<" -B";
       if(A::outText)   cout<<" -T";
-      if(A::outShort)  cout<<" -S";
-      if(A::outLong)   cout<<" -L";
       if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
       //if(A::threads)   cout<<" --threads="<<A::threads;
       if(A::xnorm)     cout<<" --xnorm";
@@ -182,14 +196,12 @@ namespace opt {
 	if( A::solnFile.size() ) cout<<" initially from "<<A::solnFile;
 	cout<<" to "<<A::outFile<<endl;
       }
-      soln.fname = A::solnFile;
       { // should I have an option to print the soln to cout? NAAH
 	ofstream ofs;
 	try{
 	  ofs.open(A::outFile);
 	  if( ! ofs.good() ) throw std::runtime_error("trouble opening outFile");
-	  soln.write( ofs, (A::outBinary? MCsoln::BINARY: MCsoln::TEXT)
-		      ,    (A::outShort ? MCsoln::SHORT : MCsoln::LONG) );
+	  soln.write( ofs, (A::outBinary? MCsoln::BINARY: MCsoln::TEXT));
 	  if( ! ofs.good() ) throw std::runtime_error("trouble writing outFile");
 	  ofs.close();
 	}catch(std::exception const& e){
@@ -349,32 +361,22 @@ namespace opt {
         if(verbose>=1) cout<<"MCsolveProgram::tryDisplay()"<<endl;
         MCsoln const& soln = S::getSoln();
         // NOTE: for normalization make a COPY (can be avoided) FIXME
-        DenseM const& ww = soln.weights;
-        DenseM const& w = soln.weights_avg;
-        DenseM const& l = soln.lower_bounds_avg;
-        DenseM const& u = soln.upper_bounds_avg;
+        DenseM const& w = soln.weights;
+        DenseM const& l = soln.lower_bounds;
+        DenseM const& u = soln.upper_bounds;
         if(verbose>=1){ // really want to find a nicer, compact display here XXX
-            cout<<"normalized     weights"<<prettyDims(ww)<<":\n";
-            if( ww.size() > 0U && ww.size() < 500U ){
-                vector<double> wwNorms(ww.cols());
-                for(uint32_t c=0U; c<ww.cols(); ++c)
-                    wwNorms[c]= ww.col(c).norm();
-                cout<<" weights     norms: ";for(uint32_t c=0U; c<ww.cols(); ++c){cout<<" "<<wwNorms[c];} cout<<endl;
-                for(uint32_t c=0; c<<ww.cols(); ++c)
-                    cout<<ww.col(c)*(wwNorms[c]>1.e-8?1.0/wwNorms[c]:1.0)<<endl;
-            }
-            cout<<"normalized weights_avg"<<prettyDims(w)<<":\n";
+            cout<<"normalized weights"<<prettyDims(w)<<":\n";
             if( w.size() > 0U && w.size() < 500U ){
                 vector<double>  wNorms(w.cols());
                 for(uint32_t c=0U; c< w.cols(); ++c)
                     wNorms[c]=  w.col(c).norm();
-                cout<<" weights_avg norms: ";for(uint32_t c=0U; c<w.cols(); ++c){cout<<" "<<wNorms[c];}cout<<endl;
+                cout<<" weights norms: ";for(uint32_t c=0U; c<w.cols(); ++c){cout<<" "<<wNorms[c];}cout<<endl;
                 for(uint32_t c=0U; c<w.cols(); ++c)
                     cout<<w.col(c)*(wNorms[c]>1.e-8?1.0/wNorms[c]:1.0)<<endl;
             }
-            cout<<"      lower_bounds_avg"<<prettyDims(l)<<":\n";
+            cout<<"      lower_bounds"<<prettyDims(l)<<":\n";
             if( l.size() < 500U ) cout<<l<<endl;
-            cout<<"      upper_bounds_avg"<<prettyDims(u)<<":\n";
+            cout<<"      upper_bounds"<<prettyDims(u)<<":\n";
             if( u.size() < 500U ) cout<<u<<endl;
         }
         if(1){
@@ -397,7 +399,7 @@ namespace opt {
         }
         if(1) { // NEW TEST CODE XXX
             cout<<"\n********* NEW TEST CODE **********"<<endl;
-            this->pretty(cout);
+            this->pretty(cout, verbose);
             auto proj = projector("-v");
             if( ! proj ) throw std::runtime_error(" Failed to construct projector associated with this solver");
 

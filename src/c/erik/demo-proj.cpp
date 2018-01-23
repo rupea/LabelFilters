@@ -141,7 +141,7 @@ void mcSave(std::string saveBasename, MCsoln const& soln){
         cout<<" Saving to file "<<saveTxt<<endl;
         try{
             ofstream ofs(saveTxt);
-            soln.write( ofs, MCsoln::TEXT, MCsoln::SHORT );
+            soln.write( ofs, MCsoln::TEXT );
             ofs.close();
         }catch(std::exception const& e){
             cout<<"OHOH! Error during text write of demo.soln "<<e.what()<<endl;
@@ -151,7 +151,7 @@ void mcSave(std::string saveBasename, MCsoln const& soln){
         cout<<" Saving to file "<<saveBin<<endl;
         try{
             ofstream ofs(saveBin);
-            soln.write( ofs, MCsoln::BINARY, MCsoln::SHORT );
+            soln.write( ofs, MCsoln::BINARY );
             ofs.close();
         }catch(std::exception const& what){
             cout<<"OHOH! Error during binary write of demo.soln"<<endl;

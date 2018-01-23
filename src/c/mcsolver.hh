@@ -45,7 +45,6 @@
 inline MCiterBools::MCiterBools( uint64_t const t, param_struct const& params )
   : MCITER_PERIODIC( reorder )
   , MCITER_PERIODIC( report )
-  , MCITER_PERIODIC( report_avg )
   , MCITER_PERIODIC( optimizeLU )
 #if GRADIENT_TEST
   , MCITER_PERIODIC( finite_diff_test )
@@ -112,13 +111,18 @@ inline void MCpermState::mkok_lu(){
 inline void MCpermState::mkok_lu_avg(){
   if(!ok_lu_avg)
     {
-      assert (nAccSortlu > 0); // should this be w run time error rather than an assert disabled by ndebug?
-      if (!ok_sortlu_avg)
+      if(nAccSortlu > 0) // averaging has started
 	{
-	  mkok_sortlu_avg();
+	  mkok_sortlu_avg();	  
+	  toLu( l_avg, u_avg, sortlu_avg );
+	  ok_lu_avg = true;
 	}
-      toLu( l_avg, u_avg, sortlu_avg );
-      ok_lu_avg = true;
+      else // averaging has not started, Just coppy l and u. 
+	{
+	  mkok_lu();
+	  l_avg = l;
+	  u_avg = u;
+	}	
     }
 }
 
@@ -174,11 +178,18 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                      param_struct const* const params_arg /*= nullptr*/ )
 {
     using namespace std;
-    if( params_arg ){
+    //    if( params_arg ){
         // XXX compatibility checks?
-        this->parms = *params_arg;      // if present, parms OVERWRITE any old ones
-    }
-    param_struct const& params = this->parms;
+      //        this->parms = *params_arg;      // if present, parms OVERWRITE any old ones
+    //    }
+    if (!params_arg)
+      {
+	throw std::runtime_error("MCsolver::solve : params_arg may not be NULL");
+      }
+
+    param_struct const& params = *params_arg;
+    //param_struct const& params = this->parms;
+
     this->nProj = params.no_projections;
     this->d = x.cols();
     if( (size_t)nProj >= d ){
@@ -208,12 +219,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
         Proj( EIGENTYPE const& x, WeightVector const& w ) : x(x), w(w), v(x.rows()), ngetSTD(0U), ngetAVG(0U), nReuse(0U), nSwitch(0U), nDemote(0U), valid(false)
         {}
         ~Proj(){
-            std::cout<<" ~Proj{ngetSTD="<<ngetSTD<<",ngetAVG="<<ngetAVG<<",nReuse="<<nReuse
-                <<",nSwitch="<<nSwitch<<",nDemote="<<nDemote<<"}"<<std::endl;
+	  //	  std::cout<<" ~Proj{ngetSTD="<<ngetSTD<<",ngetAVG="<<ngetAVG<<",nReuse="<<nReuse
+	  //               <<",nSwitch="<<nSwitch<<",nDemote="<<nDemote<<"}"<<std::endl;
         }
         /** Every time client changes \c w, \c Proj \b must be informed that the world is now different. */
         void w_changed() {
-            //cout<<" - "; cout.flush();
             valid = false;
         }
         /** get w's projection, silently demote from AVG to STD if w.getAvg_t() is still zero */
@@ -326,9 +336,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       - (1-params.remove_class_constraints) * nc.sum();
     size_t no_filtered=0;
     
-    /*double*/this-> lambda = 1.0/params.C2;
-    /*double*/this-> C1 = params.C1/params.C2;
-    /*double*/this-> C2 = 1.0;
+    double lambda = 1.0/params.C2;
+    double C1 = params.C1/params.C2;
+    double C2 = 1.0;
         
     Proj xwProj( x, w );
     int prjax = 0;
@@ -389,7 +399,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       luPerm.optimizeLU_avg( xwProj.avg(), y, wc, nclasses, filtered, C1, C2, params); \
     };
 
-    auto RemoveConstraints = [&] (bool const avg) -> void
+    auto RemoveConstraints = [&] () -> void
       {	
 	// should we do this in parallel?
 	// the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
@@ -398,19 +408,13 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	//       and maybe nc
 	// check if nclass and nc are used for anything else than weighting examples belonging
 	//       to multiple classes
-	if ( avg )
-	  {
-	    luPerm.mkok_lu_avg();  //-- *just* finished doing this
-	    update_filtered(filtered,  /*inputs:*/ xwProj.avg(), luPerm.l_avg, luPerm.u_avg
-			    , y, params.remove_class_constraints);
-	  }
-	else
-	  {
-	    luPerm.mkok_lu();
-	    update_filtered(filtered, xwProj.std(), luPerm.l, luPerm.u, y, params.remove_class_constraints);
-	  }
+
+	// if averagin has not started this will be using the non-averaged w,l and u
+	luPerm.mkok_lu_avg(); // should be OK, but just in case
+	update_filtered(filtered,  /*inputs:*/ xwProj.avg(), luPerm.l_avg, luPerm.u_avg
+			, y, params.remove_class_constraints);
 	
-	no_filtered = filtered.count();
+	no_filtered = filtered.count(); 
 	if (params.verbose >= 1)
 	  {
 	    cout<<"Filter["<<filtered.rows()<<"x"<<filtered.cols()<<"] removed "<<no_filtered
@@ -423,13 +427,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	    cerr<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left\n"
 	      "  Stopping at "<<prjax+1U<< " filters." << endl;
 	    setNProj(prjax+1U, true, true);
-	    //-- do we really need this?
-	    //const_cast<param_struct*>(params_arg)->no_projections = nProj; // <-- NB
-	    //const_cast<param_struct&>(params).no_projections = nProj; // <-- NB
 	    return;
 	  }
 	
-	if (params.reweight_lambda != REWEIGHT_NONE) //duplicated code. 
+	if (params.reweight_lambda != REWEIGHT_NONE)
 	  {
 	    long const no_remaining = (int)total_constraints - no_filtered;
 	    lambda = no_remaining*1.0/(total_constraints*params.C2);
@@ -452,11 +453,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     
     if (params.verbose >= 1)
       {
-	cout<<"  ... begin with weights"<<prettyDims(weights)<<" weights_avg"<<prettyDims(weights_avg)
-	    <<" lower_bounds_avg"<<prettyDims(lower_bounds_avg)<<" upper_bounds_avg"<<prettyDims(upper_bounds_avg)
+	cout<<"  ... begin with weights"<<prettyDims(weights)
+	    <<" lower_bounds"<<prettyDims(lower_bounds)<<" upper_bounds"<<prettyDims(upper_bounds)
 	    <<endl;
       }
-
+    
     //-- move this to parameters check
     if (params.reoptimize_LU && params.reorder_type == REORDER_RANGE_MIDPOINTS )
       {
@@ -467,39 +468,29 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     for ( ;prjax < reuse_dim; ++prjax)
       { 
 	cout<<"\tp:"<<prjax;
-	w.init(weights_avg.col(prjax));
+	w.init(weights.col(prjax));
 	xwProj.w_changed();  // projections of 'x' onto 'w' no longer valid
 	if (params.reoptimize_LU) {
 	  luPerm.init( xwProj.std(), y, nc );     // try to appease valgrind?
 	  luPerm.rank( GetMeans(params.reorder_type) );
 	  OptimizeLU(); // w,projection,sort_order ----> luPerm.l,u
-	  //	  weights_avg.col(prjax) = w.getVec();
-	  lower_bounds_avg.col(prjax) = luPerm.l;
-	  upper_bounds_avg.col(prjax) = luPerm.u;
-	  // 
-	  //should check if non-averaged values are requested. If yes, optimizeLU for non-averaged values. Else have weights = null
-	  weights.col(prjax) = weights_avg.col(prjax);
 	  lower_bounds.col(prjax) = luPerm.l;
 	  upper_bounds.col(prjax) = luPerm.u;
 	}else{
-	  luPerm.set_lu( lower_bounds_avg.col(prjax), upper_bounds_avg.col(prjax) );
+	  luPerm.set_lu( lower_bounds.col(prjax), upper_bounds.col(prjax) );
 	}
 	
 	if (params.remove_constraints && prjax < (int)nProj-1) 
 	  {
-	    RemoveConstraints(false);
+	    RemoveConstraints();
 	  }	
       }
+
     obj_idx = objective_val.size();
-    obj_idx_avg = objective_val_avg.size();
-    // Note: if soln NOT stored in LONG format, we will redo all projections
-    //       if soln IS  stored in LONG format, we will never re-iterate over previous projections
-    //prjax = weights.cols();
     
     if(params.verbose >= 1)
       {
       cout<<"  ... starting with     weights"<<prettyDims(weights)<<endl;
-      cout<<"  ... starting with weights_avg"<<prettyDims(weights_avg)<<endl;
       cout<<"  ... beginning at prjax="<<prjax<<" reuse_dim="<<reuse_dim<<endl;
       cout<<"  ... sc_chunks="<<updateSettings.sc_chunks<<" MCTHREADS="<<MCTHREADS<<endl;
       }
@@ -507,20 +498,15 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       int const newProjs = nProj - prjax;
       if(params.report_epoch > 0){
 	size_t const nReports = params.max_iter / params.report_epoch + 1U;
-	size_t const more = newProjs * (nReports+1U) + 1000U;
-	objective_val    .conservativeResize(obj_idx     + more );
-      }
-      if(params.report_avg_epoch > 0){
-	size_t const nReports = params.max_iter / params.report_avg_epoch + 1U;
-	size_t const more = newProjs * (nReports+1U) + 1000U;
-	objective_val_avg.conservativeResize(obj_idx_avg + more );
+	size_t const more = newProjs * (nReports+1U);
+	objective_val    .conservativeResize(obj_idx + more );
       }
     }
     assert(w.getAvg_t() == 0);
     for(; prjax < nProj; ++prjax)
       {
 	//        init_w( w, x,y,nc, weights_avg,prjax, (prjax<reuse_dim) );
-	init_w( w, x, y, nc, weights_avg, prjax, params);
+	init_w( w, x, y, nc, weights, prjax, params);
 	
 	if (params.verbose >= 1)
 	  cout<<" start projection "<<prjax<<" w.norm="<<w.norm();
@@ -539,7 +525,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	  cout<<"initial w.norm = "<<w.norm()<<"\n"
 	      <<"--------------------- --------------- ------"<<endl;	
 	} 
-	this->t = 0;   	// -------- main iteration loop --------
+	uint64_t t = 0;   	// -------- main iteration loop --------
 	while (t < params.max_iter) {
 	  ++t;
 	  MCiterBools t4(t, params);          // "time for" ... various const bool
@@ -549,7 +535,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	    cout.flush();
 	  }
 	  OPT_GRADIENT_TEST;
-	  eta_t = set_eta(params, t, lambda); // set eta for this iteration
+	  double eta_t = set_eta(params, t, lambda); // set eta for this iteration
 	  // compute the gradient and update
 	  //      modifies w, sortedLU, (sortedLU_avg) ONLY  (l,u,l_avg,u_avg values may be stale)
 	  // --> the ONLY place where 'w' is modified
@@ -574,82 +560,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	      cout<<w.norm()<<endl;
 	    }
 	  }
-#ifndef NDEBUG
-	  assert( t4.doing_avg_epoch != (w.getAvg_t() == 0U) ); 
-	  //I think this works like a xor becaue both are bools. 
-#endif
-	  if(t4.report_avg)
-	    {
-	      double objective_avg;       // calculate the objective for the averaged w [if avail]
-	      // if optimizing LU then this is expensive since it runs the optimization
-	      if ( t4.doing_avg_epoch )
-		{ 
-		  if (params.optimizeLU_epoch > 0) 
-		    { // <-- Note: {l,u}_avg as SCRATCH storage ...
-		      OptimizeLU_avg();
-		    }
-		  luPerm.mkok_sortlu_avg();
-		  objective_avg = ObjectiveHingeAvg();
-		}
-	      else if(t4.report) 
-		{ //no avg, we have alredy calculated the objective functions at this iteration
-		  objective_avg = objective_val[obj_idx - 1];
-		} 
-	      else 
-		{ // no avg avail: do full calc
-		  objective_avg = ObjectiveHinge();
-		}
-	      objective_val_avg[obj_idx_avg++] = objective_avg;
-	      if(params.verbose >= 1)
-		{
-		  cout<<"objective_avg["<<t<<"]:"<<objective_avg<<" ";
-		  if( t4.doing_avg_epoch ) cout<<w.norm_avg()<<" (avg)"<<endl; // 'if' for valgrind? XXX
-		  else               cout<<w.norm()<<" (std)"<<endl;
-		}
-	    }
 	} // **** **** end while t **** ****
-	if(params.verbose >= 1) 
-	  cout<<" * end iterations" <<endl;
-	
-	// optimize LU and compute objective for averaging if it is turned on
-	// if t = params.avg_epoch, everything is exactly the same as
-	// just using the current w
-	if ( params.avg_epoch && t > params.avg_epoch ) {
-	  // only need to reorder the classes if optimizing LU
-	  // or if we are interested in the last obj value
-	  if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_avg_epoch > 0)) {
-	    luPerm.rank(GetMeans(params.reorder_type));
-	  }
-	  // optimize the lower and upper bounds (done after class ranking)
-	  // since it depends on the ranks
-	  if (params.optimizeLU_epoch > 0) {
-	    OptimizeLU_avg();
-	  }
-	  if( params.report_avg_epoch>0 ) { // calculate the objective for the averaged w
-	    luPerm.mkok_sortlu_avg();
-	    objective_val_avg[obj_idx_avg++] = ObjectiveHingeAvg();
-	    if(params.verbose>=1) {
-	      cout << "objective_val_avg[" << t << "]: " << objective_val_avg[obj_idx_avg-1] << " "<< w.norm_avg() << endl;
-	    }
-	  }
-	}
-	// only need to reorder the classes if optimizing LU
-	// or if we are interested in the last obj value
-	// do the reordering based on w (pretend we  do not do averaging to compare averaging 
-	// vs noaveraging. 
-	if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_epoch > 0)) {
-	  luPerm.rank( GetMeansNoAvg(params.reorder_type) ); 
-	}
-	
-	// optimize the lower and upper bounds (done after class ranking)
-	// since it depends on the ranks
-	// if ranking type is REORDER_RANGE_MIDPOINTS, then class ranking depends on this
-	// but shoul still be done before since it is less expensive
-	// (could also be done after the LU optimization
-	if (params.optimizeLU_epoch > 0) {
-	  OptimizeLU();
-	}
-	// calculate the objective for the current w
 	if( params.report_epoch>0 ) {
 	  // get the current sortedLU in case bounds or order changed
 	  luPerm.mkok_sortlu();
@@ -658,35 +569,45 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	    cout << "objective_val[" <<setw(6)<<t << "]: " << objective_val[obj_idx-1] << " "<< w.norm();
 	  }
 	}
-      
+
 	if(params.verbose >= 1) 
-	  cout<<" * END projection "<<prjax << endl;
-	
-	weights.col(prjax) = w.getVec();
-	luPerm.mkok_lu();
-	lower_bounds.col(prjax) = luPerm.l;
-	upper_bounds.col(prjax) = luPerm.u;
-	if (params.avg_epoch > 0)
-	  {
-	    weights_avg.col(prjax) = w.getVecAvg(); // will return w if averaging is not on.  
-	    luPerm.mkok_lu_avg(); 
-	    lower_bounds_avg.col(prjax) = luPerm.l_avg;
-	    upper_bounds_avg.col(prjax) = luPerm.u_avg;
-	  }     
-	else
-	  {
-	    weights_avg.col(prjax) = weights.col(prjax);
-	    lower_bounds_avg.col(prjax) = luPerm.l;
-	    upper_bounds_avg.col(prjax) = luPerm.u;
+	  cout<<" * end iterations" <<endl;
+
+	// optimize LU and compute objective for averaging if it is turned on
+	// if t = params.avg_epoch, everything is exactly the same as
+	// just using the current w
+
+	// only need to reorder the classes if optimizing LU
+	// or if we are interested in the last obj value
+	if (params.reorder_epoch > 0 && (params.optimizeLU_epoch > 0 || params.report_epoch > 0)) {
+	  luPerm.rank(GetMeans(params.reorder_type));
+	}
+	// optimize the lower and upper bounds (done after class ranking)
+	// since it depends on the ranks
+	if (params.optimizeLU_epoch > 0) {
+	  OptimizeLU_avg();
+	}
+	if( params.report_epoch>0 ) { // calculate the objective for the averaged w
+	  luPerm.mkok_sortlu_avg();
+	  objective_val[obj_idx++] = ObjectiveHingeAvg();
+	  if(params.verbose>=1) {
+	    cout << "Final objective_val[" << prjax << "]: " << objective_val[obj_idx-1] << endl;
+	    }
 	  }
+		
+	
+	weights.col(prjax) = w.getVecAvg();
+	luPerm.mkok_lu_avg();
+	lower_bounds.col(prjax) = luPerm.l_avg;
+	upper_bounds.col(prjax) = luPerm.u_avg;
 	
 	if (params.remove_constraints && prjax < (int)nProj-1) 
 	  {
-	    RemoveConstraints(params.avg_epoch > 0);
+	    RemoveConstraints();
 	  }   
+	if(params.verbose >= 1) 
+	  cout<<" * END projection "<<prjax << endl << endl;
 	
-	if(params.verbose >= 1)
-	  cout<<endl;
       } // end for prjax
 }
 #endif //MCSOLVER_HH

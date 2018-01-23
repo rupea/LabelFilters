@@ -37,24 +37,19 @@ class MCsolver : protected MCsoln
 {
 public:
 
-    /** Initialize with given input data.
-     * If resume data is OK (readable, compatible with x, y) invoke
-     * solve_optimization with appropriate initialization.
-     *
-     * TODO: fix \b \c solve_optimization so proper resume can be done.
-     *       Initially just copy solve_optimization code until we can
-     *       deprecate the original (which is needed for the octave api).
-     */
-    MCsolver( char const* const solnfile = nullptr );
+    /**TODO: fix \b \c solve_optimization so proper resume can be done. */
+
+  //    MCsolver( char const* const solnfile = nullptr );
+    MCsolver();
     ~MCsolver();
 
-    param_struct const& getParms() const {return this->parms;}
+    //    param_struct const& getParms() const {return this->parms;}
     MCsoln       const& getSoln()  const {return *this;}
     MCsoln            & getSoln()        {return *this;}
     void read( std::istream& is )
     { MCsoln::read(is); }
-    void write( std::ostream& os, enum Fmt fmt=BINARY, enum Len len=SHORT ) const
-    { MCsoln::write(os,fmt,len); }
+    void write( std::ostream& os, enum Fmt fmt=BINARY) const
+    { MCsoln::write(os,fmt); }
 
     /** solve for MCFilter's optimal multi-class discriminating projections.
      * \p x     training data, row-wise examples of dimension MCsoln::d
@@ -92,7 +87,7 @@ public:
         setQuantiles( EIGENTYPE const& x, SparseMb const& y );
 #endif
 
-    enum Trim { TRIM_LAST, TRIM_AVG };
+    //    enum Trim { TRIM_LAST, TRIM_AVG };
     /** Free memory by moving selected {w,l,u} data into {w,l,u}_avg.
      * - After a \c solve, or a \c read we may have:
      *   - {w,l,u} of last iteration (and objective_val)
@@ -113,10 +108,11 @@ public:
      * \detail
      * - rename 'postSolve', if it does more than just Trim?
      */
-    void trim( enum Trim const kp = TRIM_AVG );
+    //    void trim( enum Trim const kp = TRIM_AVG );
 
 private:
     /** twice, we need to chop unused projections from the solution */
+    Eigen::VectorXd objective_val;
     void setNProj(uint32_t const nProj, bool, bool);
     int getNthreads( param_struct const& params ) const;
 };
@@ -249,7 +245,6 @@ struct MCiterBools
   MCiterBools( uint64_t const t, param_struct const& params );
   bool const reorder;              ///< true if param != 0 && t%param==0
   bool const report;               ///< true if param != 0 && t%param==0
-  bool const report_avg;           ///< true if param != 0 && t%param==0
   bool const optimizeLU;           ///< true if param != 0 && t%param==0
   bool const doing_avg_epoch;      ///< avg_epoch && t >= avg_epoch
   bool const progress;             ///< params.verbose >= 1 && !params.report_epoch && t % 1000 == 0

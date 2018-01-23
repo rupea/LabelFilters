@@ -15,11 +15,11 @@ void projectionsToBitsets( DenseM const& projections,
     if(verbose){ cout<<"projectionsToBitsets... MCsoln is:"<<endl; s.pretty(cout); }
     size_t const nExamples = projections.cols();        // TRANSPOSE of x*w, for efficiency
     size_t const nProj = projections.rows();
-    size_t const nClass = s.lower_bounds_avg.rows();
-    assert( (int)nClass == s.upper_bounds_avg.rows() );
-    assert( (int)nClass == s.lower_bounds_avg.rows() );
-    assert( (int)nProj == s.upper_bounds_avg.cols() );
-    assert( (int)nProj == s.lower_bounds_avg.cols() );
+    size_t const nClass = s.lower_bounds.rows();
+    assert( (int)nClass == s.upper_bounds.rows() );
+    assert( (int)nClass == s.lower_bounds.rows() );
+    assert( (int)nProj == s.upper_bounds.cols() );
+    assert( (int)nProj == s.lower_bounds.cols() );
 
     //active = new ActiveDataSet(nExamples);
     if( active.size() > nExamples ){
@@ -54,8 +54,8 @@ void projectionsToBitsets( DenseM const& projections,
     // TODO if ! nProj >> nExamples, provide a faster impl ???
     for(size_t p=0U; p<nProj; ++p){
         //proj = projections.row(p);
-        l = s.lower_bounds_avg.col(p);
-        u = s.upper_bounds_avg.col(p);
+        l = s.lower_bounds.col(p);
+        u = s.upper_bounds.col(p);
         if (verbose) cout << "Init filter" << endl;
         Filter f( l, u );
         if (verbose) cout << "Update filter, projection " << p << endl;
@@ -137,20 +137,16 @@ MCprojector::MCprojector( MCsoln const& s )
     , scDbl()
 {
     //uint32_t const nExamples = // unknown
-    int const nProj = s.weights_avg.cols();
-    assert( s.lower_bounds_avg.cols() == nProj );
-    assert( s.upper_bounds_avg.cols() == nProj );
-    int const nClass = s.lower_bounds_avg.rows();
-    assert( s.upper_bounds_avg.rows() == nClass );
+    int const nProj = s.weights.cols();
+    assert( s.lower_bounds.cols() == nProj );
+    assert( s.upper_bounds.cols() == nProj );
+    int const nClass = s.lower_bounds.rows();
+    assert( s.upper_bounds.rows() == nClass );
 
     // work area setup:   These are all [ nProj x nClass ]
-    lb = s.lower_bounds_avg.transpose();
-    ub = s.upper_bounds_avg.transpose();
-    if( s.medians.size() == s.lower_bounds_avg.size() ){
-        mid = s.medians.transpose();
-    }else{
-        mid = (lb+ub)*0.5;
-    }
+    lb = s.lower_bounds.transpose();
+    ub = s.upper_bounds.transpose();
+    mid = (lb+ub)*0.5;
     lSlope = (mid - lb).array().inverse();
     uSlope = (ub - mid).array().inverse();
     // except this one, which is a simple vector
@@ -248,11 +244,11 @@ void projectionsToScores( DenseM const& projections,
     //int const verbose=0;
     //size_t const nExamples = projections.cols();        // TRANSPOSE of x*w, for efficiency
     size_t const nProj = projections.rows();
-    size_t const nClass = s.lower_bounds_avg.rows();
-    assert( (int)nProj == s.upper_bounds_avg.cols() );
-    assert( (int)nProj == s.lower_bounds_avg.cols() );
-    assert( (int)nClass == s.upper_bounds_avg.rows() );
-    assert( (int)nClass == s.lower_bounds_avg.rows() );
+    size_t const nClass = s.lower_bounds.rows();
+    assert( (int)nProj == s.upper_bounds.cols() );
+    assert( (int)nProj == s.lower_bounds.cols() );
+    assert( (int)nClass == s.upper_bounds.rows() );
+    assert( (int)nClass == s.lower_bounds.rows() );
     MCprojector mcprojector( s );
     sps = mcprojector.score( projections );
 }

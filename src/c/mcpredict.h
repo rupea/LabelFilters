@@ -4,14 +4,14 @@
 #include "mcsoln.h"
 
 /** Simplest projector returns the final bitset for each input example.
- * - It calculates \c projections=(x*s.weights_avg).transpose().
+ * - It calculates \c projections=(x*s.weights).transpose().
  * - Then it uses \c s.lower_bounds_avg and \c s.upper_bounds_avg as a
  *   filter on possible class labels for each example \em row of \c x.
  *
  * \p x         [ nExamples x nDim ] examples
  * \p s         {l,u}[ nClass x nProj ] bounds, w[ nDim x nProj ] projection lines
  *
- * x * s.weights_avg will be [ nExamples x nProj ]
+ * x * s.weights will be [ nExamples x nProj ]
  */
 template<typename EigenType>
 std::vector<boost::dynamic_bitset<>> project( EigenType const& x, MCsoln const& s );
@@ -92,7 +92,7 @@ private:
 /** TBD Alternate filtering, using a centrality score.
  * \p x         row-wise input examples
  *              (for efficiency, pass as many rows at a time as you can).
- * \p s         MCsoln.  weights_avg, lower_bounds_avg and upper_bounds_avg are used,
+ * \p s         MCsoln.  weights, lower_bounds and upper_bounds are used,
  *              while [opt.] medians could be used to assign crude scores.
  * \p targetSize retain at most this many classes
  *

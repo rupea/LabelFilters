@@ -80,10 +80,6 @@ void print_parameter_usage()
     "\n     report_epoch - number of iterations between computation and report the objective value"
     "\n              (can be expensive because obj is calculated on the entire training set)."
     "\n              0 for no reporting [1000]."
-    "\n     report_avg_epoch - number of iterations between computation and report the objective"
-    "\n              value for the averaged w (this can be quite expensive if full optimization"
-    "\n              of LU is turned on, since it first fully optimize LU and then calculates"
-    "\n              the obj on the entire training set). 0 for no reporting [0]."
     "\n     optimizeLU_epoch - number of iterations between full optimizations of  the"
     "\n              lower and upper class boundaries. Expensive. 0 for no optimization [10000]"
     "\n     remove_constraints - whether to remove the constraints for instances that fall"
@@ -157,7 +153,6 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
 #endif
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"threads "<<left<<p.num_threads);
-    WIDE(os,c2,right<<setw(11)<<"tavg "<<left<<p.report_avg_epoch);
 #if GRADIENT_TEST
     WIDE(os,c3,right<<setw(15)<<"ngrad "<<left<<p.no_finite_diff_tests);
 #endif
@@ -342,7 +337,6 @@ using namespace detail;
         IO(avg_epoch); \
         IO(reorder_epoch); \
         IO(report_epoch); \
-        IO(report_avg_epoch); \
         IO(optimizeLU_epoch); \
         IO_AS(bool,uint32_t,remove_constraints); \
         IO_AS(bool,uint32_t,remove_class_constraints); \
