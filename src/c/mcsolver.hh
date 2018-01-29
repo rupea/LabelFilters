@@ -280,7 +280,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
     
 
-    size_t obj_idx = 0, obj_idx_avg = 0;
+    size_t obj_idx = 0;
     // in the multilabel case each example will have an impact proportinal
     // to the number of classes it belongs to. ml_wt and ml_wt_class
     // allows weighting that impact when updating params for the other classes
@@ -361,15 +361,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	break;
 	}
 	return means;
-      };
-
-    // forcibly ignore REORDER_AVG_PROJ_MEANS
-    auto GetMeansNoAvg = [&means,&GetMeans]( enum Reorder_Type reorder ) -> VectorXd const&
-      {
-	if( reorder == REORDER_AVG_PROJ_MEANS )
-	  reorder = REORDER_PROJ_MEANS;
-        GetMeans(reorder);
-        return means;
       };
 
     auto ObjectiveHinge = [&] ( ) -> double
