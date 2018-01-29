@@ -6,7 +6,7 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
                                        const DenseColM& lmat, const DenseColM& umat,
                                        bool verbose)
 {
-    ActiveDataSet* active;
+    ActiveDataSet* active=NULL;
     size_t noClasses = lmat.rows();
     assert( umat.rows() == (int)noClasses );
 
@@ -36,7 +36,6 @@ ActiveDataSet* projectionsToActiveSet( VectorXsz& no_active, DenseM const& proje
         {
             cout << "Update filter, projection " << i << endl;
         }
- 
 	no_active[i] = update_active(&active, f, proj);
     }
     return active;

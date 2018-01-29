@@ -146,7 +146,7 @@ settings:
 	echo "BOOSTLIB       = $(BOOSTLIB)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcupdate.h boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
+CHECK_HEADERS := mcfilter.h mcfilter.hh mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcupdate.h boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
 # faster version (can run in parallel)
 check-headers chk-headers:
 	rm -f /tmp/*.chk
@@ -158,7 +158,7 @@ check-oct-headers: EigenOctave.h
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
 
-LIB_CPPFILES:= mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp
+LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp
 lib: hdr-stamp
 	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1 demo-quick; }
 lib-clean:

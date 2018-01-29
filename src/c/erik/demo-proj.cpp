@@ -1,7 +1,9 @@
 /** \file
  * learn projections using only C++ */
-#include "../find_w.h"
-#include "../mcsolver.h"
+#include "../find_w.h" //old implementation
+#include "../predict.h" //old implementation
+#include "../mcsolver.h" //new implementation
+#include "../mcfilter.h" //new implementation
 #include "utils.h"              // labelVec2Mat
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -187,6 +189,7 @@ int main(int argc,char** argv)
     DenseM x(281,d);
     VectorXd yVec(281);
     x.setRandom();
+    srand(rand_seed);
     cout<<" rand seed = "<<rand_seed<<" ,  x(100,100) = "<<x(100,100)<<endl;
     for (int i = 0; i < yVec.size(); i++) {
         //      y(i) = (i%1000)+1;
@@ -195,26 +198,75 @@ int main(int argc,char** argv)
     SparseMb y = labelVec2Mat(yVec);
 
     if( use_dense ){
-        if( ! use_mcsolver ){
-            cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
-            // In fact, don't need to size or initialize
-            cout<<" demo-proj.cpp, easy-init, dense "<<endl;
-            DenseM weights, lower_bounds, upper_bounds;
-            DenseM w_avg, l_avg, u_avg;
-            VectorXd objective_val, o_avg;
-            cout<<"  pre-run call to rand() returns "<<rand()<<endl;
-            // these calls are important so that the compiler instantiates the right templates
-            solve_optimization(weights,lower_bounds,upper_bounds,objective_val
-                               ,w_avg,l_avg,u_avg,o_avg
-                               ,x,y,params);
-        }else{
-            cout<<" *** BEGIN SOLUTION *** MCsolver code "<<problem_msg<<endl;
-            cout<<"  pre-run call to rand() returns "<<rand()<<endl;
-            MCsolver mc;
-            mc.solve( x, y, &params );
-            MCsoln const& soln = mc.getSoln();
-            mcSave(saveBasename, soln);
-        }
+      //        if( ! use_mcsolver ){
+      cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
+      srand(rand_seed);
+      // In fact, don't need to size or initialize
+      cout<<" demo-proj.cpp, easy-init, dense "<<endl;
+      DenseM weights, lower_bounds, upper_bounds;
+      DenseM w_avg, l_avg, u_avg;
+      VectorXd objective_val, o_avg;
+      cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+      // these calls are important so that the compiler instantiates the right templates
+      solve_optimization(weights,lower_bounds,upper_bounds,objective_val
+			 ,w_avg,l_avg,u_avg,o_avg
+			 ,x,y,params);
+      VectorXsz no_active;
+      ActiveDataSet* active_old=getactive(no_active, x, w_avg, l_avg, u_avg);
+      //        }else{
+      cout<<" *** BEGIN SOLUTION *** MCsolver code "<<problem_msg<<endl;
+      srand(rand_seed);
+      cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+      MCsolver mc;
+      mc.solve( x, y, &params );
+      MCsoln const& soln = mc.getSoln();
+      mcSave(saveBasename, soln);
+      MCfilter mf(soln);
+      // check that the active classes are the same
+      std::vector<boost::dynamic_bitset<>> active_mc;
+      mf.filter(active_mc,x);	    
+      for (int i =0; i<active_mc.size(); i++)
+	{
+	  if (active_mc[i] != *(active_old->at(i)))
+	    {
+	      cout << "Active sets do not match" << endl;
+	      cout << "old one " << *(active_old->at(i)) << endl;
+	      cout << "new one " << active_mc[i] << endl;
+	      exit(-1);
+	    }
+	}	  
+      if (saveBasename.size() > 0U){
+	//test reading from solution file
+	string saveTxt(saveBasename); saveTxt.append(".soln");	  
+	MCfilter mf1; mf1.read(saveTxt);
+	string saveBin(saveBasename); saveBin.append("-bin.soln");	  
+	MCfilter mf2; mf2.read(saveBin);
+	
+	mf1.filter(active_mc,x);	    
+	for (int i =0; i<active_mc.size(); i++)
+	  {
+	    if (active_mc[i] != *(active_old->at(i)))
+	      {
+		cout << "Active sets do not match (read from text)" << endl;
+		cout << "old one " << *(active_old->at(i)) << endl;
+		cout << "new one " << active_mc[i] << endl;
+		exit(-1);
+	      }
+	  }	  
+	mf2.filter(active_mc,x);	    
+	for (int i =0; i<active_mc.size(); i++)
+	  {
+	    if (active_mc[i] != *(active_old->at(i)))
+	      {
+		cout << "Active sets do not match (read from binary)" << endl;
+		cout << "old one " << *(active_old->at(i)) << endl;
+		cout << "new one " << active_mc[i] << endl;
+		exit(-1);
+	      }
+	  }
+      }     
+      //    }
+
     }else{        // sparse x
         // let's let the sparse dim be 4x larger, ?? and add one high dim of noise
         SparseM xs(x.rows(), 4*x.cols());
@@ -227,26 +279,76 @@ int main(int argc,char** argv)
             //tripletList.push_back(T(r,int(c + (double(rand())/RAND_MAX)*2.5*c),double(rand()/RAND_MAX)));
         }
         xs.setFromTriplets(tripletList.begin(),tripletList.end());
-        if( ! use_mcsolver ){
-            cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
-            // In fact, don't need to size or initialize
-            cout<<" demo-proj.cpp, easy-init, dense "<<endl;
-            DenseM weights, lower_bounds, upper_bounds;
-            DenseM w_avg, l_avg, u_avg;
-            VectorXd objective_val, o_avg;
-            cout<<"  pre-run call to rand() returns "<<rand()<<endl;
-            // these calls are important so that the compiler instantiates the right templates
-            solve_optimization(weights,lower_bounds,upper_bounds,objective_val
-                               ,w_avg,l_avg,u_avg,o_avg
-                               ,xs,y,params);
-        }else{
-            cout<<" *** BEGIN SOLUTION *** MCsolver code "<<problem_msg<<endl;
-            cout<<"  pre-run call to rand() returns "<<rand()<<endl;
-            MCsolver mc;
-            mc.solve( xs, y, &params );
-            MCsoln const& soln = mc.getSoln();
-            mcSave(saveBasename, soln);
-        }
+	//        if( ! use_mcsolver ){
+	cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
+	// In fact, don't need to size or initialize
+	srand(rand_seed);
+	cout<<" demo-proj.cpp, easy-init, dense "<<endl;
+	DenseM weights, lower_bounds, upper_bounds;
+	DenseM w_avg, l_avg, u_avg;
+	VectorXd objective_val, o_avg;
+	cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+	// these calls are important so that the compiler instantiates the right templates
+	solve_optimization(weights,lower_bounds,upper_bounds,objective_val
+			   ,w_avg,l_avg,u_avg,o_avg
+			   ,xs,y,params);
+	VectorXsz no_active;
+	ActiveDataSet* active_old=getactive(no_active, xs, w_avg, l_avg, u_avg);
+	    
+	//} else {
+	
+	cout<<" *** BEGIN SOLUTION *** MCsolver code "<<problem_msg<<endl;
+	srand(rand_seed);
+	cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+	MCsolver mc;
+	mc.solve( xs, y, &params );
+	MCsoln const& soln = mc.getSoln();
+	mcSave(saveBasename, soln);	  
+	MCfilter mf(soln);
+	// check that the active classes are the same
+	std::vector<boost::dynamic_bitset<>> active_mc;
+	mf.filter(active_mc,xs);	    
+	for (int i =0; i<active_mc.size(); i++)
+	  {
+	    if (active_mc[i] != *(active_old->at(i)))
+	      {
+		cout << "Active sets do not match" << endl;
+		cout << "old one " << *(active_old->at(i)) << endl;
+		cout << "new one " << active_mc[i] << endl;
+		exit(-1);
+	      }
+	  }	  
+	if (saveBasename.size() > 0U){
+	  //test reading from solution file
+	  string saveTxt(saveBasename); saveTxt.append(".soln");	  
+	  MCfilter mf1; mf1.read(saveTxt);
+	  string saveBin(saveBasename); saveBin.append("-bin.soln");	  
+	  MCfilter mf2; mf2.read(saveBin);
+	  
+	  mf1.filter(active_mc,xs);	    
+	  for (int i =0; i<active_mc.size(); i++)
+	    {
+	      if (active_mc[i] != *(active_old->at(i)))
+		{
+		  cout << "Active sets do not match (read from text)" << endl;
+		  cout << "old one " << *(active_old->at(i)) << endl;
+		  cout << "new one " << active_mc[i] << endl;
+		    exit(-1);
+		}
+	    }	  
+	  mf2.filter(active_mc,xs);	    
+	  for (int i =0; i<active_mc.size(); i++)
+	      {
+		if (active_mc[i] != *(active_old->at(i)))
+		  {
+		    cout << "Active sets do not match (read from binary)" << endl;
+		    cout << "old one " << *(active_old->at(i)) << endl;
+		    cout << "new one " << active_mc[i] << endl;
+		    exit(-1);
+		  }
+	      }
+	}
+	//}
     }
 
 

@@ -86,7 +86,7 @@ $(PROFILE_TARGETS):
 lua: libmcfilter | libmcfilter
 	$(MAKE) -C lua-api $(JOBS)
 libmcfilter:
-	$(MAKE) -C c $(JOBS) lib
+	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile lib
 
 #standalone: 
 #	$(MAKE) -C $(BINDIR) -f../c/Makefile $(MAKECMDGOALS)
