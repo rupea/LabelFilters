@@ -13,6 +13,12 @@ void MCfilter::filter(/*out*/ std::vector<boost::dynamic_bitset<>>& active, /*in
   assert(x.cols() == this->d);
   
   np = np?np:nProj;
+  if (np > nProj)
+    {
+      cerr << "Warning: MCfilter::filter requested " << np << " projections, but only " << nProj
+	   << " are available" << endl;
+      np = nProj;
+    }
   DenseM const projections = (x * weights.leftCols(np));
 
   

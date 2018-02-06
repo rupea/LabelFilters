@@ -21,6 +21,5 @@ int main(int argc, char**argv){
     prog.tryRead( verb );       // read soln, x [,y] data
     prog.tryProj( verb );       // project
     prog.trySave( verb );       // write outfile, if asked to do so
-    prog.tryValidate( verb );   // validate (if have --yFile data)
     cout<<"\nGoodbye"<<endl;
 }

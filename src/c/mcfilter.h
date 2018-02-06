@@ -22,6 +22,12 @@ class MCfilter : protected MCsoln
   void read( std::string const& fname )
   {						
     std::ifstream is(fname);
+    if(!is.good()) 
+      { 
+	std::string errmsg = "trouble opening solution file ";
+	errmsg += fname;	
+	throw std::runtime_error(errmsg);
+      }
     read(is);
     is.close();
   }
@@ -36,6 +42,11 @@ class MCfilter : protected MCsoln
     MCsoln::write(os,fmt);
   }
   
+  bool isempty()
+  {
+    return !_filters.size();
+  }
+
   /** apply the MC filter on data 
    * \p active  bit matrix indicating if a class is active or has been filtered out 
    *              active(i,k) = 1 if class k is active for example i

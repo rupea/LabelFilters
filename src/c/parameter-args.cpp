@@ -480,25 +480,21 @@ namespace opt {
             <<endl;
     }
     void MCprojArgs::init( po::options_description & desc ){
-        desc.add_options()
-            ("xfile,x", value<string>()->required(), "x data (row-wise nExamples x dim)")
-            ("solnfile,s", value<string>()->required(), "solnfile[.soln] starting solver state")
-            ("output,o", value<string>()->default_value(string("")), "output[.proj] file base name [def. cout]. output.proj has boolean class data.")
-            ("proj,p", value<uint32_t>()->implicit_value(0U)->default_value(0U), "**TBD** Use up to --proj projections for output file [0=all] **TBD")
-            (",B", value<bool>(&outBinary)->implicit_value(true),"(T) T|B output BINARY")
-            (",T", value<bool>(&outText)->implicit_value(true),"(T) T|B output TEXT")
-            (",S", value<bool>(&outSparse)->implicit_value(true),"(S) S|D output SPARSE")
-            (",D", value<bool>(&outDense)->implicit_value(true),"(S) S|D output DENSE")
-            ("yfile,y", value<string>(), "[y] validation data (slc/mlc/SparseMb)")
-            ("Yfile,Y", value<string>(), "**TBD** [y] validation data - per projection analysis")
-            ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
-            ("xunit", value<bool>()->implicit_value(true)->default_value(false), "row-normalize x examples")
-            ("xscale", value<double>()->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
-            // xquad ?
-            ("help,h", value<bool>()->implicit_value(true), "this help")
-            //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
-            ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output. v=1: validate y per projection")
-            ;
+      desc.add_options()
+	("solnfile,s", value<string>(&solnFile)->default_value(string("")), "file with the saved label filter")
+	("xfile,x", value<string>(&xFile)->default_value(string("")), "x data (row-wise nExamples x dim)")
+	("output,o", value<string>()->default_value(string("")), "file to output the feasible classes after filter is applied.")
+	("proj,p", value<uint32_t>()->implicit_value(0U)->default_value(0U), "use up to --proj projections [0=all]")
+	("outBinary,B", value<bool>(&outBinary)->implicit_value(true)->default_value(false), "output feasible classed in  BINARY format")
+	("outDense,D", value<bool>(&outDense)->implicit_value(true)->default_value(false),"output feasible classes in DENSE format (matrix or 0|1)")
+	("xnorm", value<bool>(&xnorm)->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
+	("xunit", value<bool>(&xunit)->implicit_value(true)->default_value(false), "row-normalize x examples")
+	("xscale", value<double>(&xscale)->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
+	// xquad ?
+	("help,h", "this help")
+	//("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
+	("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output. v=1: validate y per projection")
+	;
     }
     MCprojArgs::MCprojArgs()
         : // MCprojArgs::parse output...
@@ -507,11 +503,7 @@ namespace opt {
             , outFile()
             , maxProj(0U)
             , outBinary(false)
-            , outText(true)
-            , outSparse(true)
             , outDense(false)
-            , yPerProj(false)
-            , yFile()
             , xnorm(false)
             , xunit(false)
             , xscale(1.0)
@@ -523,36 +515,38 @@ namespace opt {
     {
         this->parse(argc,argv);
     }
-    /** helper class for alternate form of constructor.
-     * This is a simple white-space tokenizer, not for
-     * hard-core robustness (no ' " treatment, ...)
-     */
-struct MkArgcArgv : public std::vector<char*>
-    {
-        MkArgcArgv( std::string cmd ) {
-            istringstream iss(cmd);
-            std::string token;
-            while(iss >> token) {
-                char *arg = new char[token.size() + 1];
-                copy(token.begin(), token.end(), arg);
-                arg[token.size()] = '\0';
-                push_back(arg);
-            }
-            push_back(nullptr);
-        }
-        ~MkArgcArgv(){
-            for(size_t i = 0; i < size(); ++i){
-                delete[] (*this)[i];
-                // (*this)[i] = nullptr;
-            }
-        }
-    };
-    MCprojArgs::MCprojArgs(std::string args)
-        : MCprojArgs()
-    {
-        MkArgcArgv a(args);
-        this->parse( a.size()-1U, &a[0] );
+
+  /** helper class for alternate form of constructor.
+   * This is a simple white-space tokenizer, not for
+   * hard-core robustness (no ' " treatment, ...)
+   */
+  struct MkArgcArgv : public std::vector<char*>
+  {
+    MkArgcArgv( std::string cmd ) {
+      istringstream iss(cmd);
+      std::string token;
+      while(iss >> token) {
+	char *arg = new char[token.size() + 1];
+	copy(token.begin(), token.end(), arg);
+	arg[token.size()] = '\0';
+	push_back(arg);
+      }
+      push_back(nullptr);
     }
+    ~MkArgcArgv(){
+      for(size_t i = 0; i < size(); ++i){
+	delete[] (*this)[i];
+	// (*this)[i] = nullptr;
+      }
+    }
+  };
+
+  MCprojArgs::MCprojArgs(std::string args)
+    : MCprojArgs()
+  {
+    MkArgcArgv a(args);
+    this->parse( a.size()-1U, &a[0] );
+  }
 
 
     void MCprojArgs::parse( int argc, char**argv ){
@@ -568,7 +562,7 @@ struct MkArgcArgv : public std::vector<char*>
             init( descMcproj );                        // create a description of the options
 
 
-            outBinary = outText = outSparse = outDense = false;
+            outBinary = outDense = false;
 
             po::variables_map vm;
             //po::store( po::parse_command_line(argc,argv,desc), vm );
@@ -592,49 +586,16 @@ struct MkArgcArgv : public std::vector<char*>
 
             po::notify(vm); // at this point, raise any exceptions for 'required' args
 
-            cerr<<"mcproj args..."<<endl;
-            assert( vm.count("xfile") );
-            assert( vm.count("solnfile") );
+            // xFile=vm["xfile"].as<string>();
+            // solnFile=vm["solnfile"].as<string>();
+            // outFile=vm["output"].as<string>();
+            // maxProj=vm["proj"].as<uint32_t>();
+            // xnorm=vm["xnorm"].as<bool>();
+            // xunit=vm["xunit"].as<bool>();
+            // xscale=vm["xscale"].as<double>();
+            // verbose=vm["verbose"].as<int>();	    
 
-            xFile=vm["xfile"].as<string>();
-            solnFile=vm["solnfile"].as<string>();
-            outFile=vm["output"].as<string>();
-            maxProj=vm["proj"].as<uint32_t>();
-            xnorm=vm["xnorm"].as<bool>();
-            xunit=vm["xunit"].as<bool>();
-            xscale=vm["xscale"].as<double>();
-            verbose=vm["verbose"].as<int>();
-
-            if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
-            if( outFile.size() && outFile .rfind(".proj") != outFile .size() - 5U ) outFile.append(".proj");
-
-            //{cout<<" -"; if(outBinary) cout<<"B"; if(outText)   cout<<"T"; if(outSparse) cout<<"S"; if(outDense)  cout<<"D";}
-            //if(vm.count("-B")) outBinary=true;
-            //if(vm.count("-T")) outText=true;
-            //if(vm.count("-S")) outSparse=true;
-            //if(vm.count("-D")) outDense=true;
-            //{cout<<" -"; if(outBinary) cout<<"B"; if(outText)   cout<<"T"; if(outSparse) cout<<"S"; if(outDense)  cout<<"D";}
-            if( !outBinary && !outText ) outText = true; // default
-            if( !outSparse && !outDense ) outDense = true; // default
-            //{cout<<" -"; if(outBinary) cout<<"B"; if(outText)   cout<<"T"; if(outSparse) cout<<"S"; if(outDense)  cout<<"D";}
-            if( outBinary == outText ) throw std::runtime_error(" Only one of B|T, please");
-            if( outSparse == outDense ) throw std::runtime_error(" Only one of S|D, please");
-
-            yPerProj = false;
-            yFile=string("");
-            if( vm.count("yfile") && vm.count("Yfile") )
-                throw std::runtime_error("Can only specify one of --yfile (shorter) or --Yfile (longer output)");
-            if( vm.count("yfile") ){
-                yFile = vm["yfile"].as<string>();
-            }
-            if( vm.count("Yfile") ){
-                yPerProj = true;
-                yFile = vm["Yfile"].as<string>();
-            }
-            if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
-
-            // projections operation doesn't need solver parms
-            //opt::extract(vm,parms);         // retrieve McSolver parameters
+	    
         }catch(po::error& e){
             cerr<<"Invalid argument: "<<e.what()<<endl;
             throw;
@@ -649,27 +610,27 @@ struct MkArgcArgv : public std::vector<char*>
         return;
     }
 
-    // static fn -- no 'this'
-    std::string MCprojArgs::defaultHelp(){
-        std::ostringstream oss;
-        try {
-            MCprojArgs proj;                    // make sure we generate *default* help
-            po::options_description descMcproj("Allowed projection options");
-            proj.init( descMcproj );            // create a description of the options
-
-            helpUsage( oss );
-            oss<<descMcproj<<endl;
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
-        }catch(std::exception const& e){
-            cerr<<"Error: "<<e.what()<<endl;
-            throw;
-        }catch(...){
-            cerr<<"Command-line parsing exception of unknown type!"<<endl;
-            throw;
-        }
-        return oss.str();
+  // static fn -- no 'this'
+  std::string MCprojArgs::defaultHelp(){
+    std::ostringstream oss;
+    try {
+      MCprojArgs proj;                    // make sure we generate *default* help
+      po::options_description descMcproj("Allowed projection options");
+      proj.init( descMcproj );            // create a description of the options
+      
+      helpUsage( oss );
+      oss<<descMcproj<<endl;
+    }catch(po::error& e){
+      cerr<<"Invalid argument: "<<e.what()<<endl;
+      throw;
+    }catch(std::exception const& e){
+      cerr<<"Error: "<<e.what()<<endl;
+      throw;
+    }catch(...){
+      cerr<<"Command-line parsing exception of unknown type!"<<endl;
+      throw;
     }
+    return oss.str();
+  }
 
 }//opt::
