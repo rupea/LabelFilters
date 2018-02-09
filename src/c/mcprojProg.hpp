@@ -49,9 +49,9 @@ namespace opt {
 
     ::MCfilter const& filter() const {return *this;}
 
-    static void dumpFeasible (std::ostream& os
-			      , std::vector<boost::dynamic_bitset<>> const& vbs
-			      , bool denseFmt=false);
+    // static void dumpFeasible (std::ostream& os
+    // 			      , std::vector<boost::dynamic_bitset<>> const& vbs
+    // 			      , bool denseFmt=false);
 
   private:
     

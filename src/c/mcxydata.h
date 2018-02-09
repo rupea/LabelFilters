@@ -13,7 +13,12 @@
 class MCxyData {
 public:
     MCxyData();
-    ~MCxyData();
+    MCxyData(DenseM const& x);   
+    MCxyData(DenseM const& x, SparseMb const& y);
+    MCxyData(SparseM const& x);   
+    MCxyData(SparseM const& x, SparseMb const& y);
+    
+    ~MCxyData(){};
     /// \name row-wise test data matrix
     //@{
     // perhaps denseOk and sparseOk can be replaced by xDense.size() != 0 (etc.) ?

@@ -1,6 +1,6 @@
 #include "mcsolver.h"
 #include "mcsolver.hh"
-#include "mcxydata.h"
+//#include "mcxydata.h"
 
 #include "find_w_detail.h"      // ::optimizeLU
 #include <boost/numeric/conversion/bounds.hpp>  // boost::numeric::bounds<T>
@@ -11,15 +11,6 @@
 #include <assert.h>
 
 using namespace std;
-
-// ... MCxyData magic headers (simplify I/O)
-std::array<char,4> MCxyData::magic_xSparse = {0,'X','s','8'}; // or 4 for floats
-std::array<char,4> MCxyData::magic_xDense  = {0,'X','d','8'}; // or 4 for floats
-// x text mode not supported so far.
-std::array<char,4> MCxyData::magic_yBin    = {0,'Y','s','b'};
-// y text mode readable but has no magic.
-// ...
-
 
 
 // Complete some of the class declarations before instantiating MCsolver
@@ -127,7 +118,7 @@ MCpermState::MCpermState( size_t nClass )
   , ok_lu(false)
   , ok_lu_avg(false)
   , ok_sortlu(false)
-  , ok_sortlu_avg(true)
+  , ok_sortlu_avg(false)
     
   , l( nClass )
   , u( nClass )
@@ -193,10 +184,10 @@ void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const
     ok_lu = true;
     ok_sortlu = false;
 
-    sortlu_avg.setZero();
-    ok_sortlu_avg = true;
+    sortlu_acc.setZero();
     nAccSortlu = 0U;
-
+    sortlu_avg.setZero();
+    ok_sortlu_avg = false;
     ok_lu_avg = false;
 }
 
@@ -224,7 +215,7 @@ void MCpermState::optimizeLU_avg( VectorXd const& projection_avg, SparseMb const
                                   double const C1, double const C2,
                                   param_struct const& params, bool print )
 {
-  ::optimizeLU( l_avg, u_avg, // <--- outputs
+ ::optimizeLU( l_avg, u_avg, // <--- outputs
 		projection_avg, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
 		nclasses, filtered, C1, C2, params, print );
   ok_lu_avg = true;

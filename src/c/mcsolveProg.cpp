@@ -24,7 +24,6 @@ namespace opt {
 				  , param_struct const* const defparms/*=nullptr*/ )
     : ::opt::MCsolveArgs( argc, argv )
     , ::MCsolver() // solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
-    , projProg()                // empty shared ptr
     , xy( new ::MCxyData() )
   {
     // defaults: if given explicitly as \c defparms
@@ -57,12 +56,11 @@ namespace opt {
       if( A::parms.reoptimize_LU ) throw std::runtime_error(" --reoptlu needs --solnfile=... or explicit default parms");
     }
     if(A::parms.verbose>=1){
-      cout<<" +MCsolveProgram --xfile="<<A::xFile <<" --yFile="<<A::yFile;
+      cout<<" +MCsolveProgram --xfile="<<A::xFile;
+      if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
       if(A::solnFile.size()) cout<<" --solnFile="<<A::solnFile;
       if(A::outFile.size()) cout<<" --output="<<A::outFile;
       if(A::outBinary) cout<<" -B";
-      if(A::outText)   cout<<" -T";
-      if(A::yFile.size()) cout<<" --yfile="<<A::yFile;
       //if(A::threads)   cout<<" --threads="<<A::threads;
       if(A::xnorm)     cout<<" --xnorm";
       if(A::xunit)     cout<<" --xunit";
@@ -70,12 +68,7 @@ namespace opt {
       cout<<endl;
     }
   }
-  MCsolveProgram::~MCsolveProgram(){
-    if( projProg && projProg->solveProg ){  // reset known shared_ptr to me [circular]
-      //projProg->solveProg.reset();
-      projProg->solveProg = nullptr;
-    }
-  }
+  MCsolveProgram::~MCsolveProgram(){}
   void MCsolveProgram::tryRead( int const verb/*=0*/ ){
     int const verbose = A::verbose + verb;
     if(verbose>=1) cout<<"MCsolveProgram::tryRead()"<<endl;
@@ -98,20 +91,15 @@ namespace opt {
 	throw;
       }
     }
-    if(!xy->sparseOk){
-      xy->xread(xFile);
-    }
-    if(xnorm && xy->sparseOk){
-      xy->xDense = DenseM( xy->xSparse );     // convert sparse --> dense
-      xy->xSparse.resize(0,0);
-      xy->sparseOk = false;
-      xy->denseOk = true;
-    }
-    // read SparseMb xy->y;
-    if(yFile.size()){
-      xy->yread(yFile);
-      if( !(xy->y.size() > 0) ) throw std::runtime_error("trouble reading y data");
-    }
+    else
+      {
+	xy->xread(xFile);
+	// read SparseMb xy->y;
+	if(yFile.size()){
+	  xy->yread(yFile);
+	  if( !(xy->y.size() > 0) ) throw std::runtime_error("trouble reading y data");
+	}
+      }
 #ifndef NDEBUG
     assert( xy->denseOk || xy->sparseOk );
     if( xy->denseOk ){
@@ -128,7 +116,9 @@ namespace opt {
       if(verbose>=1){
 	cout<<" xnorm!"<<endl;
       }
-      xy->xstdnormal(xmean, xstdev, true, true, false);
+      if (xy->sparseOk)
+	cerr << "Warning: --xnorm is used with sparse data. Features are not centered to maintain sparsity" << endl;	      
+      xy->xstdnormal(xmean, xstdev, true, !xy->sparseOk, false);
       if(verbose>=1){
 	cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
 	cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
@@ -142,6 +132,8 @@ namespace opt {
       xy -> xscale( A::xscale );
     }
     
+    if( xy->y.size() <= 0 ) throw runtime_error("No labels have been provided. Training label filters requires labeled data");
+
     if(verbose>=1){
       if( xy->denseOk ){
 	cout<<"--------- xy->xDense"<<prettyDims(xy->xDense)<<":\n";
@@ -149,15 +141,9 @@ namespace opt {
       }else{ //xy->sparseOk
 	cout<<"--------- xy->xSparse"<<prettyDims(xy->xSparse)<<":\n";
 	if(xy->xSparse.size()<1000||verbose>=3) cout<<xy->xSparse<<endl;
-	//if( xnorm ){ cout<<" xnorm!"<<endl; col_normalize(xy->xSparse,xmean,xstdev); }
-	// col-norm DISALLOWED
-	if( xnorm ) throw std::runtime_error("sparse --xfile does not support --xnorm");
       }
-      if( xy->y.size() <= 0 ) cout<<"xy->y: (no validation data)"<<endl;
-      else{
-	cout<<"--------- xy->y"<<prettyDims(xy->y)<<":\n";
-	if(xy->y.size()<1000||verbose>=3) cout<<xy->y<<endl;
-      }
+      cout<<"--------- xy->y"<<prettyDims(xy->y)<<":\n";
+      if(xy->y.size()<1000||verbose>=3) cout<<xy->y<<endl;      
     }
   }
   /** \sa mcsolver.hh for \ref MCsolver::solve implementation.
@@ -397,33 +383,5 @@ namespace opt {
                     <<" consider running with higher C1 / lower C2"<<endl;
             }
         }
-        if(1) { // NEW TEST CODE XXX
-            cout<<"\n********* NEW TEST CODE **********"<<endl;
-            this->pretty(cout, verbose);
-            auto proj = projector("-v");
-            if( ! proj ) throw std::runtime_error(" Failed to construct projector associated with this solver");
-
-            //proj->tryRead(7/*verbose*/);
-            //cout<<"tryRead MCprojProgram soln is "; proj->soln.pretty(cout); cout<<endl;
-
-            proj->tryProj(7/*verbose*/);
-            proj->tryValidate(7/*verbose*/);
-        }
-    }
-
-    //std::shared_ptr<MCprojProgram> MCsolveProgram::projector(std::string args)
-    MCprojProgram * MCsolveProgram::projector(std::string args)
-    {
-        if( ! projProg ){
-            std::ostringstream cmd;            // default command string
-            // Potential difficulty -- embedded whitespace will be treated INCORRECTLY
-            cmd<<" INTERNAL --solnfile="<<(A::outFile.size()?A::outFile:A::solnFile)
-                <<" --xfile="<<xFile<<" --yfile="<<yFile
-                <<" "<<args;
-            //projProg = std::make_shared<MCprojProgram>( this, cmd.str() );
-            projProg = new MCprojProgram( this, cmd.str() );
-            return projProg;
-        }
-        return projProg;
     }
 }//opt::

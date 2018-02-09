@@ -4,6 +4,7 @@
 #include "mcfilter.h"
 #include <boost/dynamic_bitset.hpp>
 #include "typedefs.h" //DenseM
+#include <iostream>
 
 template< typename EIGENTYPE >
 void MCfilter::filter(/*out*/ std::vector<boost::dynamic_bitset<>>& active, /*in*/ EIGENTYPE const& x, int np/* = 0*/)
@@ -15,8 +16,9 @@ void MCfilter::filter(/*out*/ std::vector<boost::dynamic_bitset<>>& active, /*in
   np = np?np:nProj;
   if (np > nProj)
     {
-      cerr << "Warning: MCfilter::filter requested " << np << " projections, but only " << nProj
-	   << " are available" << endl;
+      std::cerr << "Warning: MCfilter::filter requested " << np 
+		<< " projections, but only " << nProj
+		<< " are available" << std::endl;
       np = nProj;
     }
   DenseM const projections = (x * weights.leftCols(np));

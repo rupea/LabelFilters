@@ -5,6 +5,8 @@
 #include "../mcsolver.h" //new implementation
 #include "../mcfilter.h" //new implementation
 #include "utils.h"              // labelVec2Mat
+#include "mcxydata.h"
+#include "printing.h"
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
 #ifdef _OPENMP
@@ -179,6 +181,7 @@ int main(int argc,char** argv)
     //    params.report_epoch = 1000;
     //    params.verbose = 0;
     int const rand_seed = 117;
+    params.seed = rand_seed;
     int const p = params.no_projections;
     //int const d = 12345U;       // x training data dimensionality ~ 440 s runtime
     int const d = 281U;           // ~ 30 s run
@@ -197,6 +200,17 @@ int main(int argc,char** argv)
     }
     SparseMb y = labelVec2Mat(yVec);
 
+    if (saveBasename.size() > 0U){
+      //test writing xydata 
+      MCxyData xy(x,y);
+      string savex(saveBasename); savex.append(".xdata");	  
+      xy.xwrite(savex);
+      string savey(saveBasename); savey.append(".ydata");	  
+      xy.ywrite(savey);
+    }
+
+    cout << params << endl;
+
     if( use_dense ){
       //        if( ! use_mcsolver ){
       cout<<" *** BEGIN SOLUTION *** original code: "<<problem_msg<<endl;
@@ -206,7 +220,7 @@ int main(int argc,char** argv)
       DenseM weights, lower_bounds, upper_bounds;
       DenseM w_avg, l_avg, u_avg;
       VectorXd objective_val, o_avg;
-      cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+      //      cout<<"  pre-run call to rand() returns "<<rand()<<endl;
       // these calls are important so that the compiler instantiates the right templates
       solve_optimization(weights,lower_bounds,upper_bounds,objective_val
 			 ,w_avg,l_avg,u_avg,o_avg
@@ -216,7 +230,7 @@ int main(int argc,char** argv)
       //        }else{
       cout<<" *** BEGIN SOLUTION *** MCsolver code "<<problem_msg<<endl;
       srand(rand_seed);
-      cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+      //      cout<<"  pre-run call to rand() returns "<<rand()<<endl;
       MCsolver mc;
       mc.solve( x, y, &params );
       MCsoln const& soln = mc.getSoln();
@@ -264,6 +278,13 @@ int main(int argc,char** argv)
 		exit(-1);
 	      }
 	  }
+	if (saveBasename.size() > 0U){
+	  string saveAct(saveBasename); saveAct.append(".feasible");	  
+	  ofstream ofs(saveAct);
+	  ofs <<"## "<<active_mc.size()<<" instances" << endl;
+	  ofs <<"## "<<y.cols()<<" classes" <<endl;
+	  dumpFeasible( ofs, active_mc, false );      
+	}
       }     
       //    }
 
@@ -287,7 +308,7 @@ int main(int argc,char** argv)
 	DenseM weights, lower_bounds, upper_bounds;
 	DenseM w_avg, l_avg, u_avg;
 	VectorXd objective_val, o_avg;
-	cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+	//	cout<<"  pre-run call to rand() returns "<<rand()<<endl;
 	// these calls are important so that the compiler instantiates the right templates
 	solve_optimization(weights,lower_bounds,upper_bounds,objective_val
 			   ,w_avg,l_avg,u_avg,o_avg
@@ -299,7 +320,7 @@ int main(int argc,char** argv)
 	
 	cout<<" *** BEGIN SOLUTION *** MCsolver code "<<problem_msg<<endl;
 	srand(rand_seed);
-	cout<<"  pre-run call to rand() returns "<<rand()<<endl;
+	//	cout<<"  pre-run call to rand() returns "<<rand()<<endl;
 	MCsolver mc;
 	mc.solve( xs, y, &params );
 	MCsoln const& soln = mc.getSoln();
@@ -348,11 +369,20 @@ int main(int argc,char** argv)
 		  }
 	      }
 	}
+	if (saveBasename.size() > 0U){
+	  string saveAct(saveBasename); saveAct.append(".feasible");	  
+	  ofstream ofs(saveAct);
+	  ofs <<"## "<<active_mc.size()<<" instances" << endl;
+	  ofs <<"## "<<y.cols()<<" classes" <<endl;
+	  dumpFeasible( ofs, active_mc, false );      
+	}
 	//}
     }
 
 
     cout<<" post-run call to rand() returns "<<rand()<<endl;
+
+    cout << params << endl;
 #if 0
     // sparse case
     SparseM xs = x.sparseView();

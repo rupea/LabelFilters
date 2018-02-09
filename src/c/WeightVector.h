@@ -179,8 +179,9 @@ class WeightVector
   typedef decltype((my_A + my_weights*my_alpha) * (1.0/my_beta)) VecAvgExprType;
   inline VecAvgExprType getVecAvg()
   {
-      assert( my_avg_t > 0 );
-      return (my_A + my_weights*my_alpha) * (1.0/my_beta);
+    //if averaging has not started (my_avg_t == 0) this is the same as 
+    // getVec()
+    return (my_A + my_weights*my_alpha) * (1.0/my_beta);
   }
 
   inline double norm() const

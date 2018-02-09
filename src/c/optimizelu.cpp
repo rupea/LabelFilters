@@ -183,7 +183,7 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 	      //assert( it.value() ); if (it.value()) ...
 	      int const cs = it.col();                // raw [unsorted] class
 	      int const sc = class_order[cs];         // sorted class number
-	      if( gradu.coeff(sc) >= 0 && (gradu.coeffRef(sc) -= class_weight) <= 0){
+	      if( gradu.coeff(sc) >= 0 && (gradu.coeffRef(sc) -= class_weight) <  1e-10){
 		u.coeffRef(cs) = allproj.coeff(*i);
 	      }
 	    }
@@ -248,7 +248,7 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 	      //assert( it.value() ); //if (it.value())
 	      int cs = it.col();
 	      int sc = class_order[cs];
-	      if (gradl.coeff(sc) >= 0 && (gradl.coeffRef(sc) -= class_weight) <= 0 ){
+	      if (gradl.coeff(sc) >= 0 && (gradl.coeffRef(sc) -= class_weight) < 1e-10){
 		l.coeffRef(cs) = allproj.coeff(*i);
 	      }
 	    }

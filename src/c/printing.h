@@ -142,6 +142,11 @@ template <typename Block, typename Alloc>
 template <typename Block, typename Alloc>
   int load_bitvector(std::istream& in, boost::dynamic_bitset<Block, Alloc>& bs);
 
+void dumpFeasible(std::ostream& os
+		  , std::vector<boost::dynamic_bitset<>> const& vbs
+		  , bool denseFmt=false);
+  
+
 /// \name misc pretty printing
 //@{
 /** Prints the progress bar */

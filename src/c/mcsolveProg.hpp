@@ -48,8 +48,6 @@ namespace opt {
          * <em>agree as much as possible</em> with settings of this solver
          */
         //std::shared_ptr<MCprojProgram> projector(std::string args);
-        MCprojProgram* projector(std::string args);
-
         ::opt::MCsolveArgs const& args() const {return *this;}
         /** utility to save binary Eigen data files.
          * It's especially hard to create compact Eigen SparseM data files.
@@ -73,7 +71,6 @@ namespace opt {
         void quadx();
         //::MCsolver const& solver() const {return *this;}
     private:
-      MCprojProgram * projProg;
       std::shared_ptr<::MCxyData> xy;
     };
 

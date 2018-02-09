@@ -75,8 +75,6 @@ namespace opt {
         std::string outFile;    ///< output[.soln] file basename
         bool outBinary;         ///< outFile format
         bool outText;           ///< outFile format
-        bool outShort;          ///< outFile format
-        bool outLong;           ///< outFile format
         bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
         bool xunit/*=false*/;   ///< normalize each x example to unit length
         double xscale;          ///< multiply each x example by a constant

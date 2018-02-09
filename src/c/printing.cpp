@@ -426,7 +426,7 @@ namespace detail {
 
         }
         return is;
-    }
+    }  
 
     template
     std::istream& eigen_read_libsvm( std::istream& is,
@@ -441,3 +441,19 @@ namespace detail {
                                      SparseM &x,
                                      SparseMb &y );
 }//detail::
+
+void dumpFeasible(std::ostream& os
+		  , std::vector<boost::dynamic_bitset<>> const& vbs
+		  , bool denseFmt/*=false*/)
+{
+  for(uint32_t i=0U; i<vbs.size(); ++i){
+    auto const& fi = vbs[i];
+    if( denseFmt ){
+      for(uint32_t c=0U; c<fi.size(); ++c) os<<fi[c];
+    }else{
+      for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) os<<c<<" ";
+    }
+    os<<endl;
+  }
+}
+  

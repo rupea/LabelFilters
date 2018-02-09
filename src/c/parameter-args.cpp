@@ -44,7 +44,7 @@ namespace opt {
             ("C2", value<double>()->default_value(p.C2), "~ label outside other [l,u]")
             ("maxiter", value<uint32_t>()->default_value(p.max_iter), "max iterations per projection")
             ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
-            ("seed", value<uint32_t>()->default_value(p.seed), "random number seed")
+            ("seed", value<uint32_t>()->default_value(p.seed), "random number seed. 0 - initizize rn using current time, 1 - do not initialize rn")
             ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
             ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "recalculate directions")
             ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "existing dims get [l,u] update without direction change")
@@ -293,7 +293,7 @@ namespace opt {
             <<"\n Usage:"
             <<"\n    <mcsolve> --xfile=... --yfile=... [--solnfile=...] [--output=...] [ARGS...]"
             <<"\n where ARGS guide the optimization procedure"
-            <<"\n - Without solnfile[.soln], use random initial conditions."
+            <<"\n - Without solnfile, use random initial conditions."
             <<"\n - xfile is a plain eigen DenseM or SparseM (always stored as float)"
             <<"\n - yfile is an Eigen SparseMb matrix of bool storing only the true values,"
             <<"\n         read/written via 'eigen_io_binbool'"
@@ -301,17 +301,14 @@ namespace opt {
     }
     void MCsolveArgs::init( po::options_description & desc ){
         desc.add_options()
-            ("xfile,x", value<string>()->required(), "x data (row-wise nExamples x dim)")
-            ("yfile,y", value<string>()->default_value(string("")), "y data (if absent, try reading as libsvm format)")
-            ("solnfile,s", value<string>()->default_value(string("")), "solnfile[.soln] starting solver state")
-            ("output,o", value<string>()->default_value(string("mc")), "output[.soln] file base name")
-            (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(true),"B|T output BINARY")
-            (",T", value<bool>(&outText)->implicit_value(true)->default_value(false),"B|T output TEXT")
-            (",S", value<bool>(&outShort)->implicit_value(true)->default_value(true),"S|L output SHORT")
-            (",L", value<bool>(&outLong)->implicit_value(true)->default_value(false),"S|L output LONG")
-            ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
-            ("xunit", value<bool>()->implicit_value(true)->default_value(false), "row-normalize x examples")
-            ("xscale", value<double>()->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
+            ("xfile,x", value<string>(&xFile)->required(), "x data (row-wise nExamples x dim)")
+            ("yfile,y", value<string>(&yFile)->default_value(string("")), "y data (if absent, try reading as libsvm format)")
+            ("solnfile,s", value<string>(&solnFile)->default_value(string("")), "solnfile starting solver state")
+            ("output,o", value<string>(&outFile)->default_value(string("mc")), "output file base name")
+            (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(false),"output solution in  BINARY (default: TEXT")
+            ("xnorm", value<bool>(&xnorm)->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
+            ("xunit", value<bool>(&xunit)->implicit_value(true)->default_value(false), "row-normalize x examples")
+            ("xscale", value<double>(&xscale)->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
             // xquad ?
 
             //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
@@ -325,10 +322,7 @@ namespace opt {
           , yFile()
           , solnFile()
           , outFile()
-          , outBinary(true)
-          , outText(false)
-          , outShort(true)
-          , outLong(false)
+          , outBinary(false)
           , xnorm(false)
           , xunit(false)
           , xscale(1.0)
@@ -373,7 +367,7 @@ namespace opt {
 
             if( vm.count("help") ) {
                 helpUsage( cout );
-                cout<<descAll<<endl;
+		cout<<descAll<<endl;
                 //helpExamples(cout);
                 keepgoing=false;
             }
@@ -383,24 +377,10 @@ namespace opt {
             cerr<<"msolve args..."<<endl;
             assert( vm.count("xfile") );
             //assert( vm.count("yfile") );
-            assert( vm.count("solnfile") );
-            assert( vm.count("output") );
 
-            xFile=vm["xfile"].as<string>();
-            yFile=vm["yfile"].as<string>();
-            solnFile=vm["solnfile"].as<string>();
-            outFile=vm["output"].as<string>();
-            xnorm=vm["xnorm"].as<bool>();
-            xunit=vm["xunit"].as<bool>();
-            if( vm.count("xscale") ) xscale=vm["xscale"].as<double>();
             //threads=vm["threads"].as<uint32_t>();
-            verbose=vm["verbose"].as<int>();
+	    //            verbose=vm["verbose"].as<int>();
 
-            if( solnFile.rfind(".soln") != solnFile.size() - 5U ) solnFile.append(".soln");
-            if( outFile .rfind(".soln") != outFile .size() - 5U ) outFile .append(".soln");
-
-            if( outBinary == outText ) throw std::runtime_error(" Only one of B|T, please");
-            if( outShort == outLong ) throw std::runtime_error(" Only one of S|L, please");
 
             // ISSUE: --solnfile should set INITIAL parms, and commandline
             //        should OVERRIDE (not overwrite) those.
@@ -483,7 +463,7 @@ namespace opt {
       desc.add_options()
 	("solnfile,s", value<string>(&solnFile)->default_value(string("")), "file with the saved label filter")
 	("xfile,x", value<string>(&xFile)->default_value(string("")), "x data (row-wise nExamples x dim)")
-	("output,o", value<string>()->default_value(string("")), "file to output the feasible classes after filter is applied.")
+	("output,o", value<string>(&outFile)->default_value(string("")), "file to output the feasible classes after filter is applied.")
 	("proj,p", value<uint32_t>()->implicit_value(0U)->default_value(0U), "use up to --proj projections [0=all]")
 	("outBinary,B", value<bool>(&outBinary)->implicit_value(true)->default_value(false), "output feasible classed in  BINARY format")
 	("outDense,D", value<bool>(&outDense)->implicit_value(true)->default_value(false),"output feasible classes in DENSE format (matrix or 0|1)")
@@ -493,7 +473,7 @@ namespace opt {
 	// xquad ?
 	("help,h", "this help")
 	//("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
-	("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output. v=1: validate y per projection")
+	("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output.")
 	;
     }
     MCprojArgs::MCprojArgs()
@@ -561,8 +541,6 @@ namespace opt {
             po::options_description descMcproj("Allowed projections options");
             init( descMcproj );                        // create a description of the options
 
-
-            outBinary = outDense = false;
 
             po::variables_map vm;
             //po::store( po::parse_command_line(argc,argv,desc), vm );

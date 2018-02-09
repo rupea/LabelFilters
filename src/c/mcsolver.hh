@@ -9,6 +9,7 @@
 #include "mcupdate.h"
 #include "constants.h"          // PRINT_O
 #include "printing.hh"          // print_report
+#include <time.h>
 #include <iomanip>
 #include <vector>
 
@@ -87,11 +88,8 @@ inline void MCpermState::toSorted( VectorXd & sorted, VectorXd const& ll, Vector
 
 inline void MCpermState::chg_sortlu(){
     ok_lu = false;
-    if (nAccSortlu > 0U)
-      {
-	ok_lu_avg = false;
-	ok_sortlu_avg = false;
-      }   
+    ok_lu_avg = false;
+    ok_sortlu_avg = false;
 }
 
 // inline void MCpermState::chg_lu(){              // multiple calls OK
@@ -127,9 +125,9 @@ inline void MCpermState::mkok_lu_avg(){
 }
 
 inline VectorXd& MCpermState::mkok_sortlu(){
-  assert(ok_lu && nAccSortlu == 0); //the only time sortlu is not ok is when optmize_LU has been called
-                                    // which resets the averaging. 
   if(!ok_sortlu){
+    assert(ok_lu && nAccSortlu == 0); //the only time sortlu is not ok is when optmize_LU has been called
+                                    // which resets the averaging. 
     toSorted( sortlu, l, u );
     ok_sortlu = true;
   }
@@ -137,12 +135,11 @@ inline VectorXd& MCpermState::mkok_sortlu(){
 }
 
 inline VectorXd& MCpermState::mkok_sortlu_avg(){
-  assert (ok_lu_avg || nAccSortlu > 0);
   if(!ok_sortlu_avg) {
     if (ok_lu_avg){ // if we have good lu_avg then use them
       toSorted( sortlu_avg, l_avg, u_avg);
-      ok_sortlu_avg = true;
-    }else if (nAccSortlu > 0){ // if averaging has started the sortlu must be ok.   
+    }else if (nAccSortlu > 0){ // if averaging has started the sortlu must be ok. 
+      assert(ok_sortlu);
       sortlu_avg = sortlu_acc/nAccSortlu;
     } else { // averaging has not started. Copy sortlu into sortlu_avg 
       mkok_sortlu();
@@ -204,6 +201,17 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
 	cout << "size y: " << y.rows() << " rows and " << y.cols() << " columns.\n";
       }
+
+    // initialize the random seed generator
+    if (params.seed > 1)
+      {
+	srand(params.seed);
+      }
+    else if (params.seed == 0)
+      {
+	srand (time(NULL));
+      }
+
     WeightVector w;
 
     /** projector of row-wise data examples \c x onto evolving projection vector \c w.
@@ -233,7 +241,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
                 ++ngetSTD;
             }else if( t == AVG ){
                 ++ngetAVG;
-                if( w.getAvg_t() > 0 ){
+                if( w.getAvg_t() == 0 ){
                     ++nDemote;
                     t = STD;        // silently demote AVG --> STD if w has not yet begun averaging
                 }
@@ -295,14 +303,14 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 #ifndef NDEBUG
     {// in debug mode check no change from original settings
         const size_t batch_size = (params.batch_size < 1 || params.batch_size > nTrain) ? (size_t) nTrain : params.batch_size;
-        cout<<" batch_size = "<<batch_size<<endl;
-        int const idx_chunks = nThreads;
-        int const idx_chunk_size = batch_size/idx_chunks;
-        int const idx_remaining = batch_size % idx_chunks;
+        if (params.verbose >= 1) cout<<" batch_size = "<<batch_size<<endl;
         int const sc_chunks = nThreads;
-        std::cout<<" idx_chunks="<<idx_chunks<<std::endl;
         int const sc_chunk_size = (params.class_samples?params.class_samples:nClass)/sc_chunks;
         int const sc_remaining = (params.class_samples?params.class_samples:nClass) % sc_chunks;
+        int const idx_chunks = nThreads/sc_chunks;
+        if (params.verbose >= 1) std::cout<<" idx_chunks="<<idx_chunks<<std::endl;
+        int const idx_chunk_size = batch_size/idx_chunks;
+        int const idx_remaining = batch_size % idx_chunks;
         assert( idx_chunks == updateSettings.idx_chunks );
         assert( idx_chunk_size == updateSettings.idx_chunk_size );
         assert( idx_remaining == updateSettings.idx_remaining );
@@ -385,10 +393,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	luPerm.optimizeLU( xwProj.std(), y, wc, nclasses, filtered, C1, C2, params); 
       };
     auto OptimizeLU_avg =[&] () -> void
-    {
-      /* changes {l,u}_avg instead of {l,u}. Invalidates sortlu_avg */ 
-      luPerm.optimizeLU_avg( xwProj.avg(), y, wc, nclasses, filtered, C1, C2, params); \
-    };
+      {
+	/* changes {l,u}_avg instead of {l,u}. Invalidates sortlu_avg */ 
+	luPerm.optimizeLU_avg( xwProj.avg(), y, wc, nclasses, filtered, C1, C2, params);
+      };
 
     auto RemoveConstraints = [&] () -> void
       {	
@@ -490,7 +498,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       if(params.report_epoch > 0){
 	size_t const nReports = params.max_iter / params.report_epoch + 1U;
 	size_t const more = newProjs * (nReports+1U);
-	objective_val    .conservativeResize(obj_idx + more );
+	objective_val.conservativeResize(obj_idx + more );
       }
     }
     assert(w.getAvg_t() == 0);
@@ -557,7 +565,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	  luPerm.mkok_sortlu();
 	  objective_val[obj_idx++] = ObjectiveHinge();
 	  if(params.verbose >= 1) {
-	    cout << "objective_val[" <<setw(6)<<t << "]: " << objective_val[obj_idx-1] << " "<< w.norm();
+	    cout << "objective_val[" <<setw(6)<<t << "]: " << setw(15) << objective_val[obj_idx-1] << " ";
+	    cout << w.norm() << endl;
 	  }
 	}
 
@@ -579,14 +588,12 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	  OptimizeLU_avg();
 	}
 	if( params.report_epoch>0 ) { // calculate the objective for the averaged w
-	  luPerm.mkok_sortlu_avg();
 	  objective_val[obj_idx++] = ObjectiveHingeAvg();
 	  if(params.verbose>=1) {
 	    cout << "Final objective_val[" << prjax << "]: " << objective_val[obj_idx-1] << endl;
 	    }
 	  }
-		
-	
+			
 	weights.col(prjax) = w.getVecAvg();
 	luPerm.mkok_lu_avg();
 	lower_bounds.col(prjax) = luPerm.l_avg;

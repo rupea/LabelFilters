@@ -14,12 +14,12 @@ BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
 
-OPENMP ?= -fopenmp
+#OPENMP ?= -fopenmp
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
 # 1. no openmp anywhere
 #OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
 # 2. allow Eigen/blas threads, but no MCFilter source code threads
-#OPENMP:= -DMCTHREADS=0
+OPENMP += -DMCTHREADS=0
 # allow STL experimental threads?
 
 
@@ -162,7 +162,7 @@ LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp f
 lib: hdr-stamp
 	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1 demo-quick; }
 lib-clean:
-	rm -f libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so *.o *.lo
+	rm -f libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so *.o *.lo *-dbg.o *-dbg.lo
 hdr-stamp: erik/hdr-stamp
 erik/hdr-stamp: $(CHECK_HEADERS)
 	mkdir -p erik

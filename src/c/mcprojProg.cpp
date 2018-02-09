@@ -104,7 +104,7 @@ namespace opt {
 	   << endl; 
       if (xy->sparseOk)
 	cerr << "Warning: --xnorm is used with sparse data. Features are not centered to maintain sparsity" << endl;	      
-      xy->xstdnormal(xmean, xstdev, true, xy->sparseOk?false:true, false);
+      xy->xstdnormal(xmean, xstdev, true, !xy->sparseOk, false);
       if(verbose>=1){
 	cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
 	cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
@@ -165,20 +165,20 @@ namespace opt {
   }
   
 
-  void MCprojProgram::dumpFeasible(std::ostream& os
-				   , std::vector<boost::dynamic_bitset<>> const& vbs
-				   , bool denseFmt/*=false*/)
-  {
-    for(uint32_t i=0U; i<vbs.size(); ++i){
-      auto const& fi = vbs[i];
-      if( denseFmt ){
-	for(uint32_t c=0U; c<fi.size(); ++c) os<<fi[c];
-      }else{
-	for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) os<<c<<" ";
-      }
-      os<<endl;
-    }
-  }
+  // void MCprojProgram::dumpFeasible(std::ostream& os
+  // 				   , std::vector<boost::dynamic_bitset<>> const& vbs
+  // 				   , bool denseFmt/*=false*/)
+  // {
+  //   for(uint32_t i=0U; i<vbs.size(); ++i){
+  //     auto const& fi = vbs[i];
+  //     if( denseFmt ){
+  // 	for(uint32_t c=0U; c<fi.size(); ++c) os<<fi[c];
+  //     }else{
+  // 	for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) os<<c<<" ";
+  //     }
+  //     os<<endl;
+  //   }
+  // }
 
 
   void MCprojProgram::trySave( int const verb/*=0*/ )

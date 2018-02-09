@@ -1,12 +1,22 @@
 #include "mcxydata.h"
 #include "normalize.hh"
 #include "printing.h"
+#include "printing.hh"
 
 //#include <stdexcept>
 #include <iostream>
 #include <fstream>
 //#include <sstream>
 //#include <iomanip>
+
+// ... MCxyData magic headers (simplify I/O)
+std::array<char,4> MCxyData::magic_xSparse = {0,'X','s','8'}; // or 4 for floats
+std::array<char,4> MCxyData::magic_xDense  = {0,'X','d','8'}; // or 4 for floats
+// x text mode not supported so far.
+std::array<char,4> MCxyData::magic_yBin    = {0,'Y','s','b'};
+// y text mode readable but has no magic.
+// ...
+
 
 using namespace std;
 using namespace Eigen;
@@ -16,6 +26,27 @@ using namespace detail;
 
 MCxyData::MCxyData() : xDense(), denseOk(false), xSparse(), sparseOk(false)
                        , y(), qscal(0.0), xscal(0.0) {}
+
+MCxyData::MCxyData(DenseM const& x): 
+  xDense(x), denseOk(true), xSparse(), sparseOk(false)
+  , y(), qscal(0.0), xscal(1.0)
+{}
+
+MCxyData::MCxyData(DenseM const& x, SparseMb const& y): 
+  xDense(x), denseOk(true), xSparse(), sparseOk(false)
+  , y(y), qscal(0.0), xscal(1.0)
+{}
+
+MCxyData::MCxyData(SparseM const& x): 
+  xDense(),denseOk(false),xSparse(x), sparseOk(true)
+  , y(), qscal(0.0), xscal(1.0)
+{}
+
+MCxyData::MCxyData(SparseM const& x, SparseMb const& y): 
+  xDense(), denseOk(false), xSparse(x), sparseOk(true)
+  , y(y), qscal(0.0), xscal(1.0)
+{}
+  
 
 void MCxyData::xscale( double const mul ){
     if(mul != 1.0){
@@ -107,7 +138,7 @@ void MCxyData::xwrite( std::string fname ) const { // write binary (either spars
       detail::io_bin(ofs,MCxyData::magic_xSparse);
       detail::eigen_io_bin(ofs, xSparse);
     }else{ assert(denseOk);
-      detail::io_bin(ofs,MCxyData::magic_xSparse);
+      detail::io_bin(ofs,MCxyData::magic_xDense);
       detail::eigen_io_bin(ofs, xDense);
     }
     if( ! ofs.good() ) throw std::runtime_error("savex trouble writing fname");
