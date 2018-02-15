@@ -11,38 +11,56 @@
  * Reorganized option groups.
  *\verbatim
  * Options you want to play with:
- * C1, C2  - should tweak them a bit such that C1 is actually
- *           C1*number_of_classes no_projections
- * max_iter  — default should be 10^8/batch_size
- * report_epoch — default 10^6/batch_size
+ * C1, C2  -- penalty parameters. C1 is multiplied by the number of classes internally
+ * no_projections -- how many projections to have
+ * max_iter  —- default should be 10^8/batch_size
+ * report_epoch —- default max_iter/10
  *              -- increasing it or turning it off (report_epoch=0) would
  *              speed things up if you do not need to see the convergence. 
- * eta — default 0.1
- * seed — default 0 (not sure this should be here but some people
- *                   want to have reproducible runs)
- * num_threads — default 0  (i.e. all threads)
- * resume 
- * reoptimize_LU
- * class_samples -- default 0 (I am not sure this should be here, but the user
- *                  has the option to set it to 100 or 1000 if learning is too slow) 
+ * eta —- initial learning rate. default 0.1
+ * seed —- random seed. 0= using time, 1=no random number initilization, 
+ *      --             >1=initizile using seeed.  default 0
+ * num_threads —- default 0  (i.e. all threads)
+ * resume -- use projections from a previous run. Train more projectoins if requiested
+ * reoptimize_LU -- reoptimize lower, upper bounds on projections from previous run
+ * class_samples -- subsample xxx negative classes for each gradient computation. 
+ *               -- default 0 (no subsample)
  * 
  * verbose -- default 1. Set to 0 to have no output
  *
  * Development options:
- *   update_type — default safe 
- *   batch_size — default 1 (max(1000,nExamples) for minibatch update)
- *   avg_epoch — default #training examples.
- *   reorder_epoch — default 10^6/batch_size
- *   reorder_type — default avg_proj_means  
- *   optimizeLU_epoch — default max_iter 
- *   min_eta — default 0
- *   eta_type — default 3_4  ( default sqrt if avg_epoch == 0) 
- *   remove_constraints — default 1
- *   remove_class_constraints — default 0
- *   reweight_lambda — default 2
- *   ml_wt_by_nclasses — default 0(false)
- *                     - never tried with this option turned on so the code might break 
- *   ml_wt_class_by_nclasses — default 0(false)
+ *   update_type —- MITNIBATCH_SGD (standard minibatch)
+ *               -- or SAFE_SGD (protects against overshooting). default SAFE_SGD 
+ *   batch_size —- default: min(1000,nExamples) for MINIBATCH_SGD update. 0 = full gradient
+ *              -- Must be 1 for SAFE_SGD update (if not 1 it is set to 1 with warning)
+ *   avg_epoch —- When to start averaging the gradient.  Default max(#examples,dimension).
+ *   reorder_epoch — Reorder classes every reorder_epoch iterations. default 10^3
+ *   reorder_type — How to reorder classes:
+ *                    - REORDER_AVG_PROJ_MEANS - reorder by the mean of the projections of examples in the class. Examples are projected using the curent filter direction (averaged w).(default)
+ *                    - REORDER_PROJ_MEANS - reorder by the mean of the projections of examples in the class. Examples are projected using the current, non-averaged, filter direction (non-averaged w).
+ *                    _ REORDER_RANGE_MIDPOINTS - reorder by the midpoint of the current active interval (L+U/2)
+ *   optimizeLU_epoch — Optimize L and U every optimizeLU_epoch iterations. Expensive. default max_iter.
+ *   min_eta — minimum leanrning rate. default 0
+ *   eta_type — learning rate decay: 
+ *              - ETA_CONST  - eta_t = eta. no decay
+ *              - ETA_SQRT  - eta_t = eta/sqrt(t)
+ *              - ETA_LIN - eta_t = eta/(1+eta*lambda*t) (default if avg_epoch == 0)
+ *              - ETA_3_4 - eta_t = eta/(1+eta*lambda*t)^(3/4) (default if avg_epoch>0)
+ *   remove_constraints — remove constraints for labels eliminated by previous filters
+ *                          does not remove constraints involving the example lables
+ *                          default 1 (true)
+ *   remove_class_constraints — default 0  -- to be removed. Code brakes if it is turned on
+ *   reweight_lambda — increase parameter C2 to compensate for constraints eliminated
+ *                        by a previous filter.
+ * 			     - REWEIGHT_NONE: do not increase C2
+ *                           - REWEIGHT_LAMBDA: increase both C1 and C2
+ *                           - REWEIGHT_ALL: increase only C2 (default)
+ *
+ *   ml_wt_by_nclasses — weight example by 1/number_of_labels_it_has for constraints 
+ *                         on intervals on other labels. default 0(false)
+ *                     - never tried with this option turned on so the code might break
+ *   ml_wt_class_by_nclasses — weight example by 1/number_of_labels_it_has for
+ *                               constraints on intervals of its labels. default 0
  *                           - never tried with this option turned on so the code might break 
  * 
  * These should be removed, since they are only used for testing that the
@@ -71,7 +89,8 @@ enum Eta_Type
     ETA_CONST, ///< eta
     ETA_SQRT,  ///< eta/sqrt(t)
     ETA_LIN,   ///< eta/(1+eta*lambda*t) [*]
-    ETA_3_4    ///< eta*(1+eta*lambda*t)^(-3/4)
+    ETA_3_4,    ///< eta*(1+eta*lambda*t)^(-3/4)
+    DEFAULT   /// flag for default value
 };
 enum Update_Type
 {
@@ -148,14 +167,18 @@ typedef struct
   /// \group Development options
   //@{
   Update_Type update_type; ///< how to update w, L and U (need a better name)
+  bool default_batch_size; ///< is batch_size uninitialized?
   uint32_t batch_size;     ///< size of the minibatch
   double eps;              ///< not used
   Eta_Type eta_type;       ///< how does the learning rate decay.
   double min_eta;          ///<the minimum value of the lerarning rate. E.g. lr ~ \c max(min_eta, eta/sqrt(t), min_eta)
+  bool default_avg_epoch;  ///< is avg_epoch uninitialized?
   uint32_t avg_epoch;      ///< the iteration at which averaging starts (0=none)
   uint32_t reorder_epoch;  ///<number of iterations between class reorderings (0=none)
+  bool default_report_epoch; ///< is report epoch uninitialized?
   uint32_t report_epoch;   ///<number of iterations between computation and objective value report (expensive: calculated on whole training set) (0=none)
   uint32_t report_avg_epoch;   ///<number of iterations between computation and objective value report (expensive: calculated on whole training set) (0=none)
+  bool default_optimizeLU_epoch; ///< is optimizeLU_epoch uninitialized?
   uint32_t optimizeLU_epoch; ///< number of iterations between full optimizations of the lower and upper bounds
   bool remove_constraints; ///< whether to remove the constraints for instances that fall outside the class boundaries in previous projections.
   bool remove_class_constraints; ///< whether to remove the constraints for examples that fell outside their own class boundaries in previous projections.
@@ -181,18 +204,27 @@ typedef struct
 /// comes with a pretty-printer
 std::ostream& operator<<( std::ostream& os, param_struct const& p );
 
-/** adapt parameters with flag values for a specific problem. */
-void param_finalize( uint32_t const nTrain, uint32_t nClass, param_struct &p );
+/* some defaults depend on other parameters. This function should be after parmeters 
+ * have been set (e.g. through command line arguments).
+ * after calling this function the avg_epoch parameter may remain not set as its 
+ * default value depends on the data (i.e. avg_epoch = nExamples). It is set in 
+ * MCsolver::solve if it has not been initialized by then */
 
+void finalize_default_params( param_struct &p );
+
+// parameter initialization is done in two stages. First default are set here. 
+// some parameters defaults depend on other parameters of the data
+// so after parameters aer parsed, finalize_default_params() must be called. 
+// finally, default value of avg_epoch depends on the data, so it is initialized 
+// by mcsolver::solve if not done already. 
 inline param_struct set_default_params()
 {
   param_struct def;
   // Main options
   def.no_projections = 5;
-  //def.tot_projections = 5;
-  def.C1=10.0;
-  def.C2=1.0;
-  def.max_iter=1e8;
+  def.C1=-1.0; // this is a required parameter (error if not set > 0)
+  def.C2=-1.0; // this is a required parameter (error if not set > 0)
+  def.max_iter=0U; //1e8;
   def.eta=0.1;
   def.seed = 0;
   def.num_threads = 0;          // use OMP_NUM_THREADS
@@ -201,17 +233,21 @@ inline param_struct set_default_params()
   def.class_samples = 0;
   // Development options
   def.update_type = SAFE_SGD;
-  def.batch_size=1U;
-  def.eps=1e-4;
-  def.eta_type = ETA_LIN;
-  def.min_eta= 0;
-  def.optimizeLU_epoch=10000; // this is very expensive so it should not be done often
+  def.default_batch_size = true;
+  def.batch_size=0U; //default value depends on update_type. to be initialized in finalize default params
+  //  def.eps=1e-4;
+  def.eta_type = DEFAULT; //default value depends on the value of avg_epoch. Will be initialized by finalize_default_params.
+  def.min_eta = 0;
+  def.default_optimizeLU_epoch = true;//flag that optimizeLU_epoch has not been initialized. Default value depends on max_iter. Will be initialized by finalize_default_params
+  def.optimizeLU_epoch = 0; // this is very expensive so it should not be done often
   def.reorder_epoch=1000;
   def.reorder_type = REORDER_AVG_PROJ_MEANS; // defaults to REORDER_PROJ_MEANS if averaging is off
-  def.report_epoch=1000000;
-  def.report_avg_epoch=0;
+  def.default_report_epoch = true;
+  def.report_epoch=0;//1000000;
+  def.report_avg_epoch=0; // expensive. Should be removed
+  def.default_avg_epoch = true; //flag that avg_epoch has not been initialized. Default depends on the data. Will be initialized by mcsolver::solve
   def.avg_epoch=0;
-  def.reweight_lambda = REWEIGHT_ALL;   // <-- changed - was marked NOT YET DONE?
+  def.reweight_lambda = REWEIGHT_ALL; 
   def.remove_constraints = true;
   def.remove_class_constraints = false;
   def.ml_wt_by_nclasses = false;        // UNTESTED
@@ -219,28 +255,12 @@ inline param_struct set_default_params()
   def.init_type = INIT_DIFF;
   def.init_norm = 10; // no good reason for using 10. 
   def.init_orthogonal = false;
-  def.verbose = 1; // print output
+  def.verbose = 1; // print some output
   // Compile-time options
 #if GRADIENT_TEST
   def.finite_diff_test_epoch=0;
   def.no_finite_diff_tests=1000;
   def.finite_diff_test_delta=1e-4;
-#endif
-#if 0 //1-1
-  // For reference, here are suggested paramater updates/defaults:
-  if( def.update_type == MINIBATCH_SGD ){
-      def.batch_size = def.nExamples;   // # of training examples, x.rows()?
-      if( def.nExamples > 1000U ) def.batch_size = 1000U;
-  }
-  if( def.update_type == MINIBATCH_SGD && def.batch_size > 1U ){
-      def.max_iter      /= def.batch_size;
-      def.report_epoch  /= def.batch_size;
-      if( def.max_iter < 1U ) def.max_iter = 1U;
-  }
-  def.C1 *= nClasses;                   // # of classes?
-  def.optimizeLU_epoch = def.max_iter;  // max iter?
-  def.avg_epoch = nExamples;            // # of training examples, x.rows()?
-  if( def.avg_epoch == 0 ) def.eta_type == ETA_SQRT;
 #endif
 
   return def;
@@ -259,24 +279,4 @@ int write_binary( std::ostream& is, param_struct const& p );
 int read_binary( std::istream& is, param_struct& p );
 //@}
 
-/** \fn param_finalize
- *
- * After we have read training data, we can switch from default
- * \em flag values to final values.
- *
- * \p nTrain    number of training examples, x.row()
- * \p nClass    number of classes (used to scale a default C1)
- *
- * - Reacts to flag values:
- *   - p.batch_size == 0U         ---> nTrain  (implies MINIBATCH_SGD full gradient)
- *   - p.batch_size > nTrain      --> nTrain
- *   - p.batch_size > 1           --> if nonzero, max_iter = max(1,max_iter/batch_size)
- *     - Are there cases where p.max-iter==0 makes sense (resume, reoptlu) ?
- *   - p.C1 <= 0                  ---> C1 *= -nClasses  ( or default.C1*nClass )
- *   - p.optimizeLU_epoch > p.max_iter ---> p.max_iter
- *   - p.avg_epoch > p.max_ite   ---> p.max_iter
- *   - etc.
- *
- * \sa  extract( po::variables_map const& vm, param_struct & parms )
- */
 #endif

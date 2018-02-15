@@ -89,17 +89,21 @@ void apply_testnum(param_struct & params)
           break;
       case(1):
           params.optimizeLU_epoch = 0;
+	  params.default_optimizeLU_epoch = false;
           cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch;
           break;
       case(2):                // mcsolver does not run correctly
           //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
           //mcsolver 'luPerm.ok_sortlu_avg' failed  at end of first dim (after t=100000)
           params.avg_epoch = 1200;    
+	  params.default_avg_epoch = false;
           cout<<" params.avg_epoch = "<<params.avg_epoch;
           break;
       case(3):        // make nAccSortlu_avg increment (for sure)
           params.optimizeLU_epoch = 0;
+	  params.default_optimizeLU_epoch = false;
           params.avg_epoch = 16000;
+	  params.default_avg_epoch = false;
           cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
               <<" params.avg_epoch = "<<params.avg_epoch;
           break;
@@ -107,7 +111,8 @@ void apply_testnum(param_struct & params)
           //mcsolver OH? luPerm.nAccSortlu_avg not > 0 for t>=1200
           //mcsolver 'luPerm.ok_sortlu_avg' failed  at t=1400
           params.avg_epoch = 1200;
-          params.report_avg_epoch = 1400;
+	  params.default_avg_epoch = false;
+	  //          params.report_avg_epoch = 1400;
           cout<<" params.avg_epoch = "<<params.avg_epoch;
           break;
       case(5):
@@ -121,14 +126,16 @@ void apply_testnum(param_struct & params)
       case(7):        // make nAccSortlu_avg increment (for sure)
           params.reorder_epoch = 1000;   // default
           params.optimizeLU_epoch = 0;
-          params.report_avg_epoch = 9999;
+	  params.default_optimizeLU_epoch = false;
+	  //          params.report_avg_epoch = 9999;
           cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
               <<" params.avg_epoch = "<<params.avg_epoch;
           break;
       case(8):        // make nAccSortlu_avg increment (for sure)
           params.reorder_epoch = 1000;   // default
           params.optimizeLU_epoch = 0;
-          params.report_avg_epoch = params.report_epoch*2U;
+	  params.default_optimizeLU_epoch = false;
+	  //          params.report_avg_epoch = params.report_epoch*2U;
           cout<<" params.optimizeLU_epoch = "<<params.optimizeLU_epoch
               <<" params.avg_epoch = "<<params.avg_epoch;
           break;
@@ -180,6 +187,7 @@ int main(int argc,char** argv)
     apply_testnum(params);
     //    params.report_epoch = 1000;
     //    params.verbose = 0;
+    finalize_default_params(params);
     int const rand_seed = 117;
     params.seed = rand_seed;
     int const p = params.no_projections;
@@ -232,7 +240,7 @@ int main(int argc,char** argv)
       srand(rand_seed);
       //      cout<<"  pre-run call to rand() returns "<<rand()<<endl;
       MCsolver mc;
-      mc.solve( x, y, &params );
+      mc.solve( x, y, params );
       MCsoln const& soln = mc.getSoln();
       mcSave(saveBasename, soln);
       MCfilter mf(soln);
@@ -322,7 +330,7 @@ int main(int argc,char** argv)
 	srand(rand_seed);
 	//	cout<<"  pre-run call to rand() returns "<<rand()<<endl;
 	MCsolver mc;
-	mc.solve( xs, y, &params );
+	mc.solve( xs, y, params );
 	MCsoln const& soln = mc.getSoln();
 	mcSave(saveBasename, soln);	  
 	MCfilter mf(soln);

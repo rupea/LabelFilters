@@ -1236,9 +1236,10 @@ double set_eta(param_struct const& params, size_t const t, double const lambda)
     case ETA_3_4:
       eta_t = params.eta/pow(1+params.eta*lambda*t,3*1.0/4);
       break;
+    case DEFAULT:
+      throw runtime_error("eta_type parameter has not been set. finalize_default_params should have been called before getting here.");	
     default:
-      cerr << "Eta option "<<params.eta_type<<" unknown" << endl;
-      exit(-3);
+      throw runtime_error("Unknown eta_type option");
     }
   if (eta_t < params.min_eta)
     {

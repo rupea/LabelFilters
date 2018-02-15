@@ -153,24 +153,13 @@ namespace opt {
     int const verbose = A::verbose + verb;
     if(verbose>=1) cout<<"MCsolveProgram::trySolve() "<<(xy->denseOk?"dense":xy->sparseOk?"sparse":"HUH?")<<endl;
     if( xy->denseOk ){
-      S::solve( xy->xDense, xy->y, &(A::parms) );
+      S::solve( xy->xDense, xy->y, A::parms );
     }else if( xy->sparseOk ){
       // normalization NOT YET SUPPORTED for sparse
-      S::solve( xy->xSparse, xy->y, &(A::parms) );
+      S::solve( xy->xSparse, xy->y, A::parms );
     }else{
       throw std::runtime_error("neither sparse nor dense training x was available");
     }
-    // S::solve uses A::parms for the run, and will update S:parms to record
-    // how the next outFile (.soln) was obtained.
-#if 0
-    // --- post-processing --- opportunity to add 'easy' stuff to MCsoln ---
-    if( xy->denseOk ){
-      S::setQuantiles( xy->xDense, xy->y );
-    }else if( xy->sparseOk ){
-      S::setQuantiles( xy->xSparse, xy->y );
-    }
-    // ---------------------------------------------------------------------
-#endif
   }
   void MCsolveProgram::trySave( int const verb/*=0*/ ){
     int const verbose = A::verbose + verb;

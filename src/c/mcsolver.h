@@ -66,7 +66,7 @@ public:
      *   - Please only include \c find_w_detail.hh for \em strange 'x' types.
      */
     template< typename EIGENTYPE >
-        void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const* const params_arg = nullptr );
+        void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const& params_arg);
 
 #if 0
     /** TBD - For each projection add a \b median value for each class label.

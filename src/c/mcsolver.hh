@@ -172,30 +172,31 @@ inline void MCpermState::rank( VectorXd const& sortkey ){
 
     template< typename EIGENTYPE >
 void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
-                     param_struct const* const params_arg /*= nullptr*/ )
+                     param_struct const& params_arg /*= nullptr*/ )
 {
     using namespace std;
-    //    if( params_arg ){
-        // XXX compatibility checks?
-      //        this->parms = *params_arg;      // if present, parms OVERWRITE any old ones
-    //    }
-    if (!params_arg)
-      {
-	throw std::runtime_error("MCsolver::solve : params_arg may not be NULL");
-      }
 
-    param_struct const& params = *params_arg;
-    //param_struct const& params = this->parms;
-
-    this->nProj = params.no_projections;
     this->d = x.cols();
-    if( (size_t)nProj >= d ){
-      cerr<<"WARNING: no_projections > example dimensionality"<<endl;
-    }
     const size_t nTrain = x.rows();
     this-> nClass = y.cols();
 
-    //std::vector<int> classes = get_classes(y);
+
+    param_struct params(params_arg);
+    finalize_default_params(params); // just in case it was not done until now
+    // set the default avg_epoch if not already set
+    if (params.default_avg_epoch)
+      {
+	params.avg_epoch = nTrain>d?nTrain:d;
+	params.default_avg_epoch = false;
+      }
+    // multiply C1 by number of classes
+    params.C1 = params.C1 * nClass;
+    
+    this->nProj = params.no_projections;
+    if( (size_t)nProj >= d ){
+      cerr<<"WARNING: no_projections > example dimensionality"<<endl;
+    }
+
     if ( params.verbose >= 1)
       {
 	cout << "size x: " << x.rows() << " rows and " << x.cols() << " columns.\n";
@@ -466,7 +467,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     
     for ( ;prjax < reuse_dim; ++prjax)
       { 
-	cout<<"\tp:"<<prjax;
 	w.init(weights.col(prjax));
 	xwProj.w_changed();  // projections of 'x' onto 'w' no longer valid
 	if (params.reoptimize_LU) {
@@ -508,7 +508,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	init_w( w, x, y, nc, weights, prjax, params);
 	
 	if (params.verbose >= 1)
-	  cout<<" start projection "<<prjax<<" w.norm="<<w.norm();
+	  cout<<" start projection "<<prjax<<" w.norm="<<w.norm() << endl;
 	xwProj.w_changed();                     // invalidate w-dependent stuff (projections)
 	luPerm.init( xwProj.std(), y, nc );     // std because w can't have started averaging yet
 	luPerm.rank( GetMeans(params.reorder_type) );
@@ -521,8 +521,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	    print_report(prjax, updateSettings.batch_size, nClass,C1,C2,lambda,w.size(),print_report(x));
 	  }
 	if(params.verbose >= 1){
-	  cout<<"initial w.norm = "<<w.norm()<<"\n"
-	      <<"--------------------- --------------- ------"<<endl;	
+	  cout<<"Iteration   "<<setw(10)<<"Objective   "<<"w.norm"<<endl;
+	  cout<<"----------  ----------  -------"<<endl;	
 	} 
 	uint64_t t = 0;   	// -------- main iteration loop --------
 	while (t < params.max_iter) {
@@ -555,24 +555,22 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	    // calculate the objective functions with respect to the current w and bounds
 	    objective_val[obj_idx++] = ObjectiveHinge();
 	    if(params.verbose >= 1) {
-	      cout<<"objective_val["<<setw(6)<<t<<"]: "<<setw(15)<<objective_val[obj_idx-1]<<" ";
-	      cout<<w.norm()<<endl;
+	      cout<<setw(10)<<t<<"  "<<setw(10)<<objective_val[obj_idx-1]<<"  "<<w.norm()<<endl;
 	    }
 	  }
 	} // **** **** end while t **** ****
-	if( params.report_epoch>0 ) {
-	  // get the current sortedLU in case bounds or order changed
-	  luPerm.mkok_sortlu();
+	if( params.report_epoch>0 && t % params.report_epoch != 0 ) {
 	  objective_val[obj_idx++] = ObjectiveHinge();
-	  if(params.verbose >= 1) {
-	    cout << "objective_val[" <<setw(6)<<t << "]: " << setw(15) << objective_val[obj_idx-1] << " ";
-	    cout << w.norm() << endl;
+	  if(params.verbose >= 1 ) {
+	    cout<<setw(10)<<t<<"  "<<setw(10)<<objective_val[obj_idx-1]<<"  "<<w.norm()<<endl;
 	  }
 	}
 
-	if(params.verbose >= 1) 
-	  cout<<" * end iterations" <<endl;
-
+	if(params.verbose >= 1)
+	  {
+	    cout<<"----------  ----------  -------"<<endl;	
+	    cout<<" * end iterations" <<endl;
+	  }
 	// optimize LU and compute objective for averaging if it is turned on
 	// if t = params.avg_epoch, everything is exactly the same as
 	// just using the current w

@@ -10,36 +10,72 @@
 
 using namespace std;
 
-void param_finalize( uint32_t const nTrain ,uint32_t nClass, param_struct &p ){
-    param_struct def = set_default_params(); // might be nice to remove this someday
-
-    if( p.C1 <= 0.0 ){
-        p.C1 *= - static_cast<double>(nClass);
-        //p.C1 = def.C1 * nClass;
+void finalize_default_params(param_struct &p ){
+  if( p.C1 < 0.0 ){
+    throw runtime_error("Parameter C1 must be specified");
+  }
+  if( p.C2 < 0.0 ){
+    throw runtime_error("Parameter C2 must be specified");
+  }
+  
+  switch (p.update_type)
+    {
+    case SAFE_SGD:
+      if (p.default_batch_size) 
+	{
+	  p.batch_size = 1U;
+	  p.default_batch_size = false;
+	}
+      if (p.batch_size !=1U) 
+	{
+	  cerr << "Warning: batch size must be 1 for SAFE_SGD update method. Setting batch size to 1" << endl;
+	  p.batch_size = 1U;
+	}
+      break;
+    case MINIBATCH_SGD:
+      if (p.default_batch_size)
+	{
+	  p.batch_size = 1000U;
+	  p.default_batch_size = false;
+	}
+      break;
+    default:
+      throw runtime_error("Unrecognized update method");
     }
 
-    if( p.avg_epoch > nTrain ){ // or flag value numeric_limits<uint32_t>::max()
-        p.avg_epoch = nTrain;
+  if (p.max_iter == 0U) p.max_iter = 1e8/p.batch_size;   
+  if (p.default_report_epoch)
+    {
+      if (p.verbose == 0) 
+	{
+	  p.report_epoch = 0;
+	}
+      else
+	{	  
+	  p.report_epoch = p.max_iter/10;  // report objective value 10 times to check convergence
+	}
+      p.default_report_epoch = false; // report epoch has been initialized
     }
 
-    // first set batch size correctly, which MIGHT jiggle max_iter
-    if( p.batch_size==0U || p.batch_size > nTrain ) p.batch_size = nTrain;
-    if( p.batch_size > 1U ){
-        if( p.max_iter > 0U ){
-            p.max_iter = def.max_iter / p.batch_size;
-            if( p.max_iter <= 0U ) p.max_iter = 1U;
-        }
-    }
-    if( p.max_iter == 0U ){
-        cout<<" Are there cases like resume/reoptlu where max_iter==0 makes sense ?"<<endl;
-        //p.max_iter = def.max_iter / batch_size;
-    }
+  if (p.default_optimizeLU_epoch) 
+    {
+      p.optimizeLU_epoch = p.max_iter+1; // only optimize at the beginning and at the end
+      p.default_optimizeLU_epoch = false; // optmizeLU_epoch has been initialized
+    }  
 
-    // if asking for --optlu, make sure it happens at least once (at end)
-    if( p.optimizeLU_epoch > p.max_iter ){ // or == numeric_limits<uint32_t>::max()
-        p.optimizeLU_epoch = p.max_iter;
+  if (p.eta_type == DEFAULT)
+    {
+      // using defaults recommended by Leon Bottou
+      if (p.avg_epoch > 0 || p.default_avg_epoch)
+	{
+	  //averaging is on by default
+	  p.eta_type = ETA_3_4;
+	}
+      else 
+	{
+	  p.eta_type = ETA_LIN;
+	}
     }
-
 }
 
 void print_parameter_usage()
@@ -49,11 +85,12 @@ void print_parameter_usage()
     "\n              If a parmeter is not present the default is used"
     "\n   Main Parameters (structure field names) are:"
     "\n     no_projections - number of projections to be learned [5]"
-    "\n     C1 - the penalty for an example being outside it's class bounary"
+    "\n     C1 - the penalty for an example being outside it's class bounary."
+    "\n             Internally it is multiplied by the number of classes."
     "\n     C2 - the penalty for an example being inside other class' boundary"
-    "\n     max_iter - maximum number of iterations [1e^6]"
-    "\n     eta - initial learning rate [1]"
-    "\n     seed - random seed. 0 for time dependent seed. [0]"
+    "\n     max_iter - maximum number of iterations [1e^8/batch_size]"
+    "\n     eta - initial learning rate [0.1]"
+    "\n     seed - random seed. 0 for time dependent seed. 1 for initializing RNG[0]"
     "\n     num_threads - number of threads to run on. [0 = default num threads]"
     "\n     resume - whether to continue with additional projections."
     "\n              Takes previous projections from w_prev l_prev and u_prev. [false]"
@@ -63,27 +100,29 @@ void print_parameter_usage()
     "\n     class_samples - the number of negative classes to sample for each example"
     "\n              at each iteration. 0 to use all classes. [0]"
     "\n   Development Parameters are:"
-    "\n     batch_size - size of the minibatch [1000]"
     "\n     update_type - how to update w, L and U [SAFE]"
     "\n              MINIBATCH - update w, L and U together using minibatch SGD" 
     "\n              SAFE - update w first without overshooting, then update L and U"
     "\n                     using projected gradient. batch_size will be set to 1"
-    "\n     eta_type - type of learning rate decay:[lin]"
+    "\n     batch_size - size of the minibatch [1 for SAFE update, 1000 for MINIBATCH]"
+    "\n     eta_type - type of learning rate decay:"
     "\n                  CONST (eta)"
     "\n                  SQRT (eta/sqrt(t))"
-    "\n                  LIN (eta/(1+eta*lambda*t))"
-    "\n                  3_4 (eta*(1+eta*lambda*t)^(-3/4) [default]"
-    "\n     min_eta - minimum value of the learning rate"
-    "\n              (i.e. lr will be max (eta/sqrt(t), min_eta)  [1e-4]"
-    "\n     avg_epoch - iteration to start averaging at. 0 for no averaging [0]"
-    "\n     reorder_epoch - number of iterations between class reorderings. 0 for no reordering of classes [1000]"
+    "\n                  LIN (eta/(1+eta*lambda*t))[default if not averaging gradient]"
+    "\n                  3_4 (eta*(1+eta*lambda*t)^(-3/4) [default if averaging gradient]"
+    "\n     min_eta - minimum value of the learning rate [0]"
+    "\n     avg_epoch - iteration to start averaging the gradient at."
+    "\n              0 for no averaging [default max(nTrain,dim)]"
+    "\n     reorder_epoch - number of iterations between class reorderings."
+    "\n              0 for no reordering of classes [1000]"
     "\n     report_epoch - number of iterations between computation and report the objective value"
     "\n              (can be expensive because obj is calculated on the entire training set)."
-    "\n              0 for no reporting [1000]."
+    "\n              0 for no reporting [max_iter/10]."
     "\n     optimizeLU_epoch - number of iterations between full optimizations of  the"
-    "\n              lower and upper class boundaries. Expensive. 0 for no optimization [10000]"
+    "\n              lower and upper class boundaries. Expensive."
+    "\n              0 for no optimization [max_iter+1 (i.e. optimize at the beginning and the end)]"
     "\n     remove_constraints - whether to remove the constraints for instances that fall"
-    "\n              outside the class boundaries in previous projections. [false] "
+    "\n              outside the class boundaries in previous projections. [true] "
     "\n     remove_class_constraints - whether to remove the constraints for examples that fell"
     "\n              outside their own class boundaries in previous projections. [false] "
     "\n     reweight_lambda - whether to diminish lambda and/or C1 as constraints are eliminated."
@@ -147,7 +186,7 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     WIDE(os,c3,right<<setw(15)<<"sample "<<left<<p.class_samples);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"etamin "<<left<<p.min_eta);
-    WIDE(os,c2,right<<setw(11)<<"optlu "<<left<<p.optimizeLU_epoch);
+    WIDE(os,c2,right<<setw(11)<<"toptlu "<<left<<p.optimizeLU_epoch);
 #if GRADIENT_TEST
     WIDE(os,c3,right<<setw(15)<<"tgrad "<<left<<p.finite_diff_test_epoch);
 #endif
@@ -158,7 +197,7 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
 #endif
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"remove_constraints "<<left<<p.remove_constraints);     // bool
-    WIDE(os,c2,right<<setw(11)<<"avg_epoch (avg) "<<left<<p.avg_epoch);
+    WIDE(os,c2,right<<setw(11)<<"avgstart "<<left<<p.avg_epoch);
 #if GRADIENT_TEST
     WIDE(os,c3,right<<setw(15)<<"grad "<<left<<p.finite_diff_test_delta);
 #endif
@@ -189,6 +228,7 @@ std::string tostring( enum Eta_Type const e )
         ENUM_CASE(ETA_SQRT);
         ENUM_CASE(ETA_LIN);
         ENUM_CASE(ETA_3_4);
+        ENUM_CASE(DEFAULT);
     }
     assert(name != nullptr);
     return name;
@@ -249,13 +289,16 @@ void fromstring( std::string s, enum Eta_Type &e )
     ENUM_FIND(SQRT,  ETA_SQRT);
     ENUM_FIND(LIN,   ETA_LIN);
     ENUM_FIND(3_4,   ETA_3_4);
+    ENUM_FIND(DEFAULT,   DEFAULT);
+    
     throw std::runtime_error("Unrecognized string for MCfilter enum Eta_Type");
 }
 void fromstring( std::string s, enum Update_Type &e )
 {
     //cout<<"fromstring("<<s<<", Update_type&="<<(int)e<<")"<<endl;
-    ENUM_FIND(BATCH, MINIBATCH_SGD);
+    ENUM_FIND(MINIBATCH, MINIBATCH_SGD);
     ENUM_FIND(SAFE, SAFE_SGD);
+    ENUM_FIND(PROJECTED, SAFE_SGD);
     throw runtime_error("Unrecognized string for MCfilter enum Update_Type");
 }
 void fromstring( std::string s, enum Reorder_Type &e )

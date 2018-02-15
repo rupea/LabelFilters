@@ -39,165 +39,112 @@ namespace opt {
     {
         po::options_description main("Main options");
         main.add_options()
-            ("proj", value<uint32_t>()->default_value(p.no_projections) , "# of projections")
-            ("C1", value<double>()->default_value(p.C1), "~ label in correct [l,u]")
-            ("C2", value<double>()->default_value(p.C2), "~ label outside other [l,u]")
-            ("maxiter", value<uint32_t>()->default_value(p.max_iter), "max iterations per projection")
-            ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
-            ("seed", value<uint32_t>()->default_value(p.seed), "random number seed. 0 - initizize rn using current time, 1 - do not initialize rn")
-            ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
-            ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "recalculate directions")
-            ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "existing dims get [l,u] update without direction change")
-            ("sample", value<uint32_t>()->default_value(p.class_samples)
-             , "Cap -ve classes for chunked gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all")
-            ;
+	  ("C1", value<double>()->required(), "~ label in correct (l,u)")
+	  ("C2", value<double>()->required(), "~ label outside other (l,u)")
+	  ("nfilters", value<uint32_t>()->default_value(p.no_projections) , "# of label filters")
+	  ("maxiter", value<uint32_t>(), "max iterations per projection. [1e8/batch_size]")
+	  ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
+	  ("seed", value<uint32_t>()->default_value(p.seed), "random number seed. 0 - initizize rn using current time, 1 - do not initialize rng")
+	  ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
+	  ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "add more filters to a previous solution")
+	  ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize the intevals [l,u] for previously learned filter directions.")
+	  ("sample", value<uint32_t>()->default_value(p.class_samples)
+	   , "how many negative classes to use for gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all")
+	  ;
         po::options_description dev("Development options");
         dev.add_options()
-            ("update,u", value<std::string>()->default_value(tostring(p.update_type)), "BATCH | SAFE : gradient update type\nBATCH implies default batchsize of max(1000,nExamples)")
-            ("batchsize,b", value<uint32_t>()->default_value(p.batch_size), "batch size: !=1 => BATCH, 0~full gradient, [1000 if BATCH]")
-            ("eps", value<double>()->default_value(p.eps), "unused cvgce threshold")
-            //("eta", value<double>()->default_value(p.eta), "initial learning rate")
-            // ... ohoh: eta cannot [fully] be a prefix of any other option
-            ("etatype", value<std::string>()->default_value(tostring(p.eta_type))
-             , "CONST | SQRT | LIN | 3_4 : learning rate schedule")
-            ("etamin", value<double>()->default_value(p.min_eta), "learning rate limit")
-            ("optlu", value<uint32_t>(), "expensive exact {l,u} soln period [0=none, def=once, at maxiter")
-            ("treorder", value<uint32_t>()->default_value(p.reorder_epoch), "reorder iteration period")
-            ("reorder", value<std::string>()->default_value(tostring(p.reorder_type))
-             , "Permutation re-ordering: AVG projected means | PROJ projected means | MID range midpoints."
-             " If --avg=0, default is PROJ")
-            ("treport", value<uint32_t>()->default_value(p.report_epoch), "period for reports about latest iter")
-            ("avg", value<uint32_t>(), "averaging start iteration [def. nExamples]")
-            ("tavg", value<uint32_t>()->default_value(p.report_avg_epoch), "period for reports about avg, expensive")
-            ("reweight", value<std::string>()->default_value(tostring(p.reweight_lambda))
-             , "NONE | LAMBDA | ALL lambda reweighting method")
-            ("remove_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_constraints)
-             , "after each projection, remove constraints")
-            ("remove_class", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
-             , "after each projection, remove already-separated classes(?)")
-            ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "UNTESTED")
-            ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "UNTESTED")
+	  ("update,u", value<std::string>()->default_value(tostring(p.update_type)), "PROJECTED | MINIBATCH : gradient update type\nPROJECTED implies default batchsize of 1")
+	  ("batchsize,b", value<uint32_t>(), "batch size. 0~full gradient, [1 1000 if BATCH]")
+	  ("etatype", value<std::string>()
+	   , "CONST | SQRT | LIN | 3_4 : learning rate schedule [3_4 if using averaged gradiend, LIN if not]")
+	  ("etamin", value<double>()->default_value(p.min_eta), "minimum learning rate limit")
+	  ("toptlu", value<uint32_t>(), "expensive exact {l,u} optmization period [once, at maxiter]")
+	  ("treorder", value<uint32_t>()->default_value(p.reorder_epoch), "reorder iteration period")
+	  ("reorderby", value<std::string>()->default_value(tostring(p.reorder_type))
+	   , "Permutation re-ordering: AVG projected means | PROJ projected means | MID range midpoints.")
+	  ("treport", value<uint32_t>(), "report the objective value every treport iteratoins. 0 for no reporting. [maxiter/10]")
+	  ("avgstart", value<uint32_t>(), "averaging start iteration [max(nExamples,dim)]")
+	  //	  ("tavg", value<uint32_t>()->default_value(p.report_avg_epoch), "period for reports about avg, expensive")
+	  ("reweight", value<std::string>()->default_value(tostring(p.reweight_lambda))
+	   , "NONE | LAMBDA | ALL lambda reweighting method")
+	  ("remove_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_constraints)
+	   , "after each projection, remove constraints involving labels already eliminated for the example")
+	  //	  ("remove_class", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
+	  //	   , "after each projection, remove already-separated classes(?)")
+	  //	  ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "UNTESTED")
+	  //	  ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "UNTESTED")
             ;
-        // Add generic, main and development option groups
-        desc.add_options()
-            ("help,h", "")
-            //("verbose,v", "")
-            ;
+        // Add generic, main and development option groups	  
         desc.add(main).add(dev);
-
+	
 #if GRADIENT_TEST /*|| others?*/
         po::options_description compiled("Compile-time options (enabled by compile flags)");
 #if GRADIENT_TEST
         compiled_add_options()
-            ("tgrad", value<uint32_t>()->default_value(p.finite_diff_test_epoch), "iter period for finite difference gradient test")
-            ("ngrad", value<uint32_t>()->default_value(p.no_finite_diff_tests), "directions per gradient test")
-            ("grad", value<double>()->default_value(p.finite_diff_test_delta), "step size per gradient test")
-            ;
+	  ("tgrad", value<uint32_t>()->default_value(p.finite_diff_test_epoch), "iter period for finite difference gradient test")
+	  ("ngrad", value<uint32_t>()->default_value(p.no_finite_diff_tests), "directions per gradient test")
+	  ("grad", value<double>()->default_value(p.finite_diff_test_delta), "step size per gradient test")
+	  ;
 #endif
         desc.add(compiled);
 #endif
     }
 
     void extract( po::variables_map const& vm, param_struct & parms ){
-        //if( vm.count("axes") ) { parms.axes = vm["axes"].as<uint32_t>(); }
-        //if( vm.count("proj") )
-        parms.no_projections            =vm["proj"].as<uint32_t>();
-        //parms.C1	                =vm["C1"].as<double>();         //1.0; // LATER: *nClasses
-        parms.C2	                =vm["C2"].as<double>();         //1.0;
-        parms.max_iter	                =vm["maxiter"].as<uint32_t>();  //1e8;
-        parms.eta	                =vm["eta0"].as<double>();       //0.1;
-        parms.seed 	                =vm["seed"].as<uint32_t>(); // 0;
-        parms.num_threads 	        =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
-        parms.resume 	                =vm["resume"].as<bool>(); // false;
-        parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
-        parms.class_samples 	        =vm["sample"].as<uint32_t>(); // 0;
-        // Development options
-        fromstring( vm["update"].as<string>(), parms.update_type );
-        parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
-        parms.eps	                =vm["eps"].as<double>(); //1e-4;
-        fromstring( vm["etatype"].as<string>(), parms.eta_type );
-        parms.min_eta	                =vm["etamin"].as<double>(); // 0;
-        //parms.optimizeLU_epoch	        =vm["optlu"].as<uint32_t>(); //10000; // expensive
-        parms.reorder_epoch	        =vm["treorder"].as<uint32_t>(); //1000;
-        fromstring( vm["reorder"].as<string>(), parms.reorder_type );
-        parms.report_epoch	        =vm["treport"].as<uint32_t>(); //1000;
-        parms.report_avg_epoch	        =vm["tavg"].as<uint32_t>(); //0; // this is expensive so the default is 0
-        //parms.avg_epoch	                =vm["avg"].as<uint32_t>(); //0;
-        fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
-        parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
-        parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
-        parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
-        parms.remove_class_constraints 	=vm["remove_class"].as<bool>(); // false;
+      parms.no_projections            =vm["nfilters"].as<uint32_t>();
+      parms.C1	                =vm["C1"].as<double>();  //required
+      parms.C2	                =vm["C2"].as<double>();  //required
+      if (vm.count("maxiter"))
+	parms.max_iter	                =vm["maxiter"].as<uint32_t>();  
+      parms.eta	                =vm["eta0"].as<double>();       //0.1;
+      parms.seed 	                =vm["seed"].as<uint32_t>(); // 0;
+      parms.num_threads 	        =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
+      parms.resume 	                =vm["resume"].as<bool>(); // false;
+      parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
+      parms.class_samples 	        =vm["sample"].as<uint32_t>(); // 0;
+      // Development options
+      fromstring( vm["update"].as<string>(), parms.update_type );
+      if (vm.count("batchsize"))
+	{
+	  parms.default_batch_size = false;
+	  parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
+	}
+      if (vm.count("etatype"))
+	fromstring( vm["etatype"].as<string>(), parms.eta_type );
+      
+      parms.min_eta	                =vm["etamin"].as<double>(); // 0;
+      if (vm.count("toptlu"))
+	{
+	  parms.optimizeLU_epoch	        =vm["toptlu"].as<uint32_t>(); // expensive
+	  parms.default_optimizeLU_epoch = false;
+	}
+      
+      parms.reorder_epoch	        =vm["treorder"].as<uint32_t>(); //1000;
+      fromstring( vm["reorderby"].as<string>(), parms.reorder_type );
+      if (vm.count("treport"))
+	{	  
+	  parms.report_epoch	        =vm["treport"].as<uint32_t>(); //;
+	  parms.default_report_epoch = false;
+	}
+      if (vm.count("avgstart"))
+	{
+	  parms.avg_epoch	        =vm["avgstart"].as<uint32_t>();
+	  parms.default_avg_epoch = false;
+	}      
+      fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
+      //parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
+      //parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
+
+      parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
+      //parms.remove_class_constraints 	=vm["remove_class"].as<bool>(); // false;
+      
+      parms.verbose = vm["verbose"].as<int>();
+
         // Compile-time options
 #if GRADIENT_TEST
         parms.finite_diff_test_epoch	=vm["tgrad"].as<uint32_t>(); //0;
         parms.no_finite_diff_tests	=vm["ngrad"].as<uint32_t>(); //1000;
         parms.finite_diff_test_delta	=vm["grad"].as<double>(); //1e-4;
-#endif
-        // NEW - some options have side effects that we may not be able to
-        //       set up just yet.   Set some flag values if need to correct things later.
-        // but this ALWAYS might change if nExamples=x.rows() > 1000U
-        //
-        // This must be kept in sync with paramter.cpp routine param_finalize(nTrain,nClass,param_struct&)
-        //
-        // Note: we MIGHT skip this here, but let's set things just in case we can determine
-        //       final values at this point ...
-        //
-
-        // batch size effects ... NOTE: if batch size != 1 it MIGHT change later
-        if( vm.count("batchsize") && parms.batch_size != 1 && parms.update_type != MINIBATCH_SGD ){
-            cout<<"--batch_size != 1 implies --update=BATCH"<<endl;
-            parms.update_type = MINIBATCH_SGD;
-        }
-        if( parms.update_type == MINIBATCH_SGD && vm.count("batchsize") == 0 ){
-            cout<<"--update_type=BATCH implies --batchsize=1000"<<endl;
-            parms.batch_size = 1000U;
-        }
-        if( parms.update_type != MINIBATCH_SGD ){
-            assert( parms.batch_size == 1U );
-        }
-        // batch_size == 0     ? ---> later batch_size = nTrain (nExamples)
-        // batch_size > nTrain ? ---> later batch_size = nTrain
-        // batch_size > 1      ? ---> max_iter /= batch_size, UNLESS explicit max_iter
-        if( vm.count("maxiter") == 0U && parms.batch_size != 1 ){
-            parms.max_iter = 0U;                // FLAG for max_iter/batch_size
-        }
-
-        // This side-effect is OK to do now...
-        if( vm.count("etatype") == 0 && parms.avg_epoch == 0 ){
-            parms.eta_type = ETA_SQRT;
-        }
-        // This is the logic THAT WE CAN'T EVALUATE fully correctly just yet...        
-        //    ... so just set flag values for "auto", if not specified ...
-
-        parms.optimizeLU_epoch = numeric_limits<uint32_t>::max(); // FLAG for 'max_iter"
-        if( vm.count("optlu") ) {
-            parms.optimizeLU_epoch       = vm["optlu"].as<uint32_t>(); // expensive
-        }
-
-        parms.C1	      = vm["C1"].as<double>();
-        if( vm.count("C1") == 0 ){
-            parms.C1                    = -parms.C1; // FLAG for C1 *= -nClasses, later
-        }
-
-        parms.avg_epoch = numeric_limits<uint32_t>::max(); // FLAG for nExamples (x.rows())
-        if( vm.count("avg") ){
-            parms.avg_epoch	        = vm["avg"].as<uint32_t>(); //0;
-            if(parms.avg_epoch == 0U && parms.reorder_type == REORDER_AVG_PROJ_MEANS ){
-                cout<<"--avg=0 => --reorder=AVG changed to --reorder=MEANS"<<endl;
-                parms.reorder_type = REORDER_PROJ_MEANS;
-            }
-        }
-#if 0
-        if( parms.batch_size > 1U ){
-            if( vm.count("max_iter") == 0U ){
-                parms.max_iter /= parms.batch_size();
-                if( parms.max_iter < 1U ) parms.max_iter = 1U;
-            }
-            if( vm.count("treport") == 0U ){
-                parms.report_epoch /= parms.batch_size();
-            }
-        }
 #endif
     }
 
@@ -228,14 +175,6 @@ namespace opt {
         po::variables_map vm;
         try {
 
-#if 0
-            //po::store( po::parse_command_line(argc,argv,desc), vm );
-            po::store( po::command_line_parser(argc,argv)
-                       .options(desc)
-                       .run(),
-                       vm );
-#else
-            // Need more control, I think...
             po::parsed_options parsed
                 = po::command_line_parser( argc, argv )
                 .options( desc )
@@ -243,7 +182,6 @@ namespace opt {
                 .allow_unregistered()
                 .run();
             po::store( parsed, vm );
-#endif
 
             if( vm.count("help") ) {
                 (*usageFunc)( cout );       // some customizable Usage intro
@@ -254,10 +192,10 @@ namespace opt {
             }
 
             po::notify(vm); // at this point, raise any exceptions for 'required' args
-
+	    
             // In your custom program, you would interrogate vm HERE to get additional
             // variables particular to your program.
-
+	    
             extract( vm, parms ); // MODIFY parms to match anything from vm
 
             if( vm.count("help") ) {
@@ -266,8 +204,8 @@ namespace opt {
 
             ret = collect_unrecognized( parsed.options, include_positional );
             return ret;
-        }
-        catch(po::error& e)
+        }        
+	catch(po::error& e)
         {
             cerr<<"Invalid argument: "<<e.what()<<endl;
             throw;
@@ -301,19 +239,20 @@ namespace opt {
     }
     void MCsolveArgs::init( po::options_description & desc ){
         desc.add_options()
-            ("xfile,x", value<string>(&xFile)->required(), "x data (row-wise nExamples x dim)")
-            ("yfile,y", value<string>(&yFile)->default_value(string("")), "y data (if absent, try reading as libsvm format)")
-            ("solnfile,s", value<string>(&solnFile)->default_value(string("")), "solnfile starting solver state")
-            ("output,o", value<string>(&outFile)->default_value(string("mc")), "output file base name")
-            (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(false),"output solution in  BINARY (default: TEXT")
-            ("xnorm", value<bool>(&xnorm)->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
-            ("xunit", value<bool>(&xunit)->implicit_value(true)->default_value(false), "row-normalize x examples")
-            ("xscale", value<double>(&xscale)->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
-            // xquad ?
-
-            //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
-            ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output")
-            ;
+	  ("xfile,x", value<string>(&xFile)->required(), "x data (row-wise nExamples x dim)")
+	  ("yfile,y", value<string>(&yFile)->default_value(string("")), "y data (if absent, try reading as libsvm format)")
+	  ("solnfile,s", value<string>(&solnFile)->default_value(string("")), "solnfile starting solver state")
+	  ("output,o", value<string>(&outFile)->default_value(string("mc")), "output file base name")
+	  (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(false),"output solution in  BINARY (default: TEXT")
+	  ("xnorm", value<bool>(&xnorm)->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
+	  ("xunit", value<bool>(&xunit)->implicit_value(true)->default_value(false), "row-normalize x examples")
+	  ("xscale", value<double>(&xscale)->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
+	  // xquad ?
+	  ("help,h", "")
+	  
+	  //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
+	  ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(1), "--verbosity=-1 may reduce output")
+	  ;
     }
     MCsolveArgs::MCsolveArgs()
         : parms(set_default_params())   // parameter.h parses these options
@@ -327,89 +266,59 @@ namespace opt {
           , xunit(false)
           , xscale(1.0)
           //, threads(0U)           // unused?
-          , verbose(0)            // cmdline value can be -ve to reduce output
+          , verbose(1)            // cmdline value can be -ve to reduce output
         {}
 
-    MCsolveArgs::MCsolveArgs(int argc, char**argv)
-        : MCsolveArgs()
-    {
-        this->parse(argc,argv);
-    }
+  MCsolveArgs::MCsolveArgs(int argc, char**argv)
+    : MCsolveArgs()
+  {
+    this->parse(argc,argv);
+  }
 
-    void MCsolveArgs::parse( int argc, char**argv ){
+  void MCsolveArgs::parse( int argc, char**argv ){
 #if ARGSDEBUG > 0
-        cout<<" parse( argc="<<argc<<", argv, ... )"<<endl;
-        for( int i=0; i<argc; ++i ) {
-            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
-        }
+    cout<<" parse( argc="<<argc<<", argv, ... )"<<endl;
+    for( int i=0; i<argc; ++i ) {
+      cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
+    }
 #endif
-        bool keepgoing = true;
-        try {
-            po::options_description descAll("Allowed options");
-            po::options_description descMcsolve("mcsolve options");
-            init( descMcsolve );                        // create a description of the options
-            po::options_description descParms("solver args");
-            opt::mcParameterDesc( descParms, parms );   // add the param_struct options
-            descAll.add(descMcsolve).add(descParms);
-
-            po::variables_map vm;
-            //po::store( po::parse_command_line(argc,argv,desc), vm );
-            // Need more control, I think...
-            {
-                po::parsed_options parsed
-                    = po::command_line_parser( argc, argv )
-                    .options( descAll )
-                    //.positional( po::positional_options_description() ) // empty, none allowed.
-                    //.allow_unregistered()
-                    .run();
-                po::store( parsed, vm );
-            }
-
-            if( vm.count("help") ) {
-                helpUsage( cout );
-		cout<<descAll<<endl;
-                //helpExamples(cout);
-                keepgoing=false;
-            }
-
-            po::notify(vm); // at this point, raise any exceptions for 'required' args
-
-            cerr<<"msolve args..."<<endl;
-            assert( vm.count("xfile") );
-            //assert( vm.count("yfile") );
-
-            //threads=vm["threads"].as<uint32_t>();
-	    //            verbose=vm["verbose"].as<int>();
-
-
-            // ISSUE: --solnfile should set INITIAL parms, and commandline
-            //        should OVERRIDE (not overwrite) those.
-            // Currently 'extract' set ALL parameters to "default or commandline"
-            // Need another function to "modify" according to supplied parameters XXX
-            cerr<<"opt::extract..."<<endl;
-            opt::extract(vm,parms);         // retrieve McSolver parameters
-        }
-        catch(po::error& e)
+    try {
+      po::options_description descAll("Allowed options");
+      po::options_description descMcsolve("mcsolve options");
+      init( descMcsolve );                        // create a description of the options
+      po::options_description descParms("solver args");
+      opt::mcParameterDesc( descParms, parms );   // add the param_struct options
+      descAll.add(descMcsolve).add(descParms);
+      
+      po::variables_map vm;
+      {
+	po::parsed_options parsed
+	  = po::command_line_parser( argc, argv )
+	  .options( descAll )
+	  .run();
+	po::store( parsed, vm );
+      }
+      
+      if( vm.count("help") ) {
+	helpUsage( cout );
+	cout<<descAll<<endl;
+	//helpExamples(cout);
+	exit(0);
+      }
+      
+      po::notify(vm); // at this point, raise any exceptions for 'required' args
+      
+      assert( vm.count("xfile") );
+      
+      opt::extract(vm,parms);         // retrieve McSolver parameters
+      finalize_default_params(parms);      
+    }
+    catch(po::error& e)
         {
             cerr<<"Invalid argument: "<<e.what()<<endl;
             throw;
         }
-        //catch(std::exception const& e){
-        //    cerr<<"Error: "<<e.what()<<endl;
-        //    throw;
-        //}catch(...){
-        //    cerr<<"Command-line parsing exception of unknown type!"<<endl;
-        //    throw;
-        //}
-        if( ! keepgoing ) exit(0);
-#if 0 && ARGSDEBUG > 0
-        // Good, boost parsing does not touch argc/argv
-        cout<<" DONE parse( argc="<<argc<<", argv, ... )"<<endl;
-        for( int i=0; i<argc; ++i ) {
-            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
-        }
-#endif
-        return;
+    return;
     }
 
     // static fn -- no 'this'
@@ -536,43 +445,28 @@ namespace opt {
             cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
         }
 #endif
-        bool keepgoing = true;
         try {
             po::options_description descMcproj("Allowed projections options");
             init( descMcproj );                        // create a description of the options
 
 
             po::variables_map vm;
-            //po::store( po::parse_command_line(argc,argv,desc), vm );
-            // Need more control, I think...
             {
-                po::parsed_options parsed
-                    = po::command_line_parser( argc, argv )
-                    .options( descMcproj )
-                    //.positional( po::positional_options_description() ) // empty, none allowed.
-                    //.allow_unregistered()
-                    .run();
-                po::store( parsed, vm );
+	      po::parsed_options parsed
+		= po::command_line_parser( argc, argv )
+		.options( descMcproj )
+		.run();
+	      po::store( parsed, vm );
             }
-
+	    
             if( vm.count("help") ) {
-                helpUsage( cout );
-                cout<<descMcproj<<endl;
-                //helpExamples(cout);
-                keepgoing=false;
+	      helpUsage( cout );
+	      cout<<descMcproj<<endl;
+	      //helpExamples(cout);
+	      exit(0);
             }
 
             po::notify(vm); // at this point, raise any exceptions for 'required' args
-
-            // xFile=vm["xfile"].as<string>();
-            // solnFile=vm["solnfile"].as<string>();
-            // outFile=vm["output"].as<string>();
-            // maxProj=vm["proj"].as<uint32_t>();
-            // xnorm=vm["xnorm"].as<bool>();
-            // xunit=vm["xunit"].as<bool>();
-            // xscale=vm["xscale"].as<double>();
-            // verbose=vm["verbose"].as<int>();	    
-
 	    
         }catch(po::error& e){
             cerr<<"Invalid argument: "<<e.what()<<endl;
@@ -584,7 +478,6 @@ namespace opt {
             cerr<<"Command-line parsing exception of unknown type!"<<endl;
             throw;
         }
-        if( ! keepgoing ) exit(0);
         return;
     }
 
