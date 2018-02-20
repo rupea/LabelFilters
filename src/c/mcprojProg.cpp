@@ -89,8 +89,8 @@ namespace opt {
   {
     // obtain this->xy->MCxyData::{xDense, denseOk, xSparse,sparseOk}
     xy = std::make_shared<::MCxyData>();
-    if(verbose>=1) cout<<" try reading DenseM from xfile="<<xfile<<endl;
-    xy->xread(xfile);    // tries binary dense, sparse, (others?)            
+    if(verbose>=1) cout<<"Reading from xfile="<<xfile<<endl;
+    xy->xread(xfile);    // tries binary dense, sparse, libsvm, XML            
     if( A::xnorm ){
       // SHOULD USE THE MEAN/SDEV CALCULATED FOR THE TRAINIGN SET, NOT THE ONES FOR THE PROJECTION SET!!!
       ::Eigen::VectorXd xmean;

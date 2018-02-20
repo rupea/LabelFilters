@@ -119,11 +119,20 @@ void MCxyData::xread( std::string xFile ){
 	  xDense = DenseM();
 	}
     }else{
-      cerr<<" Neither sparse nor dense binary x data was detected"<<endl;
+      // not binary. Try libSVM/XML format
+      xfs.seekg(ios::beg);
+      detail::eigen_read_libsvm(xfs, xSparse, y);
+      sparseOk = true;
+      if (denseOk)
+	{
+	  denseOk= false;
+	  xDense = DenseM();
+	}
+      xfs.close();
       // Not here [yet]: text formats? libsvm? milde repo?
     }
   }catch(std::exception const& e){
-    cout<<" oops reading x data from "<<xFile<<" ... "<<e.what()<<endl;
+    cerr<<" oops reading x data from "<<xFile<<" ... "<<e.what()<<endl;
     throw;
   }
 }

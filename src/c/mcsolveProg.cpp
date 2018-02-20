@@ -77,29 +77,13 @@ namespace opt {
     //bool    denseOk=false;
     //SparseM xSparse;
     //bool    sparseOk=false;
-    if( yFile.size() == 0 && xFile.size() != 0 ){
-      try{
-	ifstream xfs;
-	// try to read a text libsvm format -- xy->y labels, then SparseX data
-	xfs.open(xFile);
-	if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
-	detail::eigen_read_libsvm( xfs, xy->xSparse, xy->y );
-	xy->sparseOk = true;
-	xfs.close();
-      }catch(std::exception const& e){
-	cerr<<" --xFile="<<xFile<<" and no --yFile: libsvm format input error!"<<endl;
-	throw;
-      }
+    xy->xread(xFile);
+    // read SparseMb xy->y;
+    if(yFile.size()){
+      xy->yread(yFile);
+      if( !(xy->y.size() > 0) ) throw std::runtime_error("trouble reading y data");
     }
-    else
-      {
-	xy->xread(xFile);
-	// read SparseMb xy->y;
-	if(yFile.size()){
-	  xy->yread(yFile);
-	  if( !(xy->y.size() > 0) ) throw std::runtime_error("trouble reading y data");
-	}
-      }
+    
 #ifndef NDEBUG
     assert( xy->denseOk || xy->sparseOk );
     if( xy->denseOk ){
