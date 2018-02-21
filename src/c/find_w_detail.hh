@@ -170,7 +170,7 @@ void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& 
  * - and then eta or eta_t in final adjustment loops ???
  */
     template<typename EigenType>
-void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_avg, 
+void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_acc, 
                       const EigenType& x, const SparseMb& y, const VectorXd& sqNormsX,
                       const double C1, const double C2, const double lambda,
 		      const unsigned long t, const double eta_t,
@@ -267,9 +267,13 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     if( eta >= 1.e-8){ // if we kept overshooting got too small, do not update w at all. 
         eta *= eta_bigger; // last eta did not overshooot so restore it
         if (params.avg_epoch && t >= params.avg_epoch)      // update current and avg w
-            w.batch_gradient_update_avg(x, i, multiplier, lambda, eta);
-        else                                                // update only current w
-            w.batch_gradient_update    (x, i, multiplier, lambda, eta);
+	  {
+	    w.batch_gradient_update_avg(x, i, multiplier, lambda, eta);
+	  }
+        else   // update only current w
+	  {
+	    w.batch_gradient_update    (x, i, multiplier, lambda, eta);
+	  }
     }else{
         new_proj = proj; // we have not updated w
     }
@@ -277,6 +281,7 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
     // update L and U with w fixed.
     // use new_proj since it is exactly the projection obtained with the new w
     bool const accumulate_sortedLU = (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch);
+
 #if MCTHREADS
     //#pragma omp parallel for default(shared) schedule(static,1)
 #pragma omp parallel for default(shared)
@@ -313,14 +318,9 @@ void update_safe_SGD (WeightVector& w, VectorXd& sortedLU, VectorXd& sortedLU_av
             // do it when using sortedLU_avg
             // it might become too big!, but through division it
             //might become too small
-            sortedLU_avg.segment(2*sc_start, 2*sc_incr) += sortedLU.segment(2*sc_start, 2*sc_incr);
+            sortedLU_acc.segment(2*sc_start, 2*sc_incr) += sortedLU.segment(2*sc_start, 2*sc_incr);
         }
     }
-#if MCPRM>0
-    if (accumulate_sortedLU) {
-        //++luPerm.nAccSortlu_avg;
-    }
-#endif
 }
 
 template<typename EigenType>

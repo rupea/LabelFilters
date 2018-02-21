@@ -458,7 +458,6 @@ namespace detail {
 	  }
       }    
     {
-      if(verbose>=1){cout<<"\t y.setFromTriplets..."<<endl;}
       y.resize( row, maxClass+1U );
       y.setFromTriplets( yTriplets.begin(), yTriplets.end() );
       std::vector<B> empty;
@@ -487,7 +486,6 @@ namespace detail {
 	maxXidx = nFeats - 1;
       }
     {
-      if(verbose>=1){cout<<"\t x.setFromTriplets..."<<endl;}
       xSparse.resize(row,maxXidx+1U);
       xSparse.setFromTriplets(xTriplets.begin(), xTriplets.end());
       std::vector<D> empty;

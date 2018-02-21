@@ -359,15 +359,21 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       {
 	switch (reorder){
 	case REORDER_AVG_PROJ_MEANS:
+	{
 	  proj_means(means, nc, xwProj.avg(), y); // if avg has not started ,xwProj silently uses non-averaged w
 	  break;
+	}
 	case REORDER_PROJ_MEANS:
+	{
 	  proj_means(means, nc, xwProj.std(), y);
 	  break;
+	}
 	case REORDER_RANGE_MIDPOINTS:
-	luPerm.mkok_lu();
-	means = luPerm.l+luPerm.u; /*no need to divide by 2 since it is only used for ordering*/
-	break;
+	{
+	  luPerm.mkok_lu();
+	  means = luPerm.l+luPerm.u; /*no need to divide by 2 since it is only used for ordering*/
+	  break;
+	}
 	}
 	return means;
       };
@@ -501,10 +507,11 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	objective_val.conservativeResize(obj_idx + more );
       }
     }
+
+        
     assert(w.getAvg_t() == 0);
     for(; prjax < nProj; ++prjax)
       {
-	//        init_w( w, x,y,nc, weights_avg,prjax, (prjax<reuse_dim) );
 	init_w( w, x, y, nc, weights, prjax, params);
 	
 	if (params.verbose >= 1)
@@ -538,6 +545,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	  // compute the gradient and update
 	  //      modifies w, sortedLU, (sortedLU_avg) ONLY  (l,u,l_avg,u_avg values may be stale)
 	  // --> the ONLY place where 'w' is modified
+
 	  MCupdate::update(w, luPerm, eta_t,   /*R/O:*/x, y, xSqNorms, C1, C2, lambda, t,
 			   nTrain, nclasses, maxclasses, filtered, updateSettings, params);
 	  // update 'w' ==> projections of raw 'x' data (projection_avg & projection) invalid.
