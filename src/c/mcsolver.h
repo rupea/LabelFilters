@@ -4,25 +4,16 @@
  * helper classes to make MCsolver::solve more readable
  */
 #include "mcsoln.h"
-#include "boolmatrix.h"
-
-/** MCPRM 0 = no MCpermState.
- * - 1 = define it, use it in easy ways
- * - 2 = use it (eliminate most old vars)
- *   - and then to add 'mk_ok' calls before function calls modifying luPerm variables
- * - 3 = delete original "optimized" conditional xfers from l,u <--> sortlu (and for _avg)
- * - etc etc
- */
-#define MCPRM 5
-#if MCPRM < 5
-#error "MCPRM < 5 code has been REMOVED"
-#endif
-
+//#include "boolmatrix.h"
 
 class Perm;             ///< an internal detail class -- no user access
 class MCpermState;      ///< track which versions of {l,u}{,_avg} and sortedLU{,_avg} are official
 class MCiterBools;      ///< t4_XXX bools for "Should we {params.XXX} at iteration MCsoln::t?"
 class MCupdateState;    ///< utility constants/variables passed to update routine
+namespace mcsolver_detail{
+  struct MCupdate;
+}
+class boolmatrix; 
 
 /** Provide a simpler API for solving.
  * - The long \c solve template is now in a 'detail' header,
@@ -66,8 +57,8 @@ public:
      *   - Please only include \c find_w_detail.hh for \em strange 'x' types.
      */
     template< typename EIGENTYPE >
-        void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const& params_arg);
-
+      void solve( EIGENTYPE const& x, SparseMb const& y, param_struct const& params_arg);
+    
 #if 0
     /** TBD - For each projection add a \b median value for each class label.
      * This augments {l,u} bounds information, and can be used to provide a
@@ -84,34 +75,10 @@ public:
      * for the approx positions of intermediate quantiles.
      */
     template< typename EIGENTYPE >
-        setQuantiles( EIGENTYPE const& x, SparseMb const& y );
+      setQuantiles( EIGENTYPE const& x, SparseMb const& y );
 #endif
-
-    //    enum Trim { TRIM_LAST, TRIM_AVG };
-    /** Free memory by moving selected {w,l,u} data into {w,l,u}_avg.
-     * - After a \c solve, or a \c read we may have:
-     *   - {w,l,u} of last iteration (and objective_val)
-     *   - and {w,l,u}_avg of the time-averaged solution (and objective_val_avg)
-     * - But only one set of these is required to \b use the MCsoln
-     * - So after \c solve (or maybe \c read),
-     *   - you might \c write the LONG/SHORT MCsoln to disk
-     *   - and then call trim(...) to free some memory
-     * \post MCsoln is a model of SHORT data -- only {w,l,u}_avg might contain data
-     *
-     * \note While there may be some issue of whether to use w_avg or w, it seems
-     * that the correct function for l and u should be to calculate the \b exact
-     * lower and upper boundaries for whatever projection axes we choose.
-     * This then requires a post-processing pass over the data, during which
-     * other easy trivial operations can be done --- like producing an auxiliary
-     * class median vector that can be quite useful as a built-in poor-man's
-     * nearest-neighbour predictor (for extremely small extra storage).
-     * \detail
-     * - rename 'postSolve', if it does more than just Trim?
-     */
-    //    void trim( enum Trim const kp = TRIM_AVG );
-
-private:
-    /** twice, we need to chop unused projections from the solution */
+    
+ private:
     Eigen::VectorXd objective_val;
     void setNProj(uint32_t const nProj, bool, bool);
     int getNthreads( param_struct const& params ) const;
@@ -123,7 +90,7 @@ class Perm {
 private:
     friend class MCsolver;
     friend class MCpermState; ///< allow access only via MCpermState
-    friend class MCupdate;      // perhaps temporarily
+    friend class mcsolver_detail::MCupdate;      // perhaps temporarily
     Perm(size_t nClass) : perm(), rev()       ///< initialize to identity permutation
     {
         perm.reserve(nClass);
@@ -147,7 +114,7 @@ class MCpermState : private Perm
 {
 public:
     friend class MCsolver;
-    friend class MCupdate;      // perhaps temporarily
+    friend class mcsolver_detail::MCupdate;      // perhaps temporarily
     MCpermState( size_t nClass );       ///< allocate 6 vectors of size nClass, nothing is 'ok'
     /** produce new perm+rev according to ascending \c sortKey. */
     void rank( Eigen::VectorXd const& sortkey ); // unperm, rerank, set flags
@@ -184,12 +151,12 @@ public:
     void optimizeLU( Eigen::VectorXd const& projection, SparseMb const& y, Eigen::VectorXd const& wc,
                      Eigen::VectorXi const& nclasses, boolmatrix const& filtered,
                      double const C1, double const C2,
-                     param_struct const& params, bool print=false );
+                     param_struct const& params );
     /** optimal settings for {l,u}_avg */
     void optimizeLU_avg( Eigen::VectorXd const& projection_avg, SparseMb const& y, Eigen::VectorXd const& wc,
                          Eigen::VectorXi const& nclasses, boolmatrix const& filtered,
                          double const C1, double const C2,
-                         param_struct const& params, bool print=false );
+                         param_struct const& params );
     //@}
 
     // Accumulate the current sortlu into sortlu_acc and increaset nAccSortlu

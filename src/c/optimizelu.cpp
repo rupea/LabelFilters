@@ -1,121 +1,58 @@
-#include "find_w_detail.h"
+
+#include "optimizelu.hh"
+#include "utils.h"
 #include "boost/iterator/counting_iterator.hpp"
 #include <boost/numeric/conversion/bounds.hpp>  // boost::numeric::bounds<T>
 #include <cmath>
+#include <iostream>
 
 #include "constants.h"
 
 #define __restricted /* __restricted seems to be an error */
 
-/** 0 --> Alex's original dev-branch version
- * 1 --> my version */
-#define OPTIMIZE_LU_VERSION 1
 
-using namespace std;
+namespace mcsolver_detail{
 
-//*****************************************
-// function used by optimizeLU
-// grad are stored in order of the ranked classes
-// to minimize cash misses and false sharing
-
-/** set sorted class_order values of labels for training example 'idx' */
-static inline void sortedClasses( std::vector<int> & classes, std::vector<int> const& class_order,
-                           SparseMb const& y, size_t const idx )
-{
-    classes.resize(0);
-    for (SparseMb::InnerIterator it(y,idx); it; ++it){
-        //assert(it.value()); // if (it.value())
-        classes.push_back(class_order[it.col()]);
-    }
-    std::sort(classes.begin(),classes.end());
-}
-
-//*****************************************
-// function used by optimizeLU 
-// grad are stored in order of the ranked classes
-// to minimize cash misses and false sharing 
-
-static inline void getBoundGrad (VectorXd& __restricted grad, VectorXd& __restricted bound,
-                          const size_t idx, const size_t allproj_idx,
-                          const std::vector<int>& __restricted sorted_class,
-                          const int sc_start, const int sc_end,
-                          const std::vector<int>& __restricted classes,
-                          const double start_update, const double other_weight,
-                          const VectorXd& __restricted allproj,
-			  const bool none_filtered, const boolmatrix& __restricted filtered)
-
-{
-  std::vector<int>::const_iterator class_iter = std::lower_bound(classes.begin(), classes.end(), sc_start);  
-  double update = start_update + (class_iter - classes.begin())*other_weight;
-// #pragma omp critical
-//   {
-//     cout << "1  " << idx << "   " << allproj_idx << "   " << sc_start << "   " << sc_end << "    " << class_iter - classes.begin() << "  " << update << "   " << other_weight << endl;
-//   }
-  for (int sc = sc_start; sc < sc_end; sc++)
-    {
-      if (class_iter != classes.end() && sc == *class_iter)
-	{
-	  // example is of this class
-	  update += other_weight;
-	  class_iter++;
-	  continue;
-	}		  
-      const int cp = sorted_class[sc];
-      if (grad.coeff(sc) >= 0 && (none_filtered || !(filtered.get(idx,cp))))
-	{			      
-	  grad.coeffRef(sc) -= update;
-	  if (grad.coeff(sc) < 0)
-	    {
-	      bound.coeffRef(cp) = allproj.coeff(allproj_idx);
-	    }
-	}
-    }
-
-}
-
-/** get optimal {l,u} bounds given projection and class order.
- * Computationally expensive, so it should be done sparingly.
- */
-void optimizeLU(VectorXd& l, VectorXd& u,
-		const VectorXd& projection, const SparseMb& y,
-		const vector<int>& class_order, const vector<int>& sorted_class,
-		const VectorXd& wc, const VectorXi& nclasses,
-		const boolmatrix& filtered,
-		const double C1, const double C2,
-		const param_struct& params,
-		bool print)
-{
-    // -------------- various threading options -------------
-    // Good for MCTHREADS==0: UPFRONT=0 && BOUNDGRAD_THREAD=1 is good
-    // For MCTHREADS==1:     BOUNDGRAD_THREAD=0, BOUNDGRAD_THREAD=0 
+  using namespace std;  
+  /** get optimal {l,u} bounds given projection and class order.
+   * Computationally expensive, so it should be done sparingly.
+   */
+  void optimizeLU(VectorXd& l, VectorXd& u,
+		  const VectorXd& projection, const SparseMb& y,
+		  const vector<int>& class_order, const vector<int>& sorted_class,
+		  const VectorXd& wc, const VectorXi& nclasses,
+		  const boolmatrix& filtered,
+		  const double C1, const double C2,
+		  const param_struct& params)
+  {
 #define BOUNDGRAD_THREAD 1 // 1=good
-
+    
     // -------------- and sanity checks
 #if MCTHREADS && defined(_OPENMP)
     if( omp_in_parallel() )
-        throw runtime_error(" ERROR: please don't call optimizeLU from and omp parallel section");
+      throw runtime_error(" ERROR: please don't call optimizeLU from and omp parallel section");
 #endif
     static bool check_once=false;
     if( !check_once ){
-        if( params.remove_class_constraints ){
-            cout<<" WARNING: optimizelu gradient massage via wc.coeff may not work correctly"<<endl;
-        }
-        size_t nErase=0U;
+      if( params.remove_class_constraints ){
+	cerr<<" WARNING: optimizelu gradient massage via wc.coeff may not work correctly"<<endl;
+      }
+      size_t nErase=0U;
 #if MCTHREADS && defined(_OPENMP)
 #pragma omp parallel for schedule(static)
 #endif
-        for(size_t o=0U; o<y.outerSize(); ++o){
-            for(SparseMb::InnerIterator it(y,o); it; ++it) {
-                if( it.value()==false ){
-                    ++nErase;
-                }
-            }
-        }
-        if( nErase )
-            throw runtime_error(" ERROR: SparseMb 'y' should have only 'true' entries");
-        if( ! y.isCompressed() )
-            throw runtime_error(" ERROR: expect SparseMb 'y' to be compressed sparse");
-        check_once=true;
+      for(size_t o=0U; o<y.outerSize(); ++o){
+	for(SparseMb::InnerIterator it(y,o); it; ++it) {
+	  if( it.value()==false ){
+	    ++nErase;
+	  }
+	}
+      }
+      if( nErase )
+	throw runtime_error(" ERROR: SparseMb 'y' should have only 'true' entries");
+      if( ! y.isCompressed() )
+	throw runtime_error(" ERROR: expect SparseMb 'y' to be compressed sparse");
+      check_once=true;
     }
     // ------------------------------------------------------
     size_t const n = projection.size();
@@ -125,7 +62,7 @@ void optimizeLU(VectorXd& l, VectorXd& u,
     allproj << (projection.array() - 1), (projection.array() + 1);
     std::vector<size_t> indices(allproj.size());
     sort_index(allproj, indices);
-
+    
     // yes, co[sc[c]] == c
     // initialize the gradients for u and l 
     VectorXd gradu(noClasses); // by ranked classes, to minimize cache misses/false sharing
@@ -149,18 +86,15 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 	gradl.coeffRef(sc) = C1*classweight;
       }
     }
-
-
+    
+    
     
 #if BOUNDGRAD_THREAD && MCTHREADS && defined(_OPENMP)
     int const max_n_chunks = omp_get_max_threads();
-
+    
     int const min_chunk_size = 10000;     // need a test case to set this value XXX
-    //int min_chunk_size = 100;
-    //if( noClasses/max_n_chunks > min_chunk_size ) min_chunk_size = noClasses/max_n_chunks;
-    //if( min_chunk_size > 10000 ) min_chunk_size = 10000;
 #endif
-
+    
 #if MCTHREADS
 #pragma omp parallel default(none) shared(l, u, allproj, indices, filtered, y, class_order, sorted_class, wc, nclasses, params, gradu, gradl)
 #endif
@@ -229,7 +163,6 @@ void optimizeLU(VectorXd& l, VectorXd& u,
         }
       }
       
-      
 #if MCTHREADS
 #pragma omp single nowait
 #endif
@@ -291,7 +224,6 @@ void optimizeLU(VectorXd& l, VectorXd& u,
 	  }
         }
       } // omp single
-    } // omp parallel
-   
+    } // omp parallel   
+  }
 }
-

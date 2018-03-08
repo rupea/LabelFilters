@@ -14,12 +14,12 @@ BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
 
-#OPENMP ?= -fopenmp
+OPENMP ?= -fopenmp
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
 # 1. no openmp anywhere
 #OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
 # 2. allow Eigen/blas threads, but no MCFilter source code threads
-OPENMP += -DMCTHREADS=0
+#OPENMP += -DMCTHREADS=0
 # allow STL experimental threads?
 
 
@@ -60,59 +60,42 @@ VPATH = ../c
 #OCTAVE_LDFLAGS = 
 #OCTAVE_CFLAFS = 
 
-all: standalone octave
+all: milde 
 
-standalone:  learn_projection evaluate_projection run_kmeans naive_bayes #demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve run_LPSR
+#standalone: lib mcsolve mcproj #run_kmeans naive_bayes
 
-octave: oct_find_w.oct oct_normalize_data.oct oct_project_data.oct oct_predict_data.oct oct_evaluate_predictions.oct oct_get_projection_measures.oct oct_kmeans.oct  #oct_evaluate_model.oct oct_calc_objective.oct
+#octave: oct_normalize_data.oct oct_project_data.oct oct_predict_data.oct oct_evaluate_predictions.oct oct_get_projection_measures.oct oct_kmeans.oct  #oct_evaluate_model.oct oct_calc_objective.oct
 
 
 # For MiLDe, remove all "octave"-related targets, and ensure 'lib' target[s] are mode
-milde: lib demo-mcsolver mcgen mcgenx mcdumpsoln demo-proj1 erik/mcsolve0 mcsolve | lib
+milde: lib demo-proj1 mcsolve mcproj | lib
 
-
-learn_projection: learn_projection.o find_w.o find_w_detail.o optimizelu.o mcsolver.o printing.o EigenOctave.o utils.o parameter.o predict.o filter.o
-	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
-
-evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o evaluate.o predict.o
-	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
+#evaluate_projection: evaluate_projection.o EigenOctave.o filter.o utils.o PredictionSet.o EigenIO.o evaluate.o predict.o
+#	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
 run_kmeans: run_kmeans.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o
 	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
-#run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o predict.o filter.o
-#	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
+run_LPSR: run_LPSR.o utils.o printing.o EigenOctave.o normalize.o EigenIO.o evaluate.o PredictionSet.o predict.o filter.o
+	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
 naive_bayes: naive_bayes.o EigenOctave.o utils.o
 	$(OCTAVE_MEX) -o $@ $^ $(LDFLAGS) $(OCTAVE_MEX_STANDALONE)
 
 
-oct_find_w.oct: oct_find_w.o find_w.o EigenOctave.o printing.o utils.o parameter.o find_w_detail.o optimizelu.o mcsolver.o 
-	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
-
 oct_normalize_data.oct: oct_normalize_data.o normalize.o EigenOctave.o printing.o
 	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
 
-oct_project_data.oct: oct_project_data.o EigenOctave.o filter.o utils.o
-	$(OCTAVE_MEX)  $(OCTAVE_LDFLAGS) $^
+#oct_project_data.oct: oct_project_data.o EigenOctave.o filter.o utils.o
+#	$(OCTAVE_MEX)  $(OCTAVE_LDFLAGS) $^
 
-oct_predict_data.oct: oct_predict_data.o EigenOctave.o filter.o utils.o PredictionSet.o predict.o
-	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
-
-# this functions is deprecated and will not compile. If needed, oct_evaluate_model.cpp needs to be updated 
-# to incorporate changes in the code
-# oct_evaluate_model.oct: oct_evaluate_model.o EigenOctave.o filter.o utils.o PredictionSet.o
+#oct_predict_data.oct: oct_predict_data.o EigenOctave.o filter.o utils.o PredictionSet.o predict.o
 #	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
 
-oct_evaluate_predictions.oct: oct_evaluate_predictions.o EigenOctave.o utils.o PredictionSet.o
-	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
+#oct_evaluate_predictions.oct: oct_evaluate_predictions.o EigenOctave.o utils.o PredictionSet.o
+#	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
 
-oct_get_projection_measures.oct: oct_get_projection_measures.o EigenOctave.o utils.o filter.o
-	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
-
-# this functions is deprecated and will not compile. 
-# to incorporate changes in the code
-#oct_calc_objective.oct: find_w.o EigenOctave.o oct_calc_objective.o
+#oct_get_projection_measures.oct: oct_get_projection_measures.o EigenOctave.o utils.o filter.o
 #	$(OCTAVE_MEX) $(OCTAVE_LDFLAGS) $^
 
 oct_kmeans.oct: oct_kmeans.o utils.o printing.o EigenOctave.o normalize.o 
@@ -146,7 +129,7 @@ settings:
 	echo "BOOSTLIB       = $(BOOSTLIB)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcfilter.h mcfilter.hh mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcupdate.h boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h find_w.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h find_w_detail.h find_w_detail.hh find_w.hh LPSR.h 
+CHECK_HEADERS := mcfilter.h mcfilter.hh mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcupdate.hh objective.h mcsolver_detail.hh mcsolver_init.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h LPSR.h 
 # faster version (can run in parallel)
 check-headers chk-headers:
 	rm -f /tmp/*.chk
@@ -158,9 +141,11 @@ check-oct-headers: EigenOctave.h
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
 
-LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp find_w.cpp find_w_detail.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp
+LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp 
+
 lib: hdr-stamp
-	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1 demo-quick; }
+#	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1 demo-quick; }
+	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1; }
 lib-clean:
 	rm -f libmcfilter.a libmcfilter-dbg.a libmcfilter.so libmcfilter-dbg.so *.o *.lo *-dbg.o *-dbg.lo
 hdr-stamp: erik/hdr-stamp
@@ -288,9 +273,7 @@ do-tests: | lib demo-printing demo-io demo-norm demo-quick demo-mcsolver test-sc
 	@echo ""
 	@echo ""
 
-# Create a library of octave-free C++ code for the main functionality in MCFilter
-#   (find_w, filter, kmeans, LPSR)
-#   This should aid in producing an interface in lua [I hope]
+# Create a library of C++ code for the main functionality in MCFilter
 # XXX predict.cpp and evaluate.cpp MIGHT be removable?
 libmcfilter.a: $(patsubst %.cpp,%.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^

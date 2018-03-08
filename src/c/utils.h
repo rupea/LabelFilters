@@ -26,23 +26,6 @@ void sort_index( Eigen::VectorXd const& m, std::vector<IntType>& cranks)
   std::sort(cranks.begin(), cranks.end(), [&m](int const i, int const j)
             {return m[i] < m[j];} );
 };
-#if 0 // plainer implementation
-struct Cmp {
-Cmp( Eigen::VectorXd const& m ) : m(m) {}
-  bool operator()( int const i, int const j ){
-    //return m.coeff(i) < m.coeff(j);
-    return m(i) < m(j);   // with checking
-  }
-  Eigen::VectorXd const& m;
-};
-for(size_t i=0U; i<cranks.size(); ++i)
-  cranks[i] = i;
-std::cout<<" copy..."<<std::endl;
-Eigen::VectorXd n(m);
-std::cout<<" std::sort ... "<<std::endl; std::cout.flush();
-Cmp cmp(n);
-std::sort(cranks.begin(), cranks.end(), cmp );
-#endif
 
 
 //**********************************
