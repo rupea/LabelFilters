@@ -61,7 +61,7 @@ namespace opt {
 	  ("toptlu", value<uint32_t>(), "expensive exact {l,u} optmization period [once, at maxiter]")
 	  ("treorder", value<uint32_t>()->default_value(p.reorder_epoch), "reorder iteration period")
 	  ("reorderby", value<std::string>()->default_value(tostring(p.reorder_type))
-	   , "Permutation re-ordering: AVG projected means | PROJ projected means | MID range midpoints.")
+	   , "Permutation re-ordering: PROJ mean of projected instances | MID range midpoints.")
 	  ("treport", value<uint32_t>(), "report the objective value every treport iteratoins. 0 for no reporting. [maxiter/10]")
 	  ("avgstart", value<uint32_t>(), "averaging start iteration [max(nExamples,dim)]")
 	  //	  ("tavg", value<uint32_t>()->default_value(p.report_avg_epoch), "period for reports about avg, expensive")

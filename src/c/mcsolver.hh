@@ -357,14 +357,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   auto GetMeans = [&]( enum Reorder_Type reorder ) -> VectorXd const&
     {
       switch (reorder){
-      case REORDER_AVG_PROJ_MEANS:
-      {
-	mcsolver_detail::proj_means(means, nc, xwProj.avg(), y); // if avg has not started ,xwProj silently uses non-averaged w
-	break;
-      }
       case REORDER_PROJ_MEANS:
       {
-	mcsolver_detail::proj_means(means, nc, xwProj.std(), y);
+	mcsolver_detail::proj_means(means, nc, xwProj.avg(), y); // if avg has not started ,xwProj silently uses non-averaged w
 	break;
       }
       case REORDER_RANGE_MIDPOINTS:

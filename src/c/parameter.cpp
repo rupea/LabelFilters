@@ -129,10 +129,9 @@ void print_parameter_usage()
     "\n              0 - do not diminish any,"
     "\n              1 - diminish lambda only,"
     "\n              2 - diminish lambda and C1 (increase C2) [2]."
-    "\n     reorder_type - how to order the classes [avg_proj_mean]: "
-    "\n              AVG_PROJ_MEANS reorder by the mean of the projection on the"
-    "\n              AVERAGED w (if averaging has not started is the ame as proj_mean"
-    "\n              PROJ_MEANS reorder by the mean of the projection on the current w"
+    "\n     reorder_type - how to order the classes [proj_mean]: "
+    "\n              PROJ_MEANS reorder by the mean of the projection on the"
+    "\n              AVERAGED w (if averaging has not started project on w)"
     "\n              RANGE_MIDPOINTS reorder by the midpoint of the [l,u] interval (i.e. (u-l)/2)"
     "\n     ml_wt_by_nclasses - UNTESTED whether to weight an example by the number of classes it belongs"
     "\n              to when conssidering other class contraints. [false]"
@@ -247,7 +246,6 @@ std::string tostring( enum Reorder_Type const e )
 {
     char const *name=nullptr;
     switch(e){
-        ENUM_CASE(REORDER_AVG_PROJ_MEANS);
         ENUM_CASE(REORDER_PROJ_MEANS);
         ENUM_CASE(REORDER_RANGE_MIDPOINTS);
     }
@@ -303,7 +301,6 @@ void fromstring( std::string s, enum Update_Type &e )
 }
 void fromstring( std::string s, enum Reorder_Type &e )
 {
-    ENUM_FIND(AVG,  REORDER_AVG_PROJ_MEANS);
     ENUM_FIND(PROJ, REORDER_PROJ_MEANS);
     ENUM_FIND(MID,  REORDER_RANGE_MIDPOINTS);
     throw runtime_error("Unrecognized string for MCfilter enum Reorder_Type");

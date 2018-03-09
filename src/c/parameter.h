@@ -21,7 +21,7 @@
  * seed —- random seed. 0= using time, 1=no random number initilization, 
  *      --             >1=initizile using seeed.  default 0
  * num_threads —- default 0  (i.e. all threads)
- * resume -- use projections from a previous run. Train more projectoins if requiested
+ * resume -- use projections from a previous run. Train more projectoins if requested
  * reoptimize_LU -- reoptimize lower, upper bounds on projections from previous run
  * class_samples -- subsample xxx negative classes for each gradient computation. 
  *               -- default 0 (no subsample)
@@ -36,8 +36,7 @@
  *   avg_epoch —- When to start averaging the gradient.  Default max(#examples,dimension).
  *   reorder_epoch — Reorder classes every reorder_epoch iterations. default 10^3
  *   reorder_type — How to reorder classes:
- *                    - REORDER_AVG_PROJ_MEANS - reorder by the mean of the projections of examples in the class. Examples are projected using the curent filter direction (averaged w).(default)
- *                    - REORDER_PROJ_MEANS - reorder by the mean of the projections of examples in the class. Examples are projected using the current, non-averaged, filter direction (non-averaged w).
+ *                    - REORDER_PROJ_MEANS - reorder by the mean of the projections of examples in the class. Examples are projected using the current, filter direction (averaged w). Default
  *                    _ REORDER_RANGE_MIDPOINTS - reorder by the midpoint of the current active interval (L+U/2)
  *   optimizeLU_epoch — Optimize L and U every optimizeLU_epoch iterations. Expensive. default max_iter.
  *   min_eta — minimum leanrning rate. default 0
@@ -100,8 +99,7 @@ enum Update_Type
 
 enum Reorder_Type
 {
-    REORDER_AVG_PROJ_MEANS, ///< reorder by the mean of the projection based on averaged w [*]
-    REORDER_PROJ_MEANS,     ///< reorder by the means of the projection based on current w
+    REORDER_PROJ_MEANS, ///< reorder by the mean of the projection based on averaged w [*]
     REORDER_RANGE_MIDPOINTS ///< reorder by the mean of the range of the class (i.e. (u+l)/2 )
 };
 
@@ -177,7 +175,6 @@ typedef struct
   uint32_t reorder_epoch;  ///<number of iterations between class reorderings (0=none)
   bool default_report_epoch; ///< is report epoch uninitialized?
   uint32_t report_epoch;   ///<number of iterations between computation and objective value report (expensive: calculated on whole training set) (0=none)
-  uint32_t report_avg_epoch;   ///<number of iterations between computation and objective value report (expensive: calculated on whole training set) (0=none)
   bool default_optimizeLU_epoch; ///< is optimizeLU_epoch uninitialized?
   uint32_t optimizeLU_epoch; ///< number of iterations between full optimizations of the lower and upper bounds
   bool remove_constraints; ///< whether to remove the constraints for instances that fall outside the class boundaries in previous projections.
@@ -241,10 +238,9 @@ inline param_struct set_default_params()
   def.default_optimizeLU_epoch = true;//flag that optimizeLU_epoch has not been initialized. Default value depends on max_iter. Will be initialized by finalize_default_params
   def.optimizeLU_epoch = 0; // this is very expensive so it should not be done often
   def.reorder_epoch=1000;
-  def.reorder_type = REORDER_AVG_PROJ_MEANS; // defaults to REORDER_PROJ_MEANS if averaging is off
+  def.reorder_type = REORDER_PROJ_MEANS; // defaults to REORDER_PROJ_MEANS if averaging is off
   def.default_report_epoch = true;
   def.report_epoch=0;//1000000;
-  def.report_avg_epoch=0; // expensive. Should be removed
   def.default_avg_epoch = true; //flag that avg_epoch has not been initialized. Default depends on the data. Will be initialized by mcsolver::solve
   def.avg_epoch=0;
   def.reweight_lambda = REWEIGHT_ALL; 
