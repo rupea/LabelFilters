@@ -6,6 +6,8 @@
 #include "WeightVector.h"
 #include <vector>
 
+class boolmatrix;
+
 namespace mcsolver_detail{
 
   using namespace Eigen;
@@ -19,7 +21,7 @@ namespace mcsolver_detail{
   // Get the sum of the weight of all examples in each class
   
   void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, 
-	       const param_struct& params);
+	       const param_struct& params, boolmatrix const& filtered);
 
   
   /** Projection to a new vector that is orthogonal to the rest.

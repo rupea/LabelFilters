@@ -324,7 +324,10 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     assert( updateSettings.sc_locks != nullptr );
   }
 #endif
-    
+
+  //keep track of which classes have been elimninated for a particular example
+  boolmatrix filtered(nTrain,nClass);    
+  size_t no_filtered=0;
   VectorXi nc;       // nc[class]         = number of training examples of each class
   VectorXi nclasses; // nclasses[example] = number of classes assigned to each training example
   mcsolver_detail::init_nc(nc, nclasses, y);
@@ -332,17 +335,12 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   // Suppose example y[i] --> weight of 1.0, or if params.ml_wt_class_by_nclasses, 1.0/nclasses[i]
   // Then what is total weight of each class? (used for optimizeLU)
   VectorXd wc; // wc[class] = weight of each class (= nc[class] if params.ml_wt_class_by_nclasses==false)
-  mcsolver_detail::init_wc(wc, nclasses, y, params);   // wc is used if optimizeLU_epoch>0
+  mcsolver_detail::init_wc(wc, nclasses, y, params, filtered);   // wc is used if optimizeLU_epoch>0
   VectorXd xSqNorms;
   if (params.update_type == SAFE_SGD) mcsolver_detail::calc_sqNorms( x, xSqNorms ); 
     
-  //keep track of which classes have been elimninated for a particular example
-  boolmatrix filtered(nTrain,nClass);
-  //VectorXd difference(d);
-  VectorXd tmp(d);
   unsigned long const total_constraints = nTrain*nClass
     - (1-params.remove_class_constraints) * nc.sum();
-  size_t no_filtered=0;
     
   double lambda = 1.0/params.C2;
   double C1 = params.C1/params.C2;
@@ -415,6 +413,12 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 				       , y, params.remove_class_constraints);
       
       no_filtered = filtered.count(); 
+      // recalculate wc if class constraints have been removed
+      if (params.remove_class_constraints)
+	{
+	  mcsolver_detail::init_wc(wc, nclasses, y, params, filtered);
+	}
+
       if (params.verbose >= 1)
 	{
 	  cout<<"Filter["<<filtered.rows()<<"x"<<filtered.cols()<<"] removed "<<no_filtered

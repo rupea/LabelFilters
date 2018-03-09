@@ -129,9 +129,9 @@ void print_parameter_usage()
     "\n              0 - do not diminish any,"
     "\n              1 - diminish lambda only,"
     "\n              2 - diminish lambda and C1 (increase C2) [2]."
-    "\n     reorder_type - how to order the classes [proj_mean]: "
+    "\n     reorder_type - how to order the classes [proj_means]: "
     "\n              PROJ_MEANS reorder by the mean of the projection on the"
-    "\n              AVERAGED w (if averaging has not started project on w)"
+    "\n                 AVERAGED w (if averaging has not started project on w)"
     "\n              RANGE_MIDPOINTS reorder by the midpoint of the [l,u] interval (i.e. (u-l)/2)"
     "\n     ml_wt_by_nclasses - UNTESTED whether to weight an example by the number of classes it belongs"
     "\n              to when conssidering other class contraints. [false]"
@@ -370,7 +370,6 @@ using namespace detail;
         IO(class_samples); \
         IO_enum(update_type); \
         IO(batch_size); \
-        IO(eps); \
         IO_enum(eta_type); \
         IO(eta); \
         IO(min_eta); \

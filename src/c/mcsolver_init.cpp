@@ -1,4 +1,5 @@
 #include "mcsolver_init.hh"
+#include "boolmatrix.h"
 #include <iostream>
 #include <sstream>
 
@@ -116,15 +117,14 @@ namespace mcsolver_detail{
   // ************************************
   // Get the sum of the weight of all examples in each class
 
-  void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const param_struct& params)
+  void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const param_struct& params, boolmatrix const& filtered)
   {
     double ml_wt_class = 1.0;
     int noClasses = y.cols();
     wc.setZero(noClasses);
     size_t n = y.rows();
     if (nclasses.size() != n) {
-      cerr << "init_wc has been called with vector nclasses of wrong size" << endl;
-      exit(-1);
+      throw runtime_error("init_wc has been called with vector nclasses of wrong size");
     }
     for (size_t i=0;i<n;i++) {
       if (params.ml_wt_class_by_nclasses) {
@@ -132,7 +132,10 @@ namespace mcsolver_detail{
       }
       for (SparseMb::InnerIterator it(y,i);it;++it) {
 	if (it.value()) {
-	  wc.coeffRef(it.col()) += ml_wt_class;
+	  if (!params.remove_class_constraints || !(filtered.get(i,it.col())))
+	    {
+	      wc.coeffRef(it.col()) += ml_wt_class;
+	    }
 	}
       }
     }

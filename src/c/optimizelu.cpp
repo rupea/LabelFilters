@@ -34,9 +34,6 @@ namespace mcsolver_detail{
 #endif
     static bool check_once=false;
     if( !check_once ){
-      if( params.remove_class_constraints ){
-	cerr<<" WARNING: optimizelu gradient massage via wc.coeff may not work correctly"<<endl;
-      }
       size_t nErase=0U;
 #if MCTHREADS && defined(_OPENMP)
 #pragma omp parallel for schedule(static)
@@ -74,7 +71,7 @@ namespace mcsolver_detail{
 #endif
     for (size_t sc = 0; sc <noClasses; ++sc) {
       int const c = sorted_class[sc];
-      double const classweight = wc.coeff(c); // incorrect if remove_class_constraints because true classes can be filtered. Need to fix this by recalculating wc after filtering
+      double const classweight = wc.coeff(c); 
       if (classweight <= 0.0) { // no examples of this class
 	// classes with no weight (wc[]) get {l,u} bounds set to high/low values.
 	u.coeffRef(c) = boost::numeric::bounds<double>::lowest()/10; // the /10 is needed because octave has trouble reading back ascii files that are written with the highest/lowest limits

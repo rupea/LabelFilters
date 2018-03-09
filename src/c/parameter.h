@@ -167,7 +167,6 @@ typedef struct
   Update_Type update_type; ///< how to update w, L and U (need a better name)
   bool default_batch_size; ///< is batch_size uninitialized?
   uint32_t batch_size;     ///< size of the minibatch
-  double eps;              ///< not used
   Eta_Type eta_type;       ///< how does the learning rate decay.
   double min_eta;          ///<the minimum value of the lerarning rate. E.g. lr ~ \c max(min_eta, eta/sqrt(t), min_eta)
   bool default_avg_epoch;  ///< is avg_epoch uninitialized?
@@ -232,7 +231,6 @@ inline param_struct set_default_params()
   def.update_type = SAFE_SGD;
   def.default_batch_size = true;
   def.batch_size=0U; //default value depends on update_type. to be initialized in finalize default params
-  //  def.eps=1e-4;
   def.eta_type = DEFAULT; //default value depends on the value of avg_epoch. Will be initialized by finalize_default_params.
   def.min_eta = 0;
   def.default_optimizeLU_epoch = true;//flag that optimizeLU_epoch has not been initialized. Default value depends on max_iter. Will be initialized by finalize_default_params
