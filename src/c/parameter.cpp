@@ -125,10 +125,7 @@ void print_parameter_usage()
     "\n              outside the class boundaries in previous projections. [true] "
     "\n     remove_class_constraints - whether to remove the constraints for examples that fell"
     "\n              outside their own class boundaries in previous projections. [false] "
-    "\n     reweight_lambda - whether to diminish lambda and/or C1 as constraints are eliminated."
-    "\n              0 - do not diminish any,"
-    "\n              1 - diminish lambda only,"
-    "\n              2 - diminish lambda and C1 (increase C2) [2]."
+    "\n     adjust_C - whether to adjust C1 and C2 to account for removed constraints.[true]"
     "\n     reorder_type - how to order the classes [proj_means]: "
     "\n              PROJ_MEANS reorder by the mean of the projection on the"
     "\n                 AVERAGED w (if averaging has not started project on w)"
@@ -178,7 +175,7 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"etatype "<<left<<tostring(p.eta_type));
     WIDE(os,c2,"   "<<tostring(p.reorder_type));
-    WIDE(os,c3,"      "<<left<<tostring(p.reweight_lambda));
+    WIDE(os,c3,"      "<<left<<p.adjust_C);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"eta0 "<<left<<p.eta);
     WIDE(os,c2,right<<setw(11)<<"treorder "<<left<<p.reorder_epoch);
@@ -252,17 +249,6 @@ std::string tostring( enum Reorder_Type const e )
     assert(name != nullptr);
     return name;
 }
-std::string tostring( enum Reweight_Type const e )
-{
-    char const *name=nullptr;
-    switch(e){
-        ENUM_CASE(REWEIGHT_NONE);
-        ENUM_CASE(REWEIGHT_LAMBDA);
-        ENUM_CASE(REWEIGHT_ALL);
-    }
-    assert(name != nullptr);
-    return name;
-}
 std::string tostring( enum Init_W_Type const e )
 {
     char const *name=nullptr;
@@ -304,13 +290,6 @@ void fromstring( std::string s, enum Reorder_Type &e )
     ENUM_FIND(PROJ, REORDER_PROJ_MEANS);
     ENUM_FIND(MID,  REORDER_RANGE_MIDPOINTS);
     throw runtime_error("Unrecognized string for MCfilter enum Reorder_Type");
-}
-void fromstring( std::string s, enum Reweight_Type &e )
-{
-    ENUM_FIND(NO,   REWEIGHT_NONE);
-    ENUM_FIND(LAM,  REWEIGHT_LAMBDA);
-    ENUM_FIND(ALL,  REWEIGHT_ALL);
-    throw runtime_error("Unrecognized string for MCfilter enum Reweight_Type");
 }
 void fromstring( std::string s, enum Init_W_Type &e )
 {
@@ -379,7 +358,7 @@ using namespace detail;
         IO(optimizeLU_epoch); \
         IO_AS(bool,uint32_t,remove_constraints); \
         IO_AS(bool,uint32_t,remove_class_constraints); \
-        IO_enum(reweight_lambda); \
+        IO_AS(bool,uint32_t,adjust_C); \
         IO_enum(reorder_type); \
         IO_AS(bool,uint32_t,ml_wt_by_nclasses); \
         IO_AS(bool,uint32_t,ml_wt_class_by_nclasses); \

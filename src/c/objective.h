@@ -24,6 +24,7 @@ namespace mcsolver_detail{
     // it does not require the entire projection vector
     double calculate_ex_objective_hinge(std::size_t i, double proj, const SparseMb& y,
 					const Eigen::VectorXi& nclasses,
+					const Eigen::VectorXd& inside_weight, const Eigen::VectorXd& outside_weight,
 					const std::vector<int>& sorted_class,
 					const std::vector<int>& class_order,
 					const Eigen::VectorXd& sortedLU,
@@ -51,6 +52,7 @@ namespace mcsolver_detail{
 
     double calculate_objective_hinge(const Eigen::VectorXd& projection, const SparseMb& y,
 				     const Eigen::VectorXi& nclasses,
+				     const Eigen::VectorXd& inside_weight, const Eigen::VectorXd& outside_weight,
 				     const std::vector<int>& sorted_class,
 				     const std::vector<int>& class_order,
 				     const double norm, const Eigen::VectorXd& sortedLU,
@@ -62,6 +64,7 @@ namespace mcsolver_detail{
 
     double calculate_objective_hinge(const Eigen::VectorXd& projection, const SparseMb& y,
 				     const Eigen::VectorXi& nclasses,
+				     const Eigen::VectorXd& inside_weight, const Eigen::VectorXd& outside_weight,
 				     const std::vector<int>& sorted_class,
 				     const std::vector<int>& class_order,
 				     const double norm, const Eigen::VectorXd& sortedLU,

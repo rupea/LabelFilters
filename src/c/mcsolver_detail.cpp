@@ -40,7 +40,8 @@ namespace mcsolver_detail{
   // ********************************
   // Compute the means of the classes of the projected data
   void proj_means(VectorXd& means, VectorXi const& nc,
-		  VectorXd const& projection, SparseMb const& y)
+		  VectorXd const& projection, SparseMb const& y, 
+		  const param_struct& params, boolmatrix const& filtered)
   {
     size_t noClasses = y.cols();
     size_t n = projection.size();
@@ -54,13 +55,18 @@ namespace mcsolver_detail{
 	    if (it.value())
 	      {
 		c = it.col();
-		means(c)+=projection.coeff(i);
+		if (!params.remove_class_constraints || !(filtered.get(i,c)))
+		  {	    		    
+		    means(c)+=projection.coeff(i);
+		  }
 	      }
 	  }
       }
     for (k = 0; k < noClasses; k++)
       {
-	nc(k)?means(k) /= nc(k):0.0;
+	// if there are no examples of a ceratin class then the order does not matter 
+	// becaues L and U will be set at high/low value. 
+	nc(k)?means(k) /= nc(k):0.0; 
       }
   }
 

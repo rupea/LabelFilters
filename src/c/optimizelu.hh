@@ -20,6 +20,7 @@ namespace mcsolver_detail
 		  const VectorXd& projection, const SparseMb& y,
 		  const vector<int>& class_order, const vector<int>& sorted_class,
 		  const VectorXd& wc, const VectorXi& nclasses,
+		  const VectorXd& inside_weight, const VectorXd& outside_weight,		  
 		  const boolmatrix& filtered,
 		  const double C1, const double C2,
 		  const param_struct& params);

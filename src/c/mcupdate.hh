@@ -51,6 +51,7 @@ namespace mcsolver_detail
 			  const VectorXd& proj, const VectorXsz& index,
 			  const SparseMb& y, const VectorXi& nclasses,
 			  const int maxclasses,
+			  const VectorXd& inside_weight, const VectorXd& outside_weight,
 			  const vector<int>& sorted_class,
 			  const vector<int>& class_order,
 			  const VectorXd& sortedLU,
@@ -65,6 +66,7 @@ namespace mcsolver_detail
 					 const double proj, const size_t i,
 					 const SparseMb& y, const VectorXi& nclasses,
 					 const int maxclasses,
+					 const VectorXd& inside_weight, const VectorXd& outside_weight,
 					 const vector<int>& sorted_class,
 					 const vector<int>& class_order,
 					 const VectorXd& sortedLU,
@@ -79,6 +81,7 @@ namespace mcsolver_detail
 			       const double proj, const size_t i,
 			       const SparseMb& y, const VectorXi& nclasses,
 			       int maxclasses,
+			       const VectorXd& inside_weight, const VectorXd& outside_weight,
 			       const vector<int>& sorted_class,
 			       const vector<int>& class_order,
 			       const boolmatrix& filtered,
@@ -93,6 +96,7 @@ namespace mcsolver_detail
 						 const double proj, const size_t i,
 						 const SparseMb& y, const VectorXi& nclasses,
 						 int maxclasses,
+						 const VectorXd& inside_weight, const VectorXd& outside_weight,
 						 const vector<int>& sorted_class,
 						 const vector<int>& class_order,
 						 const VectorXd& sortedLU,
@@ -109,6 +113,7 @@ namespace mcsolver_detail
 				       const double proj, const size_t i,
 				       const SparseMb& y, const VectorXi& nclasses,
 				       int maxclasses,
+				       const VectorXd& inside_weight, const VectorXd& outside_weight,
 				       const vector<int>& sorted_class,
 				       const vector<int>& class_order,
 				       const boolmatrix& filtered,
@@ -129,6 +134,7 @@ namespace mcsolver_detail
 			const double C1, const double C2, const double lambda,
 			const unsigned long t, const double eta_t,
 			const size_t n, const VectorXi& nclasses, const int maxclasses,
+			const VectorXd& inside_weight, const VectorXd& outside_weight,
 			const std::vector<int>& sorted_class, const std::vector<int>& class_order,
 			const boolmatrix& filtered,
 			const int sc_chunks, const int sc_chunk_size, const int sc_remaining,
@@ -169,11 +175,13 @@ namespace mcsolver_detail
 	    ? compute_single_w_gradient_size_sample(sc_start, sc_start+sc_incr,
 						    sample, proj, i,
 						    y, nclasses, maxclasses,
+						    inside_weight, outside_weight,
 						    sorted_class, class_order,
 						    sortedLU, filtered, C1, C2, params)
 	    : compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
 					     proj, i,
 					     y, nclasses, maxclasses,
+					     inside_weight, outside_weight,
 					     sorted_class, class_order,
 					     sortedLU, filtered, C1, C2, params) );
       }
@@ -204,11 +212,13 @@ namespace mcsolver_detail
 							sample,
 							new_proj, i,
 							y, nclasses, maxclasses,
+							inside_weight, outside_weight,
 							sorted_class, class_order,
 							sortedLU, filtered, C1, C2, params)
 		: compute_single_w_gradient_size(sc_start, sc_start+sc_incr,
 						 new_proj, i,
 						 y, nclasses, maxclasses,
+						 inside_weight, outside_weight,
 						 sorted_class, class_order,
 						 sortedLU, filtered, C1, C2, params) );
 	  }
@@ -247,13 +257,16 @@ namespace mcsolver_detail
 	    update_single_sortedLU_sample(sortedLU, sc_start, sc_start+sc_incr,
 					  sample, new_proj, i,
 					  y, nclasses, maxclasses,
+					  inside_weight, outside_weight,
 					  sorted_class, class_order,
 					  filtered, C1, C2, eta_t, params);
 	  }
 	else
 	  {
 	    update_single_sortedLU(sortedLU, sc_start, sc_start+sc_incr, new_proj, i,
-				   y, nclasses, maxclasses, sorted_class, class_order,
+				   y, nclasses, maxclasses, 
+				   inside_weight, outside_weight,
+				   sorted_class, class_order,
 				   filtered, C1, C2, eta_t, params);
 	  }
       }
@@ -269,6 +282,7 @@ namespace mcsolver_detail
 			    const unsigned long t, const double eta_t,
 			    const size_t n, const size_t batch_size,
 			    const VectorXi& nclasses, const int maxclasses,
+			    const VectorXd& inside_weight, const VectorXd& outside_weight,
 			    const std::vector<int>& sorted_class, const std::vector<int>& class_order,
 			    const boolmatrix& filtered,
 			    const size_t sc_chunks, const size_t sc_chunk_size, const size_t sc_remaining,
@@ -314,6 +328,7 @@ namespace mcsolver_detail
 			    idx_start, idx_start+idx_incr,
 			    sc_start, sc_start+sc_incr,
 			    proj, index, y, nclasses, maxclasses,
+			    inside_weight, outside_weight,
 			    sorted_class, class_order,
 			    sortedLU, filtered,
 			    C1, C2, params);
@@ -373,6 +388,7 @@ namespace mcsolver_detail
 			const double C1, const double C2, const double lambda,
 			const unsigned long t, const size_t nTrain,
 			const VectorXi& nclasses, const int maxclasses,
+			const VectorXd& inside_weight, const VectorXd& outside_weight,
 			const boolmatrix& filtered,
 			MCupdateChunking const& updateSettings,
 			param_struct const& params)
@@ -409,7 +425,9 @@ namespace mcsolver_detail
 	  mcsolver_detail::update_safe_SGD(w, sortedLU,
 					   x, y, xSqNorms,
 					   C1, C2, lambda, t, eta_t, nTrain, // nTrain is just x.rows()
-					   nclasses, maxclasses, sorted_class, class_order, filtered,
+					   nclasses, maxclasses,
+					   inside_weight, outside_weight,
+					   sorted_class, class_order, filtered,
 					   sc_chunks, sc_chunk_size, sc_remaining,
 					   params);
 	}
@@ -417,7 +435,9 @@ namespace mcsolver_detail
 	{
 	  mcsolver_detail::update_minibatch_SGD(w, sortedLU,
 						x, y, C1, C2, lambda, t, eta_t, nTrain, batch_size,
-						nclasses, maxclasses, sorted_class, class_order, filtered,
+						nclasses, maxclasses, 
+						inside_weight, outside_weight,
+						sorted_class, class_order, filtered,
 						sc_chunks, sc_chunk_size, sc_remaining,
 						idx_chunks, idx_chunk_size, idx_remaining,
 						idx_locks, sc_locks,

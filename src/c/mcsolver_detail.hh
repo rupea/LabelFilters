@@ -23,7 +23,8 @@ double set_eta(param_struct const& params, size_t const t, double const lambda);
 // ********************************
 // Compute the means of the classes of the projected data
 void proj_means(VectorXd& means, VectorXi const& nc,
-		VectorXd const& projection, SparseMb const& y);
+		VectorXd const& projection, SparseMb const& y,
+		const param_struct& params, boolmatrix const& filtered);
 
 //*****************************************
 // Update the filtered constraints

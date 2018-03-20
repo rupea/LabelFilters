@@ -64,13 +64,12 @@ namespace opt {
 	   , "Permutation re-ordering: PROJ mean of projected instances | MID range midpoints.")
 	  ("treport", value<uint32_t>(), "report the objective value every treport iteratoins. 0 for no reporting. [maxiter/10]")
 	  ("avgstart", value<uint32_t>(), "averaging start iteration [max(nExamples,dim)]")
-	  //	  ("tavg", value<uint32_t>()->default_value(p.report_avg_epoch), "period for reports about avg, expensive")
-	  ("reweight", value<std::string>()->default_value(tostring(p.reweight_lambda))
-	   , "NONE | LAMBDA | ALL lambda reweighting method")
 	  ("remove_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_constraints)
-	   , "after each projection, remove constraints involving labels already eliminated for the example")
-	  //	  ("remove_class", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
-	  //	   , "after each projection, remove already-separated classes(?)")
+	   , "after each projection, remove constraints involving incorrect labels already eliminated for the example")
+	  ("remove_class_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
+	   , "after each projection, remove constraints involving correct labels already eliminated for the example")
+	  ("adjustC", value<bool>()->implicit_value(true)->default_value(p.adjust_C)
+	   , "adjust C1 and C2 to acount for the removed constraints")
 	  //	  ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "UNTESTED")
 	  //	  ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "UNTESTED")
             ;
@@ -131,12 +130,13 @@ namespace opt {
 	  parms.avg_epoch	        =vm["avgstart"].as<uint32_t>();
 	  parms.default_avg_epoch = false;
 	}      
-      fromstring( vm["reweight"].as<string>(), parms.reweight_lambda );
+
+      parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // true;
+      parms.remove_class_constraints =vm["remove_class_constraints"].as<bool>(); // false;
+      parms.adjust_C = vm["adjustC"].as<bool>(); //true
+
       //parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
       //parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
-
-      parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // false;
-      //parms.remove_class_constraints 	=vm["remove_class"].as<bool>(); // false;
       
       parms.verbose = vm["verbose"].as<int>();
 

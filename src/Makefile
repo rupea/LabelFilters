@@ -87,6 +87,10 @@ lua: libmcfilter | libmcfilter
 	$(MAKE) -C lua-api $(JOBS)
 libmcfilter:
 	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile lib
+mcsolve: 
+	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile mcsolve
+mcproj:
+	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile mcproj
 
 #standalone: 
 #	$(MAKE) -C $(BINDIR) -f../c/Makefile $(MAKECMDGOALS)

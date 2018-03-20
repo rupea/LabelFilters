@@ -4,23 +4,25 @@
 #include "typedefs.h"
 #include "parameter.h"
 #include "WeightVector.h"
+#include "boolmatrix.h"
 #include <vector>
-
-class boolmatrix;
 
 namespace mcsolver_detail{
 
   using namespace Eigen;
 
   // ************************************
-  // Get the number of examples in each class
+  // Get the number of classes for each examples, 
+  // and the weight of each example for the inside interval constraints and 
+  // for the outside interval constraints.
+  // These quantities do not change if constraints are filtered. 
 
-  void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y);
+  void init_nclasses(VectorXi& nclasses, VectorXd& inside_weight, VectorXd& outside_weight, const SparseMb& y, const param_struct& params);
   
   // ************************************
-  // Get the sum of the weight of all examples in each class
-  
-  void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, 
+  // Get the number of examples in each class and the sum of the weight of all examples in each class
+  // if remove_class_constraints is on then examples for which the class has been filtered are not counted  
+  void init_nc(VectorXi& nc, VectorXd& wc, const VectorXd& inside_weight, const SparseMb& y, 
 	       const param_struct& params, boolmatrix const& filtered);
 
   
@@ -35,7 +37,7 @@ namespace mcsolver_detail{
 			   const int projection_dim, const bool orthogonal_weights = false);
   
   template<typename EigenType>
-  void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y, const VectorXi& nc, const int c1, const int c2)
+  void difference_means(VectorXd& difference, const EigenType& x, const SparseMb& y, const VectorXi& nc, const int c1, const int c2, const param_struct& params, boolmatrix const& filtered) 
   {
     assert(nc(c1) != 0);
     assert(nc(c2) != 0);
@@ -47,14 +49,20 @@ namespace mcsolver_detail{
     double wt2 = 1.0 / nc(c2);
     for (size_t row=0;row<n; ++row) {
       if (y.coeff(row,c1)) {
-	typename EigenType::InnerIterator it(x,row);
-	for (; it; ++it)
-	  difference.coeffRef(it.col())+=it.value()*wt1;
+	if (!params.remove_class_constraints || !(filtered.get(row,c1)))
+	  {	    
+	    typename EigenType::InnerIterator it(x,row);
+	    for (; it; ++it)
+	      difference.coeffRef(it.col())+=it.value()*wt1;
+	  }
       }
       if (y.coeff(row,c2)) {
-	typename EigenType::InnerIterator it(x,row);
-	for (; it; ++it)
-	  difference.coeffRef(it.col())-=it.value()*wt2;
+	if (!params.remove_class_constraints || !(filtered.get(row,c2)))
+	  {	    	
+	    typename EigenType::InnerIterator it(x,row);
+	    for (; it; ++it)
+	      difference.coeffRef(it.col())-=it.value()*wt2;
+	  }
       }
     }
   }
@@ -72,7 +80,7 @@ namespace mcsolver_detail{
    * are \b not yet well-separated. */
   void init_w( WeightVector& w, DenseM const& weights,
 	       EigenType const& x, SparseMb const& y, VectorXi const& nc,
-	       int const projection_dim, param_struct const& params)            
+	       int const projection_dim, param_struct const& params, boolmatrix const& filtered)            
   {
     using namespace std;
     
@@ -127,7 +135,7 @@ namespace mcsolver_detail{
       ++tries;
       }while( (nc(c2) == 0 || c2 == c1) && tries < 50 );
       if( nc(c1) > 0 && nc(c2) > 0 && c2 != c1 ){
-	difference_means(init,x,y,nc,c1,c2);
+	difference_means(init,x,y,nc,c1,c2, params, filtered);
 	init.normalize();
 	break;
       }

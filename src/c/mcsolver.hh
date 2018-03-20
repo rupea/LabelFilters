@@ -30,7 +30,8 @@
     if(t4.finite_diff_test){            /* perform finite differences test */ \
         for (size_t fdtest=0; fdtest<params.no_finite_diff_tests; ++fdtest) { \
             size_t idx = ((size_t) rand_r(&seed)) % n; \
-            finite_diff_test( w, x, idx, y, nclasses, maxclasses, luPerm.perm/*sorted_class*/, \
+            finite_diff_test( w, x, idx, y, nclasses, maxclasses, inside_weight, outside_weight, \
+			      luPerm.perm/*sorted_class*/, \
                               luPerm.rev, luPerm.sortlu, filtered, C1, C2, params); \
         } \
     } \
@@ -327,20 +328,22 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
   //keep track of which classes have been elimninated for a particular example
   boolmatrix filtered(nTrain,nClass);    
-  size_t no_filtered=0;
-  VectorXi nc;       // nc[class]         = number of training examples of each class
   VectorXi nclasses; // nclasses[example] = number of classes assigned to each training example
-  mcsolver_detail::init_nc(nc, nclasses, y);
+  VectorXd inside_weight; // inside_weight[example] = weight of this example in the inside interval constraints 
+  VectorXd outside_weight; // inside_weight[example] = weight of this example in the outside interval constraints 
+  mcsolver_detail::init_nclasses(nclasses, inside_weight, outside_weight, y, params);
   int maxclasses = nclasses.maxCoeff(); // the maximum number of classes an example might have
   // Suppose example y[i] --> weight of 1.0, or if params.ml_wt_class_by_nclasses, 1.0/nclasses[i]
   // Then what is total weight of each class? (used for optimizeLU)
+  VectorXi nc;       // nc[class]         = number of training examples of each class
   VectorXd wc; // wc[class] = weight of each class (= nc[class] if params.ml_wt_class_by_nclasses==false)
-  mcsolver_detail::init_wc(wc, nclasses, y, params, filtered);   // wc is used if optimizeLU_epoch>0
+  mcsolver_detail::init_nc(nc, wc, inside_weight, y, params, filtered);   // wc is used if optimizeLU_epoch>0
   VectorXd xSqNorms;
   if (params.update_type == SAFE_SGD) mcsolver_detail::calc_sqNorms( x, xSqNorms ); 
     
-  unsigned long const total_constraints = nTrain*nClass
-    - (1-params.remove_class_constraints) * nc.sum();
+  size_t total_constraints = nTrain * nClass;
+  size_t total_inside_constraints = nc.sum();
+  size_t total_outside_constraints = total_constraints - total_inside_constraints;
     
   double lambda = 1.0/params.C2;
   double C1 = params.C1/params.C2;
@@ -357,7 +360,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       switch (reorder){
       case REORDER_PROJ_MEANS:
       {
-	mcsolver_detail::proj_means(means, nc, xwProj.avg(), y); // if avg has not started ,xwProj silently uses non-averaged w
+	mcsolver_detail::proj_means(means, nc, xwProj.avg(), y, params, filtered); // if avg has not started ,xwProj silently uses non-averaged w
 	break;
       }
       case REORDER_RANGE_MIDPOINTS:
@@ -373,7 +376,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   auto ObjectiveHinge = [&] ( ) -> double
     {
       luPerm.mkok_sortlu();
-      return mcsolver_detail::calculate_objective_hinge( xwProj.std(), y, nclasses, luPerm.perm, luPerm.rev,
+      return mcsolver_detail::calculate_objective_hinge( xwProj.std(), y, 
+							 nclasses, inside_weight, outside_weight, 
+							 luPerm.perm, luPerm.rev,
 							 w.norm(), luPerm.sortlu, filtered,
 							 lambda, C1, C2, params); 
     };
@@ -381,7 +386,9 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   auto ObjectiveHingeAvg = [&] ( ) -> double
     {
       luPerm.mkok_sortlu_avg();
-      return mcsolver_detail::calculate_objective_hinge( xwProj.avg(), y, nclasses, luPerm.perm, luPerm.rev,
+      return mcsolver_detail::calculate_objective_hinge( xwProj.avg(), y,
+							 nclasses, inside_weight, outside_weight,
+							 luPerm.perm, luPerm.rev,
 							 w.norm_avg(), luPerm.sortlu_avg, filtered,
 							 lambda, C1, C2, params); 
     };
@@ -389,12 +396,12 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   auto OptimizeLU = [&] () -> void
     {					  
       /* changes l, u, invalidates sortlu */	
-      luPerm.optimizeLU( xwProj.std(), y, wc, nclasses, filtered, C1, C2, params); 
+      luPerm.optimizeLU( xwProj.std(), y, wc, nclasses, inside_weight, outside_weight, filtered, C1, C2, params); 
     };
   auto OptimizeLU_avg =[&] () -> void
     {
       /* changes {l,u}_avg instead of {l,u}. Invalidates sortlu_avg */ 
-      luPerm.optimizeLU_avg( xwProj.avg(), y, wc, nclasses, filtered, C1, C2, params);
+      luPerm.optimizeLU_avg( xwProj.avg(), y, wc, nclasses, inside_weight, outside_weight, filtered, C1, C2, params);
     };
 
   auto RemoveConstraints = [&] () -> void
@@ -402,46 +409,50 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       // should we do this in parallel?
       // the main problem is that the bitset is not thread safe (changes to one bit can affect changes to other bits)
       // should update to use the filter class
-      // things will not work correctly with remove_class_constrains on. We need to update wc, nclass
-      //       and maybe nc
-      // check if nclass and nc are used for anything else than weighting examples belonging
-      //       to multiple classes
 
       // if averagin has not started this will be using the non-averaged w,l and u
       luPerm.mkok_lu_avg(); // should be OK, but just in case
-      mcsolver_detail::update_filtered(filtered,  /*inputs:*/ xwProj.avg(), luPerm.l_avg, luPerm.u_avg
-				       , y, params.remove_class_constraints);
+      mcsolver_detail::update_filtered(filtered, /*inputs:*/ xwProj.avg(), luPerm.l_avg, luPerm.u_avg,
+				       y, params.remove_class_constraints);
       
-      no_filtered = filtered.count(); 
-      // recalculate wc if class constraints have been removed
+      // recalculate nc, wc if class constraints have been removed
       if (params.remove_class_constraints)
 	{
-	  mcsolver_detail::init_wc(wc, nclasses, y, params, filtered);
+	  mcsolver_detail::init_nc(nc, wc, inside_weight, y, params, filtered);
 	}
+
+      size_t no_filtered = filtered.count(); 
+      size_t filtered_inside = params.remove_class_constraints?total_inside_constraints - nc.sum():0;
+      size_t filtered_outside = no_filtered - filtered_inside;
 
       if (params.verbose >= 1)
 	{
 	  cout<<"Filter["<<filtered.rows()<<"x"<<filtered.cols()<<"] removed "<<no_filtered
 	      <<" of "<<total_constraints<<" constraints"<<endl;
 	}
-      if( no_filtered > total_constraints )
+      if( filtered_inside > total_inside_constraints || filtered_outside > total_outside_constraints )
 	throw std::runtime_error(" programmer error: removed more constraints than exist?");
-      if( no_filtered == total_constraints )
+      if( filtered_outside == total_outside_constraints || filtered_inside == total_inside_constraints )
 	{
 	  cerr<<setw(20)<<""<<"  CANNOT CONTINUE, no more constraints left\n"
 	    "  Stopping at "<<prjax+1U<< " filters." << endl;
+	  if (filtered_inside == total_inside_constraints) {
+	    cerr << "All classes have been eliinated for all examples. Increase C1!" << endl;
+	  }
 	  setNProj(prjax+1U, true, true);
 	  return;
 	}
-	
-      if (params.reweight_lambda != REWEIGHT_NONE)
+
+      if (params.adjust_C)
 	{
-	  long const no_remaining = (int)total_constraints - no_filtered;
-	  lambda = no_remaining*1.0/(total_constraints*params.C2);
-	  if (params.reweight_lambda == REWEIGHT_ALL)
-	    {
-	      C1 = params.C1*no_remaining*1.0/(total_constraints*params.C2);
-	    }
+	  size_t no_remaining= total_outside_constraints - filtered_outside;
+	  C2 = total_outside_constraints*params.C2*1.0/no_remaining;
+	  no_remaining = total_inside_constraints - filtered_inside;
+	  C1 = total_inside_constraints * params.C1 * 1.0 / no_remaining; 
+	  
+	  lambda = 1.0/C2;
+	  C1 /= C2;
+	  C2 = 1.0;
 	}
     };
 
@@ -474,7 +485,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       w.init(weights.col(prjax));
       xwProj.w_changed();  // projections of 'x' onto 'w' no longer valid
       if (params.reoptimize_LU) {
-	luPerm.init( xwProj.std(), y, nc );     // try to appease valgrind?
+	luPerm.init( xwProj.std(), y, params, filtered );     // try to appease valgrind?
 	luPerm.rank( GetMeans(params.reorder_type) );
 	OptimizeLU(); // w,projection,sort_order ----> luPerm.l,u
 	lower_bounds.col(prjax) = luPerm.l;
@@ -510,12 +521,12 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   assert(w.getAvg_t() == 0);
   for(; prjax < nProj; ++prjax)
     {
-      mcsolver_detail::init_w( w, weights, x, y, nc,  prjax, params);
+      mcsolver_detail::init_w( w, weights, x, y, nc,  prjax, params, filtered);
 	
       if (params.verbose >= 1)
 	cout<<" start projection "<<prjax<<" w.norm="<<w.norm() << endl;
       xwProj.w_changed();                     // invalidate w-dependent stuff (projections)
-      luPerm.init( xwProj.std(), y, nc );     // std because w can't have started averaging yet
+      luPerm.init( xwProj.std(), y, params, filtered);     // std because w can't have started averaging yet
       luPerm.rank( GetMeans(params.reorder_type) );
       if (params.optimizeLU_epoch > 0) { 
 	OptimizeLU();
@@ -545,7 +556,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	// --> the ONLY place where 'w' is modified
 
 	mcsolver_detail::MCupdate::update(w, luPerm, eta_t,   /*R/O:*/x, y, xSqNorms, C1, C2, lambda, t,
-				nTrain, nclasses, maxclasses, filtered, updateSettings, params);
+					  nTrain, nclasses, maxclasses, inside_weight, outside_weight,
+					  filtered, updateSettings, params);
 	// update 'w' ==> projections of raw 'x' data (projection_avg & projection) invalid.
 	xwProj.w_changed();
 	if(t4.reorder) {

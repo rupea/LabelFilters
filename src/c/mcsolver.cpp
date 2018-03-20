@@ -138,12 +138,11 @@ void MCpermState::reset()
   ok_sortlu_avg = false;
 
 }
-void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const& y, VectorXi const& nc )
+void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const& y,
+			const param_struct& params, boolmatrix const& filtered)
 {
   size_t const nClasses = y.cols();
   size_t const nEx      = y.rows();
-  //l.conservativeResize( nClasses );
-  //u.conservativeResize( nClasses );
   assert( l.size() == (int)nClasses );
   assert( u.size() == (int)nClasses );
   assert( projection.size() == (int)nEx );
@@ -154,9 +153,12 @@ void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const
       if (it.value()) {
 	size_t const c = it.col();
 	assert( c < nClasses );
-	double const pr = projection.coeff(i);
-	l.coeffRef(c) = min(pr, l.coeff(c));
-	u.coeffRef(c) = max(pr, u.coeff(c));
+	if (!params.remove_class_constraints || !(filtered.get(i,c)))
+	  {	    
+	    double const pr = projection.coeff(i);
+	    l.coeffRef(c) = min(pr, l.coeff(c));
+	    u.coeffRef(c) = max(pr, u.coeff(c));
+	  }
       }
     }
   }
@@ -173,13 +175,15 @@ void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const
 }
 
 void MCpermState::optimizeLU( VectorXd const& projection, SparseMb const& y, VectorXd const& wc,
-                              VectorXi const& nclasses, boolmatrix const& filtered,
+                              VectorXi const& nclasses, 
+			      VectorXd const& inside_weight, VectorXd const& outside_weight,
+			      boolmatrix const& filtered,
                               double const C1, double const C2,
                               param_struct const& params )
 {
   mcsolver_detail::optimizeLU( l, u, // <--- outputs
 			       projection, y, rev/*class_order*/, perm/*sorted_class*/, wc,
-			       nclasses, filtered, C1, C2, params );
+			       nclasses, inside_weight, outside_weight, filtered, C1, C2, params );
   ok_lu = true;
   ok_sortlu = false;
   // reset accumulation since changes to lu do not come from a gradient step
@@ -192,13 +196,15 @@ void MCpermState::optimizeLU( VectorXd const& projection, SparseMb const& y, Vec
 }
 
 void MCpermState::optimizeLU_avg( VectorXd const& projection_avg, SparseMb const& y, VectorXd const& wc,
-                                  VectorXi const& nclasses, boolmatrix const& filtered,
+                                  VectorXi const& nclasses, 
+				  VectorXd const& inside_weight, VectorXd const& outside_weight,
+				  boolmatrix const& filtered,
                                   double const C1, double const C2,
                                   param_struct const& params )
 {
   mcsolver_detail::optimizeLU( l_avg, u_avg, // <--- outputs
 			       projection_avg, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
-			       nclasses, filtered, C1, C2, params );
+			       nclasses, inside_weight, outside_weight, filtered, C1, C2, params );
   ok_lu_avg = true;
   ok_sortlu_avg = false;
 }

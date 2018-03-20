@@ -20,7 +20,8 @@ namespace mcsolver_detail{
   void optimizeLU(VectorXd& l, VectorXd& u,
 		  const VectorXd& projection, const SparseMb& y,
 		  const vector<int>& class_order, const vector<int>& sorted_class,
-		  const VectorXd& wc, const VectorXi& nclasses,
+		  const VectorXd& wc, const VectorXi& nclasses, 
+		  const VectorXd& inside_weight, const VectorXd& outside_weight,
 		  const boolmatrix& filtered,
 		  const double C1, const double C2,
 		  const param_struct& params)
@@ -93,7 +94,7 @@ namespace mcsolver_detail{
 #endif
     
 #if MCTHREADS
-#pragma omp parallel default(none) shared(l, u, allproj, indices, filtered, y, class_order, sorted_class, wc, nclasses, params, gradu, gradl)
+#pragma omp parallel default(none) shared(l, u, allproj, indices, filtered, y, class_order, sorted_class, wc, nclasses, inside_weight, outside_weight, params, gradu, gradl)
 #endif
     {
 #if MCTHREADS
@@ -108,8 +109,7 @@ namespace mcsolver_detail{
 	  if (idx >= n) { plus = true; idx -= n; }
 	  
 	  if (plus) { // only the upper bounds of the classes of this example are affected
-	    double const class_weight = (params.ml_wt_class_by_nclasses
-					 ? C1 / nclasses.coeff(idx): C1);
+	    double const class_weight = C1*inside_weight.coeff(idx);
 	    for (SparseMb::InnerIterator it(y,idx); it; ++it) {
 	      //assert( it.value() ); if (it.value()) ...
 	      int const cs = it.col();                // raw [unsorted] class
@@ -124,8 +124,7 @@ namespace mcsolver_detail{
 	    if (classes.size() == 0) continue;
 	    if (classes.back() == 0) continue;
 	    
-	    double const other_weight = (params.ml_wt_by_nclasses
-					 ? C2 / nclasses.coeff(idx): C2);
+	    double const other_weight = C2*outside_weight.coeff(idx);
 	    // how many classes of the curent instance should be ranked higher 
 	    //  times the weight of each
 	    //  if each class has its own weight will need to
@@ -172,8 +171,7 @@ namespace mcsolver_detail{
 	  if (idx >= n) { plus = true; idx -= n; }
 	  
 	  if (!plus){ // only the lower bounds of the classes of this example are affected
-	    double const class_weight = (params.ml_wt_class_by_nclasses
-					 ? C1 / nclasses.coeff(idx): C1);
+	    double const class_weight = inside_weight.coeff(idx)*C1;
 	    for (SparseMb::InnerIterator it(y,idx); it; ++it) {
 	      //assert( it.value() ); //if (it.value())
 	      int cs = it.col();
@@ -193,8 +191,7 @@ namespace mcsolver_detail{
 	    if (n_active <= 0)
 	      continue;
 	    
-	    double const other_weight = (params.ml_wt_by_nclasses
-					 ? C2 / nclasses.coeff(idx): C2);
+	    double const other_weight = outside_weight.coeff(idx)*C2;
 #if BOUNDGRAD_THREAD && MCTHREADS && defined(_OPENMP)
 	    // make sure there is enough work to do to paralelize this
 	    int n_chunks = n_active/min_chunk_size + 1;

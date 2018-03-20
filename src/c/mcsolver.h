@@ -135,7 +135,8 @@ public:
      *   - While doing so, return a \c means vector according to \c reorder
      *   - \c reorder == \c REORDER_AVG_PROJ_MEANS is treated as \c REORDER_PROJ_MEANS
      */
-    void init( /* inputs: */ Eigen::VectorXd const& projection, SparseMb const& y, Eigen::VectorXi const& nc );
+    void init( /* inputs: */ Eigen::VectorXd const& projection, SparseMb const& y,
+	       const param_struct& params, boolmatrix const& filtered);
 
     /** If restarting from soln file, can also explicitly set initial state */
     template< typename EIGENTYPE1, typename EIGENTYPE2 >
@@ -149,12 +150,16 @@ public:
 
     /** optimal settings for {l,u} */
     void optimizeLU( Eigen::VectorXd const& projection, SparseMb const& y, Eigen::VectorXd const& wc,
-                     Eigen::VectorXi const& nclasses, boolmatrix const& filtered,
+                     Eigen::VectorXi const& nclasses, 
+		     Eigen::VectorXd const& inside_weight, Eigen::VectorXd const& outside_weight,
+		     boolmatrix const& filtered,
                      double const C1, double const C2,
                      param_struct const& params );
     /** optimal settings for {l,u}_avg */
     void optimizeLU_avg( Eigen::VectorXd const& projection_avg, SparseMb const& y, Eigen::VectorXd const& wc,
-                         Eigen::VectorXi const& nclasses, boolmatrix const& filtered,
+                         Eigen::VectorXi const& nclasses, 
+			 Eigen::VectorXd const& inside_weight, Eigen::VectorXd const& outside_weight,
+			 boolmatrix const& filtered,
                          double const C1, double const C2,
                          param_struct const& params );
     //@}

@@ -49,11 +49,8 @@
  *                          does not remove constraints involving the example lables
  *                          default 1 (true)
  *   remove_class_constraints — default 0  -- to be removed. Code brakes if it is turned on
- *   reweight_lambda — increase parameter C2 to compensate for constraints eliminated
- *                        by a previous filter.
- * 			     - REWEIGHT_NONE: do not increase C2
- *                           - REWEIGHT_LAMBDA: increase both C1 and C2
- *                           - REWEIGHT_ALL: increase only C2 (default)
+ *   adjust_C — increase parameters C1 and C2 to compensate for constraints removed 
+ *                        by a previous filter (true).
  *
  *   ml_wt_by_nclasses — weight example by 1/number_of_labels_it_has for constraints 
  *                         on intervals on other labels. default 0(false)
@@ -103,12 +100,6 @@ enum Reorder_Type
     REORDER_RANGE_MIDPOINTS ///< reorder by the mean of the range of the class (i.e. (u+l)/2 )
 };
 
-enum Reweight_Type
-{
-    REWEIGHT_NONE,      ///< do not diminish any
-    REWEIGHT_LAMBDA,    ///< diminish lambda only [*]
-    REWEIGHT_ALL        ///< diminish lambda and C1 ", increase C2
-};
 
 enum Init_W_Type
   {
@@ -124,13 +115,11 @@ enum Init_W_Type
 std::string tostring( enum Eta_Type const e );
 std::string tostring( enum Update_Type const e );
 std::string tostring( enum Reorder_Type const e );
-std::string tostring( enum Reweight_Type const e );
 std::string tostring( enum Init_W_Type const e );
 /** throw runtime_error if invalid string. Matches on some substring. */
 void fromstring( std::string s, enum Eta_Type &e );
 void fromstring( std::string s, enum Update_Type &e );
 void fromstring( std::string s, enum Reorder_Type &e );
-void fromstring( std::string s, enum Reweight_Type &e );
 void fromstring( std::string s, enum Init_W_Type &e );
 /** ostreams write enums as strings. XXX Why do these need templating? */
 template<typename OSTREAM> inline
@@ -139,8 +128,6 @@ template<typename OSTREAM> inline
 OSTREAM& operator<<(OSTREAM& os, enum Update_Type const e) { return os<<tostring(e); }
 template<typename OSTREAM> inline
 OSTREAM& operator<<(OSTREAM& os, enum Reorder_Type const e) { return os<<tostring(e); }
-template<typename OSTREAM> inline
-OSTREAM& operator<<(OSTREAM& os, enum Reweight_Type const e) { return os<<tostring(e); }
 template<typename OSTREAM> inline
 OSTREAM& operator<<(OSTREAM& os, enum Init_W_Type const e) { return os<<tostring(e); }
 
@@ -178,7 +165,7 @@ typedef struct
   uint32_t optimizeLU_epoch; ///< number of iterations between full optimizations of the lower and upper bounds
   bool remove_constraints; ///< whether to remove the constraints for instances that fall outside the class boundaries in previous projections.
   bool remove_class_constraints; ///< whether to remove the constraints for examples that fell outside their own class boundaries in previous projections.
-  Reweight_Type reweight_lambda; ///< whether to diminish lambda (increase C1 and C2) as constraints are eliminated;
+  bool adjust_C; ///< whether to increase C1 and C2 as constraints are eliminated;
   Reorder_Type reorder_type; ///< whether to rank the classes by the mean of the projected examples or by the midpoint \c (u+l)/2 of its [l,u] interval
   bool ml_wt_by_nclasses;  ///< UNTESTED - whether to weight an example by the number of classes it belongs to when considering other class contraints
   bool ml_wt_class_by_nclasses; ///< UNTESTED - whether to weight an example by the number of classes it belongs to when considering its class contraints
@@ -241,7 +228,7 @@ inline param_struct set_default_params()
   def.report_epoch=0;//1000000;
   def.default_avg_epoch = true; //flag that avg_epoch has not been initialized. Default depends on the data. Will be initialized by mcsolver::solve
   def.avg_epoch=0;
-  def.reweight_lambda = REWEIGHT_ALL; 
+  def.adjust_C = true; 
   def.remove_constraints = true;
   def.remove_class_constraints = false;
   def.ml_wt_by_nclasses = false;        // UNTESTED

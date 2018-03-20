@@ -79,68 +79,67 @@ namespace mcsolver_detail{
 
 
   // ************************************
-  // Get the number of examples in each class
-
-  void init_nc(VectorXi& nc, VectorXi& nclasses, const SparseMb& y)
+  // Get the number of classes for each examples, 
+  // and the weight of each example for the inside interval constraints and 
+  // for the outside interval constraints.
+  // These quantities do not change if constraints are filtered. 
+  void init_nclasses(VectorXi& nclasses, VectorXd& inside_weight, VectorXd& outside_weight, const SparseMb& y, const param_struct& params)
   {
-    int noClasses = y.cols();
     int n = y.rows();
-    nc.setZero(noClasses);
     nclasses.setZero(n);
+    inside_weight.setZero(n);
+    outside_weight.setZero(n);
     for (int i=0;i<n;i++) {
       for (SparseMb::InnerIterator it(y,i);it;++it) {
 	if (it.value()) {
-	  ++nc.coeffRef(it.col());
 	  ++nclasses.coeffRef(i);
 	}
       }
     }
-    ostringstream err;
-    // Until supported, check that all data is needed
-    // E.g. many places may divide by nc[i] or ...
     int nclassesZero = 0;
-    for (int i=0;i<n;i++) if( nclasses[i]==0 ) ++nclassesZero;
-    if(nclassesZero) err<<"\nWARNING: it seems "<<nclassesZero<<" examples have been assigned to no class at all";
-
-    int ncZero = 0;
-    int i0=0;
-    for (int i=0;i<noClasses;i++) if( nc[i]==0 ) {++ncZero; if(i0==0) i0=i;}
-    if(ncZero) err<<"\nWARNING: it seems "<<ncZero<<" classes have been assigned to NO training examples (nc["<<i0<<"]==0)";
-
-    if(err.str().size()){
-      err<<"\n\tPlease check whether code should support this, since"
-	 <<"\n\tboth nc[class] and nclasses[example] may be used as divisors"<<endl;
-      //throw runtime_error(err.str());
-    }
+    for (int i=0;i<n;i++)
+      {
+	if( nclasses[i]==0 )
+	  {
+	    ++nclassesZero;
+	    inside_weight.coeffRef(i) = 0.0;
+	    outside_weight.coeffRef(i) = 0.0;
+	  }
+	else
+	  {
+	    inside_weight.coeffRef(i) = params.ml_wt_class_by_nclasses?1.0/nclasses.coeff(i):1.0;
+	    outside_weight.coeffRef(i) = params.ml_wt_by_nclasses?1.0/nclasses.coeff(i):1.0;
+	  }
+      }
+    if(nclassesZero) std::cerr<<"WARNING: it seems "<<nclassesZero<<" examples have been assigned to no class at all. They will be ignored"<<endl;
   }
+ 
+
 
   // ************************************
-  // Get the sum of the weight of all examples in each class
-
-  void init_wc(VectorXd& wc, const VectorXi& nclasses, const SparseMb& y, const param_struct& params, boolmatrix const& filtered)
+  // Get the number of examples in each class and the sum of the weight of all examples in each class
+  // if remove_class_constraints is on then examples for which the class has been filtered are not counted
+  void init_nc(VectorXi& nc, VectorXd& wc, const VectorXd& inside_weight, const SparseMb& y, const param_struct& params, boolmatrix const& filtered)
   {
-    double ml_wt_class = 1.0;
     int noClasses = y.cols();
+    nc.setZero(noClasses);
     wc.setZero(noClasses);
     size_t n = y.rows();
-    if (nclasses.size() != n) {
+    if (inside_weight.size() != n) {
       throw runtime_error("init_wc has been called with vector nclasses of wrong size");
     }
     for (size_t i=0;i<n;i++) {
-      if (params.ml_wt_class_by_nclasses) {
-	ml_wt_class = 1.0/nclasses.coeff(i);
-      }
       for (SparseMb::InnerIterator it(y,i);it;++it) {
 	if (it.value()) {
 	  if (!params.remove_class_constraints || !(filtered.get(i,it.col())))
 	    {
-	      wc.coeffRef(it.col()) += ml_wt_class;
+	      ++nc.coeffRef(it.col());
+	      wc.coeffRef(it.col()) += inside_weight.coeff(i);
 	    }
 	}
       }
     }
   }
 
-
-
+  
 }

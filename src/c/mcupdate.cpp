@@ -115,6 +115,7 @@ void init_ordered_class_list_sample(int& left_classes, double& left_update,
 			  const VectorXd& proj, const VectorXsz& index,
 			  const SparseMb& y, const VectorXi& nclasses,
 			  const int maxclasses,
+			  const VectorXd& inside_weight, const VectorXd& outside_weight,		    
 			  const vector<int>& sorted_class,
 			  const vector<int>& class_order,
 			  const VectorXd& sortedLU,
@@ -143,10 +144,8 @@ void init_ordered_class_list_sample(int& left_classes, double& left_update,
 	tmp = proj.coeff(idx);
 	i=index.coeff(idx);
 
-	class_weight = C1;
-	if (params.ml_wt_class_by_nclasses) class_weight /= nclasses.coeff(i);
-	other_weight = C2;
-	if (params.ml_wt_by_nclasses) other_weight /= nclasses.coeff(i);
+	class_weight = C1 * inside_weight.coeff(i);
+	other_weight = C2 * outside_weight.coeff(i);
 
 	init_ordered_class_list(left_classes, left_update,
 				right_classes, right_update,
@@ -205,7 +204,7 @@ void init_ordered_class_list_sample(int& left_classes, double& left_update,
 	      {
 		if (left_classes && ((1 - *sortedLU_iter + tmp) > 0)) // I3 Condition w*x > l(cp) - 1
 		  {
-		    *multipliers_iter += left_update; // use the iterator for multiplier too ?
+		    *multipliers_iter += left_update; 
 		    *sortedLU_gradient_iter += left_update;
 		  }
 		sortedLU_iter++;
@@ -236,6 +235,7 @@ double compute_single_w_gradient_size (const int sc_start, const int sc_end,
 				       const double proj, const size_t i,
 				       const SparseMb& y, const VectorXi& nclasses,
 				       const int maxclasses,
+				       const VectorXd& inside_weight, const VectorXd& outside_weight,		    
 				       const vector<int>& sorted_class,
 				       const vector<int>& class_order,
 				       const VectorXd& sortedLU,
@@ -255,16 +255,8 @@ double compute_single_w_gradient_size (const int sc_start, const int sc_end,
   double pp1 = proj + 1;
   double pm1 = proj - 1;
 
-  class_weight = C1;
-  other_weight = C2;
-  if (params.ml_wt_by_nclasses)
-    {
-      other_weight /= nclasses.coeff(i);
-    }
-  if (params.ml_wt_class_by_nclasses)
-    {
-      class_weight /= nclasses.coeff(i);
-    }
+  class_weight = C1 * inside_weight.coeff(i);
+  other_weight = C2 * outside_weight.coeff(i);
 
   init_ordered_class_list(left_classes, left_update,
 			  right_classes, right_update,
@@ -321,6 +313,7 @@ void update_single_sortedLU( VectorXd& sortedLU,
 			     const double proj, const size_t i,
 			     const SparseMb& y, const VectorXi& nclasses,
 			     int maxclasses,
+			     const VectorXd& inside_weight, const VectorXd& outside_weight,		    
 			     const vector<int>& sorted_class,
 			     const vector<int>& class_order,
 			     const boolmatrix& filtered,
@@ -339,16 +332,9 @@ void update_single_sortedLU( VectorXd& sortedLU,
   double pm1 = proj - 1;
 
   // absorbe the learning rate in C1 and C2
-  class_weight = C1*eta_t;
-  other_weight = C2*eta_t;
-  if (params.ml_wt_by_nclasses)
-    {
-      other_weight /= nclasses.coeff(i);
-    }
-  if (params.ml_wt_class_by_nclasses)
-    {
-      class_weight /= nclasses.coeff(i);
-    }
+  class_weight = C1 * inside_weight.coeff(i) * eta_t;
+  other_weight = C2 * outside_weight.coeff(i) *eta_t;
+
   init_ordered_class_list(left_classes, left_update,
 			  right_classes, right_update,
 			  classes,
@@ -425,6 +411,7 @@ double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
 					       const double proj, const size_t i,
 					       const SparseMb& y, const VectorXi& nclasses,
 					       int maxclasses,
+					       const VectorXd& inside_weight, const VectorXd& outside_weight,    
 					       const vector<int>& sorted_class,
 					       const vector<int>& class_order,
 					       const VectorXd& sortedLU,
@@ -443,16 +430,8 @@ double compute_single_w_gradient_size_sample ( int sc_start, int sc_end,
   double pp1 = proj + 1;
   double pm1 = proj - 1;
 
-  class_weight = C1;
-  other_weight = C2*noClasses*1.0/(sc_sample.size()-1); //-1 because we added noClasses at the end;
-  if (params.ml_wt_by_nclasses)
-    {
-      other_weight /= nclasses.coeff(i);
-    }
-  if (params.ml_wt_class_by_nclasses)
-    {
-      class_weight /= nclasses.coeff(i);
-    }
+  class_weight = C1*inside_weight.coeff(i);
+  other_weight = C2*outside_weight.coeff(i)*noClasses*1.0/(sc_sample.size()-1); //-1 because we added noClasses at the end;
 
   init_ordered_class_list_sample(left_classes, left_update,
 				 right_classes, right_update,
@@ -514,6 +493,7 @@ void update_single_sortedLU_sample ( VectorXd& sortedLU,
 				     const double proj, const size_t i,
 				     const SparseMb& y, const VectorXi& nclasses,
 				     int maxclasses,
+				     const VectorXd& inside_weight, const VectorXd& outside_weight,		    
 				     const vector<int>& sorted_class,
 				     const vector<int>& class_order,
 				     const boolmatrix& filtered,
@@ -534,17 +514,8 @@ void update_single_sortedLU_sample ( VectorXd& sortedLU,
   double pm1 = proj - 1;
 
   // absorbe the learning rate in C1 and C2
-  class_weight = C1*eta_t;
-  other_weight = C2*eta_t*noClasses*1.0/sc_sample.size();
-  if (params.ml_wt_by_nclasses)
-    {
-      other_weight /= nclasses.coeff(i);
-    }
-  if (params.ml_wt_class_by_nclasses)
-    {
-      class_weight /= nclasses.coeff(i);
-    }
-
+  class_weight = C1*inside_weight.coeff(i)*eta_t;
+  other_weight = C2*outside_weight.coeff(i)*eta_t*noClasses*1.0/sc_sample.size();
   init_ordered_class_list_sample(left_classes, left_update,
 				 right_classes, right_update,
 				 classes,
