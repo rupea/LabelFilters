@@ -14,7 +14,7 @@ class MCxyData;
 
 namespace opt {
   
-  /** high level MCsolver api, as used in mcsolve executable */
+  /** high level MCfilter api, as used in mcproj executable */
   class MCprojProgram : private ::opt::MCprojArgs, public ::MCfilter
   {
     typedef ::opt::MCprojArgs A;
@@ -45,13 +45,8 @@ namespace opt {
     void setData(std::shared_ptr<::MCxyData> data);
 
     ::opt::MCprojArgs const& args() const {return *this;}
-    //::MCsolver const& solver() const {return *this;}
 
     ::MCfilter const& filter() const {return *this;}
-
-    // static void dumpFeasible (std::ostream& os
-    // 			      , std::vector<boost::dynamic_bitset<>> const& vbs
-    // 			      , bool denseFmt=false);
 
   private:
     
@@ -63,12 +58,6 @@ namespace opt {
      * ... TBD per projection versions ?
      */
     std::vector<boost::dynamic_bitset<>> feasible;
-    
-#if 0 // pure binary outputs might not be very useful.
-    /** Alt per-projection outputs (detail view of results).
-     * If used, size of 1st dim will be \c soln.nProj. */
-    std::vector< std::vector< boost::dynamic_bitset >> projFeasible;
-#endif
   };
   
 }//opt::

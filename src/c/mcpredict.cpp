@@ -1,4 +1,3 @@
-
 #include "mcpredict.hh"
 #include "filter.h"
 #include <boost/dynamic_bitset.hpp>

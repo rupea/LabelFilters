@@ -1,13 +1,9 @@
-
 #include "mcprojProg.hpp"
 #include "mcxydata.h"
 #include "printing.hh"
 #include "normalize.h"
 #include "mcpredict.hh"
-#include "predict.hh"           // low-level tests [optional]
 #include "utils.h"              // OUTWIDE
-
-//#include <omp.h>
 
 #include <stdexcept>
 #include <iostream>
@@ -17,27 +13,19 @@
 
 namespace opt {
   using namespace std;
-  /**
-   * - What are the default parameters?
-   *   - 1. if given explicitly as \c defparms
-   *   - 2. if --solnFile, adopt parms from a previous run
-   *   - 3. else use library defaults
-   */
   MCprojProgram::MCprojProgram( int argc, char**argv
-				, int const verbose/*=0*/ )
+				, int const verb/*=0*/ )
     : ::opt::MCprojArgs( argc, argv )
     , ::MCfilter()
     , xy( new ::MCxyData() )
     , feasible()
   {
-    // defaults: if given explicitly as \c defparms
     if (A::solnFile.size()==0) 
       {
 	throw runtime_error("MCprojProg: must specify label filter, or file to read it from via --solnFile");
       }
-   
+    int const verbose = A::verbose + verb;
     if(verbose>=1){
-      //++A::verbose;
       cout<<" +MCprojProgram --solnFile="<<A::solnFile;
       if(A::xFile.size()) cout<<" --xFile="<<A::xFile;
       if(A::outFile.size()) cout<<" --output="<<A::outFile;
@@ -164,23 +152,6 @@ namespace opt {
     }      
   }
   
-
-  // void MCprojProgram::dumpFeasible(std::ostream& os
-  // 				   , std::vector<boost::dynamic_bitset<>> const& vbs
-  // 				   , bool denseFmt/*=false*/)
-  // {
-  //   for(uint32_t i=0U; i<vbs.size(); ++i){
-  //     auto const& fi = vbs[i];
-  //     if( denseFmt ){
-  // 	for(uint32_t c=0U; c<fi.size(); ++c) os<<fi[c];
-  //     }else{
-  // 	for(uint32_t c=0U; c<fi.size(); ++c) if( fi[c] ) os<<c<<" ";
-  //     }
-  //     os<<endl;
-  //   }
-  // }
-
-
   void MCprojProgram::trySave( int const verb/*=0*/ )
   {
     int const verbose = A::verbose + verb;  // verb modifies the initial value from MCprojArgs --verbose

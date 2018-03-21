@@ -110,25 +110,5 @@ std::vector<SimpleProjectionScores> project( EigenType const& x,
                                              MCsoln const& s,
                                              uint32_t const targetSize );
 
-struct SimpleValidation {
-    uint32_t tp;        ///< true positive count
-    uint32_t tn;        ///< true negative count  (hopefully large, correctly filtered-out labels)
-    uint32_t fp;        ///< false positive count (typically nonzero, unless class perfectly separated)
-    uint32_t fn;        ///< false negatives      (zero if {l,u} bounds are good)
-    // number of true labels of 'y' used for validation == tp + fn
-    uint32_t top10;     ///< how many true y in top10 (if using SimpleProjectionScores)
-    uint32_t top100;    ///< how many true y in top100 (if using SimpleProjectionScores)
-    // ...
-};
-
-typedef std::vector<SimpleValidation> Validations;
-
-/** TBD validation, EigenBool SparseMb OR some sub-rows (corresp to \c project(x,...) call) */
-template< typename EigenBool >
-Validations validate( EigenBool const& y, std::vector<SimpleProjectionScores> const& sps );
-
-/** TBD validation, EigenType SparseMb OR some sub-rows (corresp to \c project(x,...) call) */
-template< typename EigenBool >
-Validations validate( EigenBool const& y, std::vector<boost::dynamic_bitset<>> const& vdb );
 
 #endif // MCPREDICT_H
