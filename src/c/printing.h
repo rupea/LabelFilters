@@ -10,7 +10,9 @@
 #include <string>
 #include <iosfwd>
 
-namespace detail {
+class Roaring;
+
+namespace detail {  
     template<typename T> inline std::ostream& io_txt( std::ostream& os, T const& x, char const* ws="\n" );
     template<typename T> inline std::istream& io_txt( std::istream& is, T      & x );
     template<typename T> inline std::ostream& io_bin( std::ostream& os, T const& x );
@@ -26,20 +28,16 @@ namespace detail {
     template<> std::ostream& io_bin( std::ostream& os, std::string const& x );
     template<> std::istream& io_bin( std::istream& is, std::string& x );
 
-    /** \name dynamic_bitset i/o
-     * \b beware that boost and io_txt do BIG-ENDIAN output, </em>msb first</em> */
+    /** \name Roaring i/o */
     //@{
-#define TBITSET template<typename Block, typename Alloc>
-#define BITSET  boost::dynamic_bitset<Block,Alloc>
-    // boost provides a big-endian operator<< and operator>>, so default impl works
-    //TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws="\n" );
-    //TBITSET std::istream& io_txt( std::istream& is, BITSET      & x );
-    TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& x );
-    TBITSET std::istream& io_bin( std::istream& is, BITSET      & x );
-    TBITSET std::ostream& io_bin( std::ostream& os, std::vector<BITSET> const& x );
-    TBITSET std::istream& io_bin( std::istream& os, std::vector<BITSET> const& x );
-#undef BITSET
-#undef TBITSET
+    std::ostream& io_txt( std::ostream& os, Roaring const& x, char const* ws = "\n" );
+    std::istream& io_txt( std::istream& is, Roaring      & x );
+    std::ostream& io_txt( std::ostream& os, std::vector<Roaring> const& x, char const* ws = "\n" );
+    std::istream& io_txt( std::istream& os, std::vector<Roaring>      & x );
+    std::ostream& io_bin( std::ostream& os, Roaring const& x );
+    std::istream& io_bin( std::istream& is, Roaring      & x );
+    std::ostream& io_bin( std::ostream& os, std::vector<Roaring> const& x );
+    std::istream& io_bin( std::istream& os, std::vector<Roaring>      & x );
     //@}
 
     /** \name std::array<T,N> i/o

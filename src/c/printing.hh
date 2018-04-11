@@ -6,8 +6,8 @@
 #include <iomanip>
 #include <sstream>
 #include <stdexcept>
-#include <boost/function_output_iterator.hpp>
-#include <boost/iterator/function_input_iterator.hpp>
+#include "roaring.hh"
+#include <limits>
 
 #if 0
 #define PRINTING_HH_DBG( STUFF ) do{ \
@@ -106,69 +106,91 @@ namespace detail {
         result_type operator()() { T t; is.read( reinterpret_cast<char*>(&t), sizeof(T) ); return t; }
         std::istream& is;
     };
-    // -------- boost::dynamic_bitset I/O --------------
-#define TBITSET template<typename Block, typename Alloc> inline
-#define BITSET  boost::dynamic_bitset<Block,Alloc>
-#if 0 // Oh, dynamic_bitset << and >> are provided, so default impl is OK
-    // BUT BE AWARE THAT boost outputs in reverse order of what you might expect
-    TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws/*="\n"*/ ){
-        using namespace std;
-        std::cout<<" io_txt(os,BS,ws) "; std::cout.flush();
-        os<<x<<ws;    // ---------> reverse of expected output.  x[0] is output LAST !
-        //for(size_t i=0U; i<x.size(); ++i) os<<x[i];     // XXX slow?
-        //os<<ws;
-        if(os.fail()) throw std::overflow_error("failed txt dynamic_bitset-->std::ostream");
-        return os;
-    }
-    TBITSET std::istream& io_txt( std::istream& is, BITSET      & x ){
-        using namespace std;
-        is>>x;        // big-endian output.  Little-endian seems more natural.
-        if(is.fail()) throw std::underflow_error("failed txt std::istream-->dynamic_bitset");
-        return is;
-    }
-#endif
-    TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& bs ){
-        using namespace boost;
-        io_bin(os, (uint64_t)(bs.size()));
-        io_bin(os, (uint64_t)(bs.num_blocks()));
-        to_block_range(bs, make_function_output_iterator(OutBinary< Block >(os)));
-        if(os.fail()) throw std::overflow_error("failed bitset-data-->std::ostream");
-        return os;
-    }
-    TBITSET std::istream& io_bin( std::istream& is, BITSET      & bs ){
-        using namespace boost;
-        uint64_t nbits, nblocks;
-        io_bin(is, nbits);
-        io_bin(is, nblocks);
-        bs.resize( nbits );
-        InBinary<Block> in(is);
-        from_block_range( make_function_input_iterator(in,uint64_t{0}),
-                          make_function_input_iterator(in,nblocks),
-                          bs );
-        if(is.fail()) throw std::underflow_error("failed std::istream-->bitset-data");
-        return is;
-    }
-    TBITSET std::ostream& io_bin( std::ostream& os, std::vector<BITSET> const& x )
-    {
-        uint64_t const rows = x.size();
-        io_bin(os,rows);
-        for(auto const& xi: x) io_bin(os,xi);
-        if(os.fail()) throw std::overflow_error("failed bitset-data-->std::ostream");
-        return os;
-    }
+    // -------- Roaring I/O --------------
+  inline std::ostream& io_txt( std::ostream& os, Roaring const& x, char const* ws/*="\n"*/ ){
+    os<<x.toString()<<ws;  
+    if(os.fail()) throw std::overflow_error("failed txt Roaring-->std::ostream");
+    return os;
+  }
+  
+  inline std::istream& io_txt( std::istream& is, Roaring  & x ){
+    std::string buf;
+    is.ignore(std::numeric_limits<std::streamsize>::max(),'{');
+    std::getline(is,buf,'}');
+    if(is.fail()) throw std::underflow_error("failed txt std::istream-->Roaring");
+    std::stringstream ss(buf);
+    std::vector<uint32_t> array;    
+    uint32_t val;    
+    while (ss>>val)
+      {
+	array.push_back(val);
+	ss.ignore(std::numeric_limits<std::streamsize>::max(), ',');
+      }
+    x = Roaring(array.size(), array.data());
+    return is;
+  }
 
-    TBITSET std::istream& io_bin( std::istream& is, std::vector<BITSET> const& x )
-    {
-        uint64_t rows;
-        io_bin(is,rows);
-        x.resize(rows);
-        for(auto & xi: x) io_bin(is,xi);
-        if(is.fail()) throw std::underflow_error("failed bitset-data-->std::ostream");
-        return is;
-    }
+  inline std::ostream& io_txt( std::ostream& os, std::vector<Roaring> const& x, char const* ws/*="\n"*/ ){
+    os << x.size() << "\n";
+    for(auto & xi: x) io_txt(os,xi,ws);
+    if(os.fail()) throw std::overflow_error("failed txt dynamic_bitset-->std::ostream");
+    return os;
+  }
+  
+  inline std::istream& io_txt( std::istream& is, std::vector<Roaring>& x ){
+    size_t n;
+    is >> n;
+    x.resize(n);    
+    for(auto & xi: x) io_txt(is,xi);
+    if(is.fail()) throw std::underflow_error("failed bitset-data-->std::ostream");
+    return is;
+  }    
+  
+  inline std::ostream& io_bin( std::ostream& os, Roaring const& r ){
+    uint32_t bytes = (uint32_t)r.getSizeInBytes();
+    io_bin(os, bytes);
+    char* buf = new char[bytes];
+    r.write(buf);
+    os.write(buf,bytes);
+    delete[] buf;
+    if(os.fail()) throw std::overflow_error("failed Roaring-data-->std::ostream");    
+    return os;
+  }
 
-#undef BITSET
-#undef TBITSET
+  inline std::istream& io_bin( std::istream& is, Roaring& r ){
+    uint32_t bytes;
+    io_bin(is, bytes);
+    char* buf = new char [bytes];
+    is.read(buf,bytes);
+    if(is.fail()) 
+      {
+	delete[] buf;
+	throw std::underflow_error("failed std::istream-->Roaring-data");
+      }
+    r = Roaring::readSafe(buf,bytes);
+    delete[] buf;
+    return is;
+  }
+
+  inline std::ostream& io_bin( std::ostream& os, std::vector<Roaring> const& x )
+  {
+    uint32_t const rows = static_cast<uint32_t>(x.size());    
+    io_bin(os,rows);
+    for(auto const& xi: x) io_bin(os,xi);
+    if(os.fail()) throw std::overflow_error("failed bitset-data-->std::ostream");
+    return os;
+  }
+
+  inline std::istream& io_bin( std::istream& is, std::vector<Roaring>& x )
+  {
+    uint32_t rows;
+    io_bin(is,rows);
+    x.resize(rows);
+    for(auto & xi: x) io_bin(is,xi);
+    if(is.fail()) throw std::underflow_error("failed bitset-data-->std::ostream");
+    return is;
+  }
+
 #define TARRAY template<class T, std::size_t N> inline
     TARRAY std::ostream& io_txt( std::ostream& os, std::array<T,N> const& x, char const* ws/*="\n"*/ ){
         for(auto const& t: x ) io_txt(os,t,ws);

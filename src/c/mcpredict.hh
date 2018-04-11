@@ -5,7 +5,6 @@
 #include "printing.hh" //prettyDims
 #include <iostream>
 #include <iomanip>
-//#include <boost/dynamic_bitset.hpp>
 
 /** non-templated workhorse.
  * \p active            output [ nExamples x nClass ] bitsets
@@ -23,10 +22,10 @@
  */
 void projectionsToBitsets( DenseM const& projections,
                            MCsoln const& s,
-                           std::vector<boost::dynamic_bitset<>>& active );
+                           std::vector<Roaring>& active );
 
 template<typename EigenType> inline
-std::vector<boost::dynamic_bitset<>> project( EigenType const& x, MCsoln const& s )
+std::vector<Roaring> project( EigenType const& x, MCsoln const& s )
 {
     using namespace std;
     assert( x.cols() == s.weights.rows() );
@@ -43,7 +42,7 @@ std::vector<boost::dynamic_bitset<>> project( EigenType const& x, MCsoln const& 
         }
     }
     // projections.rows() [ nExamples x nProj ];
-    std::vector<boost::dynamic_bitset<>> active;
+    std::vector<Roaring> active;
     projectionsToBitsets( projections, s, active );
     return active;
 }

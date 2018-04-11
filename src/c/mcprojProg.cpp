@@ -2,7 +2,7 @@
 #include "mcxydata.h"
 #include "printing.hh"
 #include "normalize.h"
-#include "mcpredict.hh"
+//#include "mcpredict.hh"
 #include "utils.h"              // OUTWIDE
 
 #include <stdexcept>
@@ -31,8 +31,6 @@ namespace opt {
       if(A::outFile.size()) cout<<" --output="<<A::outFile;
       if(A::maxProj) cout<<" --proj="<<A::maxProj;
       if(A::outBinary) cout<<" -B";
-      if(A::outText)   cout<<" -T";
-      if(A::outSparse) cout<<" -S";
       if(A::outDense)  cout<<" -D";
       //            if(A::yFile.size()) cout<<(A::yPerProj?" --Yfile=":" --yfile")<<A::yFile;
       //if(A::threads)   cout<<" --threads="<<A::threads;
@@ -157,31 +155,28 @@ namespace opt {
     int const verbose = A::verbose + verb;  // verb modifies the initial value from MCprojArgs --verbose
     if(verbose>=1) cout<<" MCprojProgram::trySave()"
 		       <<"\tSaving feasible "<<(outBinary?"Binary":"Text")<<" "
-		       <<(outSparse?"Sparse":"Dense")<<" classes --> "
-		       <<(outFile.size()? outFile: string("cout"))
+		       <<(A::outDense?"Dense":"Sparse")<<" classes --> "
+		       <<(A::outFile.size()? A::outFile: string("cout"))
 		       <<endl;
     
     ofstream ofs;
-    if (outFile.size()==0){
-      cerr<<"Warning: Binary flag ignored for cout"<<endl;
-      outBinary = false;
+    if (A::outFile.size()==0){
+      if (A::outBinary){
+	cerr<<"Warning: Binary flag ignored for cout"<<endl;
+	A::outBinary = false;
+      }
     }else{
       ofs.open(outFile);
     }
-    ostream& out = outFile.size()?ofs:cout;
+    ostream& out = A::outFile.size()?ofs:cout;
     if( ! out.good() ) throw std::runtime_error("trouble opening outFile");
     
-    if(outBinary){	
-      if(outSparse){
-	cerr<<"Warning: Sparse flag ignored fro binary dump -- see printing.hh to implement it 'magically'"<<endl;
-      }
-      detail::io_bin( out, feasible );
-      if(verbose>=2) cout<<"Note:\tIn C++, use printing.hh\n\t\tio_bin(ifstream(\""<<outFile
-			 <<"\"),vector<boost::dynamic_bitset<>>&)\n\tcan read the projections binary file";
+    if(outBinary){
+      detail::io_bin(out, feasible);
+      if(verbose>=2) cout<<"Note:\tIn C++, use printing.hh\n\t\tio_bin(ifstream(\""<<A::outFile
+			 <<"\"),vector<Roaring>&)\n\tcan read the projections binary file";
     }else{ // outText
-      out<<"## "<<feasible.size()<<" instances" << endl;
-      out <<"## "<<F::lower_bounds.rows()<<" classes" <<endl;
-      dumpFeasible( out, feasible, outDense );      
+      detail::io_txt(out, feasible);
       if( ! out.good() ) throw std::runtime_error("trouble writing outFile");
     }
     if (A::outFile.size()) ofs.close();

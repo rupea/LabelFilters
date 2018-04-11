@@ -31,9 +31,9 @@ MCfilter::MCfilter(MCsoln const& s):
 // Explicitly instantiate MCfilter into the library
 
 template
-void MCfilter::filter(std::vector<boost::dynamic_bitset<>>& active, DenseM const& x, int np);
+void MCfilter::filter(std::vector<Roaring>& active, DenseM const& x, int np);
 template
-void MCfilter::filter(std::vector<boost::dynamic_bitset<>>& active, SparseM const& x, int np);
+void MCfilter::filter(std::vector<Roaring>& active, SparseM const& x, int np);
 template
-void MCfilter::filter(std::vector<boost::dynamic_bitset<>>& active, ExtConstSparseM const& x, int np);
+void MCfilter::filter(std::vector<Roaring>& active, ExtConstSparseM const& x, int np);
 

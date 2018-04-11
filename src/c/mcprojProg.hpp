@@ -7,7 +7,6 @@
 #include "parameter-args.h"
 
 #include <vector>
-#include <boost/dynamic_bitset.hpp>
 #include <memory>
 
 class MCxyData;
@@ -57,7 +56,7 @@ namespace opt {
      * raw output is a bitset of feasible classes.
      * ... TBD per projection versions ?
      */
-    std::vector<boost::dynamic_bitset<>> feasible;
+    std::vector<Roaring> feasible;
   };
   
 }//opt::

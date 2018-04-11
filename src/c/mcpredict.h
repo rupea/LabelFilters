@@ -3,6 +3,7 @@
 
 #include "mcsoln.h"
 
+class Roaring;
 /** Simplest projector returns the final bitset for each input example.
  * - It calculates \c projections=(x*s.weights).transpose().
  * - Then it uses \c s.lower_bounds_avg and \c s.upper_bounds_avg as a
@@ -14,7 +15,7 @@
  * x * s.weights will be [ nExamples x nProj ]
  */
 template<typename EigenType>
-std::vector<boost::dynamic_bitset<>> project( EigenType const& x, MCsoln const& s );
+std::vector<Roaring> project( EigenType const& x, MCsoln const& s );
 
 
 /** Given any crude \em centrality measure (0-255) we can rank and retain some number

@@ -1,6 +1,5 @@
 #include "mcpredict.hh"
 #include "filter.h"
-#include <boost/dynamic_bitset.hpp>
 #include <iostream>
 
 using namespace std;
@@ -8,7 +7,7 @@ using namespace Eigen;
 
 void projectionsToBitsets( DenseM const& projections,
                            MCsoln const& s,
-                           std::vector<boost::dynamic_bitset<>>& active )
+                           std::vector<Roaring>& active )
 {
     int const verbose=0;
     if(verbose){ cout<<"projectionsToBitsets... MCsoln is:"<<endl; s.pretty(cout); }
@@ -21,32 +20,18 @@ void projectionsToBitsets( DenseM const& projections,
     assert( (int)nProj == s.lower_bounds.cols() );
 
     //active = new ActiveDataSet(nExamples);
-    if( active.size() > nExamples ){
-        active.resize(nExamples);
-    }
-    for(size_t i=0U; i<active.size(); ++i){
-        active[i].clear();
-        active[i].resize(nClass,true);
-    }
-    if( active.size() < nExamples ){
-        if( active.size() == 0U ){
-            active.emplace_back( boost::dynamic_bitset<>() );
-            active.back().resize(nClass,true);
-        }
-        assert( active.size() > 0U );
-        size_t bk = active.size() - 1U;
-        while( active.size() < nExamples )
-            active.emplace_back( active[bk] );  // can copy-construct all-true as a copy in 1 step
+    // initialize with all labels active.   
+    active.clear();
+    active.reserve(nExamples);  
+    Roaring full; //empty set
+    full.flip(0,nClass); // full set
+    full.setCopyOnWrite(false);
+    for(size_t i=0U; i<nExamples; ++i){
+      active.emplace_back(full);
     }
     assert( active.size() == nExamples );
-#if 1 // slow!
-    assert( active.size() == nExamples );
-    for( uint32_t e=0U; e<nExamples; ++e ){
-        assert( active[e].size() == nClass );
-        assert( active[e].count() == nClass );
-    }
-#endif
-
+    
+    
     //VectorXd proj;
     VectorXd l;
     VectorXd u;
@@ -62,11 +47,11 @@ void projectionsToBitsets( DenseM const& projections,
 #pragma omp parallel for shared(f,projections,active,p)
 #endif
         for(size_t e=0U; e<nExamples; ++e){
-            boost::dynamic_bitset<> const* dbitset = f.filter(projections.coeff(p,e));
+	  Roaring const* dbitset = f.filter(projections.coeff(p,e));
             active[e] &= *dbitset;
             if(verbose && e==0){
                 cout<<" projection value "<<projections.coeff(p,e)<<" Filter idx "<<f.idx(projections.coeff(p,e))<<endl;
-                cout<<"example 0: proj "<<p<<" dbitset="<<*dbitset<<" active="<<active[e]<<endl;
+                //cout<<"example 0: proj "<<p<<" dbitset="<<*dbitset<<" active="<<active[e]<<endl;
             }
         }
     }

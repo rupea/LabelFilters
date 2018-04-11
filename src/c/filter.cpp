@@ -1,12 +1,11 @@
 #include "filter.h"
 #include "Eigen/Dense"
 #include "utils.h"
-#include <boost/dynamic_bitset.hpp>
+#include "roaring.hh"
 #include <vector>
 #include <iostream>
 
 using Eigen::VectorXd;
-using namespace boost;
 using namespace std;
 
 int const Filter::verbose = 0;
@@ -18,7 +17,6 @@ int const Filter::verbose = 0;
       , nCalls(0)
 #endif
 {
-    //_sortedLU = new VectorXd(2*l.size());
     for(size_t i=0; i<l.size(); ++i){
         _sortedLU.coeffRef(2*i) = l.coeff(i);
         if (l.coeff(i) >= u.coeff(i)) {
@@ -61,12 +59,16 @@ void Filter::init_map(vector<int>& ranks)
   size_t const nBitmaps = 2U*noClasses + 1U;
   assert( _map.size() == 0U );
   _map.reserve( nBitmaps );
-  _map.emplace_back(noClasses);                     // begin with a default [empty] bitset
-  if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back()<<endl;
+  _map.emplace_back();  // begin with a default [empty] bitset
+  _map.back().setCopyOnWrite(true);
+  if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back().toString()<<endl;
   for(size_t i=0U; i<nBitmaps-1U; ++i){
-    _map.emplace_back( _map.back() );             // push a copy of the last bitmap
-    _map.back().set( ranks[i]/2, !(ranks[i]&1) ); // toggle 1 bit as cross a lower or upper bound
-    if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back()<<endl;
+    _map.emplace_back( _map.back() ); // push a copy of the last bitmap
+    // this depends on lower bounds being smaller than upper bounds. 
+    ranks[i]&1?_map.back().remove(ranks[i]/2):_map.back().add(ranks[i]/2); // toggle 1 bit as cross a lower or upper bound
+    // could try if this is faster
+    // _map.back().flip( ranks[i]/2, ranks[i]/2+1 ); 
+    if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back().toString()<<endl;
   }
   assert( _map.size() == nBitmaps );
 }

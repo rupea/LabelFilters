@@ -1,4 +1,6 @@
 CXX ?= g++
+CC ?= gcc
+
 ifneq ($(wildcard /opt/boost-1.60),)
 BOOSTDIR ?= /opt/boost-1.60/include
 endif
@@ -9,6 +11,13 @@ BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
 OPENMP ?= -fopenmp
+
+CROARINGDIR ?= ../../CRoaring
+CROARINGINC ?= -I$(CROARINGDIR)
+CROARINGLIB ?= $(CROARINGDIR)
+CROARINGLINK:=-L$(CROARINGLIB) -Wl,-rpath,$(CROARINGLIB) 
+
+
 
 ifneq ($(wildcard /usr/include/octave-3.8.2),)
 OCTAVEDIR ?= /usr
@@ -46,14 +55,14 @@ OPENMP ?= -fopenmp
 #OPENMP:= -DMCTHREADS=0
 # allow STL experimental threads?
 
-CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
+CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) $(CROARINGINC) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
 
-LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK)
+LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK) $(CROARINGLINK) -lroaring
 
 
 PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = $(HOME)/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR) $(OCT_INC) $(HDF5_INC)
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR) $(CROARINGINC) $(OCT_INC) $(HDF5_INC)
 PROFILE_CPPFLAGS+=-DMCTHREADS=1
 #PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
@@ -96,6 +105,18 @@ mcproj:
 #	$(MAKE) -C $(BINDIR) -f../c/Makefile $(MAKECMDGOALS)
 #octave:
 #	$(MAKE) -C $(BINDIR) -f../octave/Makefile
+
+CRoaring:
+	$(MAKE) -C $(CROARINGDIR) -f ../src/Makefile CRoaring-bld
+
+CRoaring-bld:
+	./amalgamation.sh 
+	$(CC) -march=native -O3 -std=c11 -o roaring.o -c roaring.c
+	$(AR) -vru libroaring.a roaring.o
+	$(CC) -O3 -std=c11 -shared -o libroaring.so -fPIC -fPIC roaring.c
+
+CRoaring-clean:
+	cd $(CROARINGDIR) && rm roaring.o libroaring.a libroaring.so roaring.c roaring.h roaring.hh
 
 libsvm:
 	cd libsvm-3.17/matlab && make OCTAVE_CFLAGS="$(LIBSVM_OCTAVE_CFLAGS)" octave

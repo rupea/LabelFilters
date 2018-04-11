@@ -2,12 +2,12 @@
 #define MCFILTER_HH
 
 #include "mcfilter.h"
-#include <boost/dynamic_bitset.hpp>
+#include "roaring.hh"
 #include "typedefs.h" //DenseM
 #include <iostream>
 
 template< typename EIGENTYPE >
-void MCfilter::filter(/*out*/ std::vector<boost::dynamic_bitset<>>& active, /*in*/ EIGENTYPE const& x, int np/* = 0*/)
+void MCfilter::filter(/*out*/ std::vector<Roaring>& active, /*in*/ EIGENTYPE const& x, int np/* = 0*/)
 {  
 
   size_t const nExamples = x.rows();  
@@ -23,24 +23,18 @@ void MCfilter::filter(/*out*/ std::vector<boost::dynamic_bitset<>>& active, /*in
     }
   DenseM const projections = (x * weights.leftCols(np));
 
-  
-  //active = new ActiveDataSet(nExamples);
-  if( active.size() > nExamples ){
-    active.resize(nExamples);
+
+
+  // initialize with all labels active.   
+  active.clear();
+  active.reserve(nExamples);  
+  Roaring full; //empty set
+  full.flip(0,nClass); // full set
+  full.setCopyOnWrite(false);
+  for(size_t i=0U; i<nExamples; ++i){
+    active.emplace_back(full);
   }
-  for(size_t i=0U; i<active.size(); ++i){
-    active[i].clear();
-    active[i].resize(nClass,true);
-  }
-  if( active.size() < nExamples ){
-    if( active.size() == 0U ){
-      active.emplace_back( boost::dynamic_bitset<>() );
-      active.back().resize(nClass,true);
-    }
-    size_t bk = active.size() - 1U;
-    while( active.size() < nExamples )
-      active.emplace_back( active[bk] );  // can copy-construct all-true as a copy in 1 step
-  }
+
   assert( active.size() == nExamples );
   
   // TODO if ! nProj >> nExamples, provide a faster impl ???
@@ -49,7 +43,7 @@ void MCfilter::filter(/*out*/ std::vector<boost::dynamic_bitset<>>& active, /*in
 #endif
   for(size_t e=0U; e<nExamples; ++e){
     for(size_t p=0U; p<np; ++p){
-      boost::dynamic_bitset<> const* dbitset = _filters[p].filter(projections.coeff(e,p));
+      Roaring const* dbitset = _filters[p].filter(projections.coeff(e,p));
       active[e] &= *dbitset;
     }
   }

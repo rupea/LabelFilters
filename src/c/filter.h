@@ -2,7 +2,7 @@
 #define __FILTER_H
 
 #include "Eigen/Dense"
-#include <boost/dynamic_bitset.hpp>
+#include "roaring.hh"
 #include <vector>
 
 /** Filter with fast random-access by individual projection values.
@@ -34,7 +34,7 @@ public:
      * - the bitset has \b 1 (true) for each possible class.
      * \return bitset pointer \b unusable after \c Filter destructor runs.
      */
-    boost::dynamic_bitset<> const* filter (double xproj) const;
+    Roaring const* filter (double xproj) const;
 
     /** debug... */
     ssize_t idx(double xproj) const{
@@ -54,7 +54,7 @@ private:
      * - As projection values pass l/u boundaries in \c _sortedLU,
      * - one bit in the class bitmap changes.
      * - So save these easily-constructed bitmaps. */
-    std::vector<boost::dynamic_bitset<> > _map;
+    std::vector<Roaring> _map;
 #ifndef NDEBUG
     mutable uint64_t nCalls;
 #endif
@@ -68,7 +68,7 @@ private:
  * - Considering highest right boundary, a larger xproj will
  *   yield _sortedLU.end(), so _map.size() must be 2*noClasses+1.
  */
-inline const boost::dynamic_bitset<>* Filter::filter(double xproj) const
+inline const Roaring* Filter::filter(double xproj) const
 {
 #ifndef NDEBUG
     ++nCalls;
@@ -95,9 +95,9 @@ class FilterBatch
     ~FilterBatch();
     /** Given a projection value, \c xproj, what classes are possible?
      * \return vector of bitsets, <b>up to client to \c delete returned pointer</b> */
-    std::vector<boost::dynamic_bitset<>>* filter (vector<double> xproj) const;
+    std::vector<Roaring>* filter (vector<double> xproj) const;
 private:
-    boost::dynamic_bitset<> bs;
+    Roaring bs;
 };
 #endif
 

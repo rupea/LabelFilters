@@ -58,7 +58,7 @@ class MCfilter : protected MCsoln
    *   - Please only include \c find_w_detail.hh for \em strange 'x' types.
    */
   template< typename EIGENTYPE >
-    void filter(/*out*/ std::vector<boost::dynamic_bitset<>>& active, /*in*/ EIGENTYPE const& x, int np = 0);
+    void filter(/*out*/ std::vector<Roaring>& active, /*in*/ EIGENTYPE const& x, int np = 0);
  private:
   std::vector<Filter> _filters;
   void init_filters();

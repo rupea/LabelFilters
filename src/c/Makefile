@@ -13,7 +13,6 @@ endif
 BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
-
 OPENMP ?= -fopenmp
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
 # 1. no openmp anywhere
@@ -42,15 +41,15 @@ OCTAVE_MEX_STANDALONE ?= --link-stand-alone
 HDF5_INC ?= -I/usr/include/hdf5/serial
 #OCTAVE_CFLAGS ?= -fPIC $(OCT_INC) $(HDF5_INC)
 
-CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
+CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) $(CROARINGINC) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
 
-LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK)
+LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK) $(CROARINGLINK)
 # testing
 #LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
 
 PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = $(HOME)/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR)
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR) $(CROARINGINC)
 PROFILE_CPPFLAGS+=-DMCTHREADS=1
 #PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
@@ -129,7 +128,7 @@ settings:
 	echo "BOOSTLIB       = $(BOOSTLIB)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcfilter.h mcfilter.hh mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcupdate.hh objective.h mcsolver_detail.hh mcsolver_init.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp predict.h predict.hh PredictionSet.h printing.h printing.hh utils.h WeightVector.h LPSR.h 
+CHECK_HEADERS := mcfilter.h mcfilter.hh mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcupdate.hh objective.h mcsolver_detail.hh mcsolver_init.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp PredictionSet.h printing.h printing.hh utils.h WeightVector.h LPSR.h # predict.h predict.hh
 # faster version (can run in parallel)
 check-headers chk-headers:
 	rm -f /tmp/*.chk
@@ -141,7 +140,7 @@ check-oct-headers: EigenOctave.h
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
 
-LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp predict.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp 
+LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp # predict.cpp
 
 lib: hdr-stamp
 #	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1 demo-quick; }
@@ -280,9 +279,9 @@ libmcfilter.a: $(patsubst %.cpp,%.o,$(LIB_CPPFILES))
 libmcfilter-dbg.a: $(patsubst %.cpp,%-dbg.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
 libmcfilter.so: $(patsubst %.cpp,%.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
+	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring
 libmcfilter-dbg.so: $(patsubst %.cpp,%-dbg.lo,$(LIB_CPPFILES))
-	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options
+	$(CXX) -o $@ -shared $^ $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring
 # special library versions
 libmcfilter-prof.a: $(patsubst %.cpp,%-prof.o,$(LIB_CPPFILES))
 	$(AR) -vru $@ $^
@@ -375,11 +374,11 @@ erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_
 	# mcsolve0 is an initial version, before opt::MCsolveProgram was written
 	mkdir -p erik
 	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
-mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
+mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a $(CROARINGLIB)/libroaring.a
 	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcproj0: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
-mcproj: mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
+mcproj: mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a $(CROARINGLIB)/libroaring.a
 	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 .PHONY: run-mcproj
 run-mcproj:
