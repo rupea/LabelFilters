@@ -1,18 +1,19 @@
 #include "mcfilter.hh"
 
+
 void MCfilter::init_filters()
 {
   // delete any existing filters
-  _filters.clear();
-  _filters.shrink_to_fit(); //free memory if any has been alocated.
+  delete_filters();
   
-  _filters.reserve(nProj);  
+  _filters.resize(nProj);
+  MCfilter* fp = this; // for openmp
 #if MCTHREADS
-#pragma omp parallel for shared(_filters, lower_bounds, upper_bounds)
+#pragma omp parallel for shared(fp)
 #endif
   for(size_t p=0U; p<nProj; ++p)
     {
-      _filters.emplace_back(lower_bounds.col(p), upper_bounds.col(p));
+      fp->_filters[p] = new Filter(fp->lower_bounds.col(p), fp->upper_bounds.col(p));
     }
 }    
 
@@ -27,13 +28,26 @@ MCfilter::MCfilter(MCsoln const& s):
   init_filters();
 }
 
+void MCfilter::delete_filters()
+{
+  for (size_t i = 0; i < _filters.size(); i++)
+    {
+      delete _filters[i];
+    }    
+  _filters.clear();
+}  
+    
+MCfilter::~MCfilter()
+{
+  delete_filters();
+}
 
 // Explicitly instantiate MCfilter into the library
 
 template
-void MCfilter::filter(std::vector<Roaring>& active, DenseM const& x, int np);
+void MCfilter::filter(ActiveSet& active, DenseM const& x, int np) const;
 template
-void MCfilter::filter(std::vector<Roaring>& active, SparseM const& x, int np);
-template
-void MCfilter::filter(std::vector<Roaring>& active, ExtConstSparseM const& x, int np);
+void MCfilter::filter(ActiveSet& active, SparseM const& x, int np) const;
+//template
+//void MCfilter::filter(ActiveSet& active, ExtConstSparseM const& x, int np) const;
 

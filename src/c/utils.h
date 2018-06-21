@@ -55,19 +55,19 @@ template <typename Scalar1, typename IndexType1,  typename Scalar2, typename Ind
   while (iter1 && iter2)
     {
       if (iter1.index() == iter2.index())
-	{
-	  ans+=iter1.value()*iter2.value();
-	  ++iter1;
-	  ++iter2;
-	}
+  	{
+  	  ans+=iter1.value()*iter2.value();
+  	  ++iter1;
+  	  ++iter2;
+  	}
       else if (iter1.index() < iter2.index())
-	{
-	  ++iter1;
-	}
+  	{
+  	  ++iter1;
+  	}
       else
-	{
-	  ++iter2;
-	}
+  	{
+  	  ++iter2;
+  	}
     }
   return ans;
 }
@@ -154,9 +154,6 @@ SparseMb labelVec2Mat (const Eigen::VectorXd& yVec);
 
 // check if a file exists and is ready for reading
 
-bool fexists(const char *filename);
-
-/** delete an ActiveDataSet to free up memory. \post \c active==nullptr. */
-void free_ActiveDataSet(ActiveDataSet*& active);
+//bool fexists(const char *filename);
 
 #endif

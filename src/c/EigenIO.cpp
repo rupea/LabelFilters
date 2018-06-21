@@ -7,7 +7,7 @@
 //#include <octave/toplev.h>
 #include "EigenIO.h"
 
-#include "printing.hh"
+//#include "printing.hh"
 #include <iostream>
 #include <fstream>
 #include <stdlib.h>
@@ -55,13 +55,20 @@ void read_dense_binary(const char* filename, ovaDenseColM& m, const DenseColMf::
 // Next is an array of index types representing the values.
 
 // to do , store the size of the index typte and the size of the scalar type in the file
-void read_sparse_binary(const char* filename, ovaSparseColM& m, const ovaSparseColM::StorageIndex rows, const ovaSparseColM::StorageIndex cols, const ovaSparseColM::StorageIndex start_col /*=0*/)
+void read_sparse_binary(const char* filename, ovaSparseColM& m, ovaSparseColM::StorageIndex rows, ovaSparseColM::StorageIndex cols, const ovaSparseColM::StorageIndex start_col /*=0*/)
 {
   assert(sizeof(ovaSparseColM::Scalar) == 4);
   assert(sizeof(ovaSparseColM::StorageIndex) == 8);
   ifstream in(filename, ios::in | ios::binary);
   if (in.is_open())
     {
+      ovaSparseColM::StorageIndex nouter=0;  // nr of outer dimensions cols in a column major matrix
+      ovaSparseColM::StorageIndex ninner=0;   // n of row in a rowmajor matrix      
+      in.read((char*)(&nouter), sizeof(ovaSparseColM::StorageIndex));
+      in.read((char*)(&ninner), sizeof(ovaSparseColM::StorageIndex));
+      if (cols == 0) cols = nouter;
+      if (rows == 0) rows = ninner;
+
       try
 	{
 	  m.resize(rows,cols);
@@ -71,10 +78,7 @@ void read_sparse_binary(const char* filename, ovaSparseColM& m, const ovaSparseC
 	  std::cerr << "Error allocating OVA matrix of size " << rows << "x" << cols << ". " << std::endl;
 	  throw;
 	}
-      ovaSparseColM::StorageIndex nouter=0;  // nr of outer dimensions cols in a column major matrix
-      ovaSparseColM::StorageIndex ninner=0;   // n of row in a rowmajor matrix      
-      in.read((char*)(&nouter), sizeof(ovaSparseColM::StorageIndex));
-      in.read((char*)(&ninner), sizeof(ovaSparseColM::StorageIndex));
+
       // read col  outer indices starting from the start_col
       in.seekg((2+start_col)*sizeof(ovaSparseColM::StorageIndex));
       ovaSparseColM::StorageIndex* outerIndexPtr = m.outerIndexPtr();
@@ -122,6 +126,7 @@ void read_sparse_binary(const char* filename, ovaSparseColM& m, const ovaSparseC
     }
 }
 
+/*
 void save_LPSR_model(const char* filename, const DenseColM& centers, const ActiveDataSet& active_classes)
 {
   ofstream out(filename, ios::out|ios::binary);
@@ -199,3 +204,4 @@ int load_LPSR_model(const char* filename, DenseColM& centers, ActiveDataSet*& ac
   in.close();
   return 0;
 }
+*/

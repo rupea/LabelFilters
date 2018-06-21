@@ -312,19 +312,18 @@ namespace detail {
       if (checkHeader)
 	{
 	  // test if XML format. Check if header is present.
-	  // only do it once. 
+	  // only do it once.
 	  checkHeader = false;
 	  istringstream header(line);	  
 	  if (!(header>>ws>>nEx)) 
 	    {
 	      //this was not a header so no XML format. Reset values and reparse the line. 
 	      nEx = 0U;
-	      
 	    }
 	  else if ( !(header>>ws>>nFeats))
 	    {
 	      //this was not a header so no XML format. Reset values and reparse the line. 
-	      nEx = 0U;
+	      nEx = 0U;	      
 	      nFeats = 0U;
 	    }
 	  else if (!(header>>ws>>nClass))
@@ -427,25 +426,21 @@ namespace detail {
     if(nEx > 0 && row != nEx)
       throw runtime_error("Found more/less examples than declared in the header");
 
-    if(verbose>=1){cout<<" GOOD libsvm-like text input, minClass="<<minClass
-		       <<" maxClass="<<maxClass
-		       <<" minXidx="<<minXidx<<" maxXidx="<<maxXidx<<" rows="<<row<<endl;}
     // solver complains if have any class {0,1,2,...,nClasses-1} with
     // no assigned examples.
     if( minClass > 0 )
       {
-	cerr<< "Warning: No labels with indices below " << minClass << endl 
-	    << "Assuming lable indices start at " << minClass << " and subtracting " 
-	    << minClass <<" from all label indices to make them 0 based"<<endl;
-	for(size_t i=0U; i<yTriplets.size(); ++i){
-	  auto & yi = yTriplets[i];
-	  assert( yi.value() == true );
-	  assert( yi.col() >= minClass && yi.col() <= maxClass );
-	  B bnew( yi.row(), yi.col()-minClass, yi.value() );
-	  yi = bnew;
-	}
-	maxClass -= minClass;
-	minClass = 0U;       
+	cerr<< "WARNING: No labels with indices below " << minClass << endl 
+	    << "The code assumes label indices start at 0!" <<endl;
+	// for(size_t i=0U; i<yTriplets.size(); ++i){
+	//   auto & yi = yTriplets[i];
+	//   assert( yi.value() == true );
+	//   assert( yi.col() >= minClass && yi.col() <= maxClass );
+	//   B bnew( yi.row(), yi.col()-minClass, yi.value() );
+	//   yi = bnew;
+	// }
+	// maxClass -= minClass;
+	// minClass = 0U;       
       }    
     if (nClass > 0)
       {
@@ -491,6 +486,10 @@ namespace detail {
       std::vector<D> empty;
       xTriplets.swap(empty); // de-allocate xTriplets memory
     }
+    if(verbose>=1){cout<<" GOOD libsvm-like text input, minClass="<<minClass
+		       <<" maxClass="<<maxClass
+		       <<" minXidx="<<minXidx<<" maxXidx="<<maxXidx<<" rows="<<row<<endl;}
+    
     return is;
   }  
   

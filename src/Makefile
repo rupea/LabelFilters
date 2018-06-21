@@ -1,16 +1,10 @@
 CXX ?= g++
 CC ?= gcc
 
-ifneq ($(wildcard /opt/boost-1.60),)
-BOOSTDIR ?= /opt/boost-1.60/include
-endif
-ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
-BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
-endif
+BOOSTDIR ?= $(HOME)/local
 BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
-OPENMP ?= -fopenmp
 
 CROARINGDIR ?= ../../CRoaring
 CROARINGINC ?= -I$(CROARINGDIR)
@@ -39,6 +33,16 @@ OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.
 endif
 
 
+OPENMP ?= -fopenmp -DMCTHREADS=1
+# for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
+# 1. no openmp anywhere
+#OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
+# 2. allow Eigen/blas threads, but no MCFilter source code threads
+#OPENMP:= -DMCTHREADS=0
+# allow STL experimental threads?
+
+
+
 HDF5_INC ?= -I/usr/include/hdf5/serial
 OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -std=c++11 -march=native -ffast-math -m64 -pipe $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
 OCTAVE_LDFLAGS ?= -L../c
@@ -47,13 +51,6 @@ LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -DNDEBUG $(OCT_INC) -I..
 
 
 
-OPENMP ?= -fopenmp
-# for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
-# 1. no openmp anywhere
-#OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
-# 2. allow Eigen/blas threads, but no MCFilter source code threads
-#OPENMP:= -DMCTHREADS=0
-# allow STL experimental threads?
 
 CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) $(CROARINGINC) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
 
@@ -61,9 +58,9 @@ LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK) $(CROARINGLINK) -lro
 
 
 PROFILE_OPENMP = $(OPENMP)
-PROFILEDIR = $(HOME)/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR) $(CROARINGINC) $(OCT_INC) $(HDF5_INC)
-PROFILE_CPPFLAGS+=-DMCTHREADS=1
+PROFILEDIR = $(HOME)/local
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR) $(CROARINGINC) 
+PROFILE_CPPFLAGS+=-DMCTHREADS=0
 #PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
@@ -73,7 +70,7 @@ JOBS:=-j$(NCPUS)
 
 export
 
-C_TARGETS = clean standalone milde lib learn_projection evaluate_projection run_kmeans run_LPSR \
+C_TARGETS = mcproj clean standalone milde lib learn_projection evaluate_projection run_kmeans run_LPSR \
 	octave oct_find_w.oct oct_normalize_data.oct oct_project_data.oct oct_predict_data.oct \
 	oct_get_projection_measures.oct oct_kmeans.oct #oct_evaluate_model.oct oct_calc_objective.oct
 PROFILE_TARGETS = $(patsubst %,profile_%,$(C_TARGETS))

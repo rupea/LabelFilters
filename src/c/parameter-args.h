@@ -81,41 +81,61 @@ namespace opt {
         int verbose;            ///< verbosity
         //@}
     };
-
-    /** wrap program options for standalone mcproj exectuable */
-    struct MCprojArgs {
-        MCprojArgs();
-        MCprojArgs(int argc, char**argv);       ///< main constructor (boost::program_arguments)
-        MCprojArgs(std::string args);           ///< quick'n'dirty "break at EVERY whitespace"
-        /// \name lua api
-        //@{
-        void parse( int argc, char**argv );
-        static std::string defaultHelp();
-        //@}
-        /// \name helpers
-        //@{
-        void init( po::options_description & desc ); ///< checks for parse errors
-        static void helpUsage( std::ostream& os );
-        //@}
-        /// \name parse settings
-        //@{
-        std::string xFile;      ///< x data file name (io via ???)
-        std::string solnFile;   ///< solution file basename
-
-        std::string outFile;    ///< output[.proj] file basename (or cout)
-        uint32_t maxProj;       ///< output.proj with projections 0..maxProj-1 [0=all projections]
-        bool outBinary;         ///< outFile format
-        bool outDense;          ///< outFile format
-      //        bool yPerProj;          ///< per-projection validation?
-      //        std::string yFile;      ///< y data file name (for validation)
-        bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
-        bool xunit/*=false*/;   ///< normalize each x example to unit length
-        double xscale;          ///< multiply each x example by a constant
-        //uint32_t threads;       ///< used?
-        int verbose;            ///< verbosity
-        //@}
-    };
-
+    
 }//opt::
 
+namespace po = boost::program_options;
+struct MCxyDataArgs {
+  static po::options_description getDesc();
+  
+  MCxyDataArgs();
+  MCxyDataArgs(po::variables_map const& vm);
+  void extract(po::variables_map const& vm);
+  
+  std::vector<std::string> xFiles;      ///< x data file name (io via ???)
+  std::vector<std::string> yFiles;      ///< optional. If present, same length as xFiles.
+  std::string normData;
+  uint rmRareF; /*=0*/  // remove features with fewer than rmRareF non-zero entries.   
+  bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
+  int center; ///< center the data when col-normalizing. -1: center for dense data don't center for sparse data. 0: don't center, 1:center. (Default -1) 
+  bool xunit/*=false*/;   ///< normalize each x example to unit length
+  double xscale;          ///< multiply each x example by a constant
+  
+};
+
+struct MCprojectorArgs {      
+  static po::options_description getDesc();
+  
+  MCprojectorArgs();
+  MCprojectorArgs(po::variables_map const& vm);
+  void extract(po::variables_map const& vm);
+  
+  std::vector<std::string> lfFiles;   ///< files to read the trained label filters from
+  
+  // feasible set changes with each dataset/nprojections/lablel filter. Need some naming convention
+  //      std::string feasibleFile;    ///< outputs feasible set in feasibleFile. [.proj] file basename (or cout)
+  // bool feasibleBinary;         ///< outFile format
+  // bool feasibleDense;          ///< outFile format
+  
+  std::vector<int> nProj;    ///< numbers of filters (projections) to use. -1 means use all filters. -2 means {0,1,2,...,no_fiters}
+};
+
+struct MCclassifierArgs{
+  static po::options_description getDesc();
+  
+  MCclassifierArgs();
+  MCclassifierArgs(po::variables_map const& vm);
+  void extract(po::variables_map const& vm);
+  
+  std::vector<std::string> modelFiles;
+  
+  // prediction set changes with every dataset/nprojection/label filter/model file/etc. Need some naming convention
+  // std::string predsFile;
+  
+  double keep_thresh;
+  uint32_t keep_top;
+  double threshold;
+  uint32_t min_labels;
+  
+};  
 #endif // PARAMETER_ARGS_H

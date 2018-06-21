@@ -3,12 +3,11 @@
 
 #include "mcfilter.h"
 #include "roaring.hh"
-#include "typedefs.h" //DenseM
+#include "typedefs.h" //DenseM, ActiveSet
 #include <iostream>
 
 template< typename EIGENTYPE >
-void MCfilter::filter(/*out*/ std::vector<Roaring>& active, /*in*/ EIGENTYPE const& x, int np/* = 0*/)
-{  
+void MCfilter::filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int np/* = 0*/) const{  
 
   size_t const nExamples = x.rows();  
   assert(x.cols() == this->d);
@@ -38,12 +37,13 @@ void MCfilter::filter(/*out*/ std::vector<Roaring>& active, /*in*/ EIGENTYPE con
   assert( active.size() == nExamples );
   
   // TODO if ! nProj >> nExamples, provide a faster impl ???
+  MCfilter const* fp = this; // to work with omp
 #if MCTHREADS
-#pragma omp parallel for shared(_filters, projections, active, lower_bounds, upper_bounds)
+#pragma omp parallel for shared(fp, active)
 #endif
   for(size_t e=0U; e<nExamples; ++e){
     for(size_t p=0U; p<np; ++p){
-      Roaring const* dbitset = _filters[p].filter(projections.coeff(e,p));
+      Roaring const* dbitset = fp->_filters[p]->filter(projections.coeff(e,p));
       active[e] &= *dbitset;
     }
   }

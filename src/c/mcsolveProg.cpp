@@ -1,5 +1,4 @@
 #include "mcsolveProg.hpp"
-#include "mcprojProg.hpp"
 #include "mcxydata.h"
 #include "printing.hh"
 #include "normalize.h"

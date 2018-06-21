@@ -3,16 +3,15 @@
 #include <iostream>
 #include <cstdint>
 #include <sstream>
-
+#include <boost/program_options.hpp>
 #include <boost/program_options/parsers.hpp>    // split_unix
 
-#define ARGSDEBUG 1
-
 using namespace std;
-using namespace boost::program_options;
+namespace po = boost::program_options;
+
+using namespace po;
 
 namespace opt {
-
     std::vector<std::string> cmdSplit( std::string cmdline, bool haveProgName/*=true*/ )
     {
         if( ! haveProgName ){ // insert a dummy program name, which gets ignored
@@ -160,12 +159,6 @@ namespace opt {
     std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
                                      , void(*usageFunc)(std::ostream&)/*=helpUsageDummy*/ )
     {
-#if ARGSDEBUG > 0
-        cout<<" mcArgs( argc="<<argc<<", argv, ... )"<<endl;
-        for( int i=0; i<argc; ++i ) {
-            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
-        }
-#endif
         vector<string> ret;
         po::options_description desc("Options");
 
@@ -348,160 +341,183 @@ namespace opt {
         return oss.str();
     }
 
-    //
-    // ----------------------- MCprojArgs --------------------
-    //
+} //opt::
 
-    void MCprojArgs::helpUsage( std::ostream& os ){
-        os  <<" Function:"
-            <<"\n    apply .soln {w,l,u} projections to examples 'x' and print eligible class"
-            <<"\n    assignments of each example (row of 'x')"
-            <<"\n Usage:"
-            <<"\n    <mcproj> --xfile=... --solnfile=... [other args...]"
-            <<"\n- xfile is a plain eigen DenseM or SparseM (always stored as float)"
-            <<"\n- soln is a .soln file, such as output by mcgen or mcsolve"
-            <<"\n- <mcsoln> and <mcproj> must agree on --xnorm option. (TBD: detect & forbid)"
-            <<"\n  - Perhaps this means the training --xnorm transform needs to be stored"
-            <<"\n    as part of the .soln, and applied during <mcproj> on the test/validation set"
-            <<"\n  - OR combine the xnorm and weights_avg transforms, adding a"
-            <<"\n    translation step to the vanilla matrix multiply?"
-            <<"\n  - OR just deprecate '--xnorm' and leave input 'x' xform up to the user?"
-            <<endl;
-    }
-    void MCprojArgs::init( po::options_description & desc ){
-      desc.add_options()
-	("solnfile,s", value<string>(&solnFile)->default_value(string("")), "file with the saved label filter")
-	("xfile,x", value<string>(&xFile)->default_value(string("")), "x data (row-wise nExamples x dim)")
-	("output,o", value<string>(&outFile)->default_value(string("")), "file to output the feasible classes after filter is applied.")
-	("proj,p", value<uint32_t>()->implicit_value(0U)->default_value(0U), "use up to --proj projections [0=all]")
-	("outBinary,B", value<bool>(&outBinary)->implicit_value(true)->default_value(false), "output feasible classed in  BINARY format")
-	("outDense,D", value<bool>(&outDense)->implicit_value(true)->default_value(false),"output feasible classes in DENSE format (matrix or 0|1)")
-	("xnorm", value<bool>(&xnorm)->implicit_value(true)->default_value(false), "Uggh. col-normalize x dimensions (mean=stdev=1)")
-	("xunit", value<bool>(&xunit)->implicit_value(true)->default_value(false), "row-normalize x examples")
-	("xscale", value<double>(&xscale)->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
-	// xquad ?
-	("help,h", "this help")
-	//("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
-	("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(0), "--verbosity=-1 may reduce output.")
-	;
-    }
-    MCprojArgs::MCprojArgs()
-        : // MCprojArgs::parse output...
-            xFile()
-            , solnFile()
-            , outFile()
-            , maxProj(0U)
-            , outBinary(false)
-            , outDense(false)
-            , xnorm(false)
-            , xunit(false)
-            , xscale(1.0)
-            , verbose(0)
-        {}
 
-    MCprojArgs::MCprojArgs(int argc, char**argv)
-        : MCprojArgs()
+//
+// ----------------------- MCprojArgs --------------------
+//
+
+po::options_description MCprojectorArgs::getDesc(){
+  po::options_description projopt("Label Filter Options");
+  projopt.add_options()
+    ("lfFiles,f", value<std::vector<std::string>>()->multitoken()->zero_tokens()->composing(), "label filter files") 
+    ("nProj", value<std::vector<int>>()->multitoken()->composing(), "number of filters to apply. 0 = no filters, -1 = all filters. -2 = {0,1,2,..., all filters}")
+    ;
+  return projopt;
+}
+
+MCprojectorArgs::MCprojectorArgs()
+  : 
+  lfFiles()	    
+  , nProj({-1})
+{}
+  
+MCprojectorArgs::MCprojectorArgs(po::variables_map const& vm)
+  : MCprojectorArgs()
+{
+  this->extract(vm);
+}
+  
+void MCprojectorArgs::extract(po::variables_map const& vm)
+{
+  if (vm.count("lfFiles"))
     {
-        this->parse(argc,argv);
+      lfFiles = std::vector<std::string>(vm["lfFiles"].as<std::vector<std::string>>());
+    }
+    
+  if (vm.count("nProj"))
+    {
+      nProj = std::vector<int>(vm["lfFiles"].as<std::vector<int>>());
+    }
+}
+  
+  
+  
+po::options_description MCxyDataArgs::getDesc(){
+  po::options_description dataopt("Data Options");
+  dataopt.add_options()
+    ("xFiles,x", value<std::vector<std::string>>()->multitoken()->composing()->required(), "Data files. LibSVM, XML or binary dense/sparse formats. LibSVM and XML formats also contain the labels. Binary formats don't contain labels.") 
+    ("yFiles,y", value<std::vector<std::string>>()->multitoken()->zero_tokens()->composing(), "Lables for the data. Must be one file used with all xFiles, or the same number and in same order as xFiles.")
+    ("rmRareF", value<uint>()->default_value(0U), "Remove features with fewer than this many non-zero values.")
+    ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Col-normalize the data(mean=0, stdev=1)")
+    ("center", value<bool>()->implicit_value(true), "Remove the mean when col-normalizing. Default true for dense data and false for sparse data.")
+    ("normdata", value<std::string>()->default_value(""), "Data to compute statistics for col-normalization or for rare feature removal. If empty, statistis are calculated on the first xFiles argument")
+    ("xunit", value<bool>()->implicit_value(true)->default_value(false), "Row-normalize data to unit length")
+    ("xscale", value<double>()->default_value(1.0), "scale each x example. rare feature removal, xnorm, xunit, xscal applied in order.")
+    ;
+  return dataopt;
+}
+  
+MCxyDataArgs::MCxyDataArgs()
+  : xFiles()
+  , normData()
+  , rmRareF(0U)
+  , xnorm(false)
+  , center(-1)
+  , xunit(false)
+  , xscale(1.0)
+{}
+  
+MCxyDataArgs::MCxyDataArgs(po::variables_map const& vm)
+  : MCxyDataArgs()
+{
+  this->extract(vm);
+}
+  
+void MCxyDataArgs::extract(po::variables_map const& vm)
+{ 
+  if (vm.count("xFiles"))
+    {
+      xFiles = std::vector<std::string>(vm["xFiles"].as<std::vector<std::string>>());
+    }
+  if (vm.count("yFiles"))
+    {
+      yFiles = std::vector<std::string>(vm["xFiles"].as<std::vector<std::string>>());
+    }
+    
+  if (yFiles.size()!=0 && yFiles.size()!=1 && yFiles.size() != xFiles.size())
+    {
+      throw std::runtime_error("Different numbers of xFiles and yFiles");
     }
 
-  /** helper class for alternate form of constructor.
-   * This is a simple white-space tokenizer, not for
-   * hard-core robustness (no ' " treatment, ...)
-   */
-  struct MkArgcArgv : public std::vector<char*>
-  {
-    MkArgcArgv( std::string cmd ) {
-      istringstream iss(cmd);
-      std::string token;
-      while(iss >> token) {
-	char *arg = new char[token.size() + 1];
-	copy(token.begin(), token.end(), arg);
-	arg[token.size()] = '\0';
-	push_back(arg);
-      }
-      push_back(nullptr);
+  if (vm.count("rmRareF"))
+    {
+      rmRareF = vm["rmRareF"].as<uint>();
     }
-    ~MkArgcArgv(){
-      for(size_t i = 0; i < size(); ++i){
-	delete[] (*this)[i];
-	// (*this)[i] = nullptr;
-      }
-    }
-  };
-
-  MCprojArgs::MCprojArgs(std::string args)
-    : MCprojArgs()
-  {
-    MkArgcArgv a(args);
-    this->parse( a.size()-1U, &a[0] );
-  }
-
-
-    void MCprojArgs::parse( int argc, char**argv ){
-#if ARGSDEBUG > 0
-        cout<<" parse( argc="<<argc<<", argv, ... )"<<endl;
-        for( int i=0; i<argc; ++i ) {
-            cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
-        }
-#endif
-        try {
-            po::options_description descMcproj("Allowed projections options");
-            init( descMcproj );                        // create a description of the options
-
-
-            po::variables_map vm;
-            {
-	      po::parsed_options parsed
-		= po::command_line_parser( argc, argv )
-		.options( descMcproj )
-		.run();
-	      po::store( parsed, vm );
-            }
-	    
-            if( vm.count("help") ) {
-	      helpUsage( cout );
-	      cout<<descMcproj<<endl;
-	      //helpExamples(cout);
-	      exit(0);
-            }
-
-            po::notify(vm); // at this point, raise any exceptions for 'required' args
-	    
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
-        }catch(std::exception const& e){
-            cerr<<"Error: "<<e.what()<<endl;
-            throw;
-        }catch(...){
-            cerr<<"Command-line parsing exception of unknown type!"<<endl;
-            throw;
-        }
-        return;
+  
+  if (vm.count("xnorm"))
+    {
+      xnorm = vm["xnorm"].as<bool>();
     }
 
-  // static fn -- no 'this'
-  std::string MCprojArgs::defaultHelp(){
-    std::ostringstream oss;
-    try {
-      MCprojArgs proj;                    // make sure we generate *default* help
-      po::options_description descMcproj("Allowed projection options");
-      proj.init( descMcproj );            // create a description of the options
-      
-      helpUsage( oss );
-      oss<<descMcproj<<endl;
-    }catch(po::error& e){
-      cerr<<"Invalid argument: "<<e.what()<<endl;
-      throw;
-    }catch(std::exception const& e){
-      cerr<<"Error: "<<e.what()<<endl;
-      throw;
-    }catch(...){
-      cerr<<"Command-line parsing exception of unknown type!"<<endl;
-      throw;
+  if (vm.count("center"))
+    {
+      center = vm["center"].as<bool>()?1:0;
     }
-    return oss.str();
-  }
 
-}//opt::
+  if (vm.count("normdata"))
+    {
+      normData = vm["normdata"].as<std::string>();
+    }    
+  if (vm.count("xunit"))
+    {
+      xunit = vm["xunit"].as<bool>();
+    }
+  if (vm.count("xscale"))
+    {
+      xunit = vm["xscale"].as<double>();
+    }
+}
+
+po::options_description MCclassifierArgs::getDesc(){
+  po::options_description classopt("Classifier Options");
+  classopt.add_options()
+    ("modelFiles", value<std::vector<std::string>>()->multitoken()->composing()->required(), "Files with saved models. Binary dense/sparse format or text sparse format")       
+    ("keep_top", value<uint32_t>()->default_value(10), "Keep at least keep_top predictions for each instance. Others are considered -inf. (i.e. can not calculate Prec@20 if keep_top < 20")
+    ("keep_thresh", value<double>()->default_value(0.0), "Keep all predictions larger than keep_thresh. Others are considered -inf")
+    ("threshold", value<double>()->default_value(0.0), "Threshold to use when assigning labels to an instance. Used when calculating precision/recall")
+    ("min_labels", value<uint32_t>()->default_value(1), "Each example will have at least min_labels assigned (even if they are below the threshold). Used when calculating precision/recall") 
+    ;
+  return classopt;
+}
+
+MCclassifierArgs::MCclassifierArgs()
+  : modelFiles()
+  , keep_thresh(0.0)
+  , keep_top(10)
+  , threshold(0.0)
+  , min_labels(1)
+{}
+
+MCclassifierArgs::MCclassifierArgs(po::variables_map const& vm)
+  : MCclassifierArgs()
+{
+  this->extract(vm);
+}
+
+void MCclassifierArgs::extract(po::variables_map const& vm)
+{ 
+  if (vm.count("modelFiles"))
+    {
+      modelFiles = std::vector<std::string>(vm["modelFiles"].as<std::vector<std::string>>());
+    }
+    
+  if (vm.count("keep_top"))
+    {
+      keep_top = vm["keep_top"].as<uint32_t>();
+    }
+  if (vm.count("min_labels"))
+    {
+      min_labels = vm["min_labels"].as<uint32_t>();
+    }
+    
+  if (min_labels > keep_top)
+    {
+      throw std::runtime_error("Asked to predict at least " + std::to_string(min_labels) + " per example, but keep_top is set to " + std::to_string(keep_top));
+    }
+    
+  if (vm.count("keep_thresh"))
+    {
+      keep_thresh = vm["keep_thresh"].as<double>();
+    }
+  if (vm.count("threshold"))
+    {
+      threshold = vm["threshold"].as<double>();
+    }
+  if (threshold < keep_thresh)
+    {
+      throw std::runtime_error("Asked to use threshold " + std::to_string(threshold) + " but keep_thresh is set to " + std::to_string(keep_thresh));
+    }    
+}
+

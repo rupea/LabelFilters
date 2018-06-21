@@ -4,7 +4,8 @@
  * implementation of the mc filter. 
  */
 #include "mcsoln.h"
-#include "filter.h" 
+#include "filter.h"
+#include "typedefs.h"
 #include <fstream>
 
 class MCfilter : protected MCsoln
@@ -14,7 +15,7 @@ class MCfilter : protected MCsoln
   //    MCfilter( char const* const solnfile = nullptr );
   MCfilter();
   MCfilter(MCsoln const& s);
-  ~MCfilter(){}
+  ~MCfilter();
   
   //    param_struct const& getParms() const {return this->parms;}
   MCsoln       const& getSoln()  const {return *this;}
@@ -32,21 +33,11 @@ class MCfilter : protected MCsoln
     is.close();
   }
   
-  void read( std::istream& is )
-  {       
-    MCsoln::read(is);
-    init_filters();
-  }
-  void write( std::ostream& os, enum Fmt fmt=BINARY) const
-  {
-    MCsoln::write(os,fmt);
-  }
+  inline void read( std::istream& is ){ MCsoln::read(is);init_filters();}
+  inline void write( std::ostream& os, enum Fmt fmt=BINARY) const {MCsoln::write(os,fmt);}  
+  inline bool isempty()const {return !_filters.size();}
+  inline uint32_t nFilters() const {return _filters.size();}
   
-  bool isempty()
-  {
-    return !_filters.size();
-  }
-
   /** apply the MC filter on data 
    * \p active  bit matrix indicating if a class is active or has been filtered out 
    *              active(i,k) = 1 if class k is active for example i
@@ -58,10 +49,11 @@ class MCfilter : protected MCsoln
    *   - Please only include \c find_w_detail.hh for \em strange 'x' types.
    */
   template< typename EIGENTYPE >
-    void filter(/*out*/ std::vector<Roaring>& active, /*in*/ EIGENTYPE const& x, int np = 0);
+    void filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int np = 0) const;
  private:
-  std::vector<Filter> _filters;
+  std::vector<Filter*> _filters;
   void init_filters();
+  void delete_filters();
   //    int getNthreads( param_struct const& params ) const;
 };
 

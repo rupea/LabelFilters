@@ -1,5 +1,7 @@
 #include "mcxydata.h"
-#include "normalize.hh"
+#include "mcxydata_detail.h"
+#include "mcxydata_detail.hh"
+//#include "normalize.hh"
 #include "printing.h"
 #include "printing.hh"
 
@@ -10,8 +12,8 @@
 //#include <iomanip>
 
 // ... MCxyData magic headers (simplify I/O)
-std::array<char,4> MCxyData::magic_xSparse = {0,'X','s','8'}; // or 4 for floats
-std::array<char,4> MCxyData::magic_xDense  = {0,'X','d','8'}; // or 4 for floats
+std::array<char,4> MCxyData::magic_xSparse = {0,'X','s','4'}; // value saved as floats
+std::array<char,4> MCxyData::magic_xDense  = {0,'X','d','4'}; // values saved as floats 
 // x text mode not supported so far.
 std::array<char,4> MCxyData::magic_yBin    = {0,'Y','s','b'};
 // y text mode readable but has no magic.
@@ -60,8 +62,8 @@ void MCxyData::xscale( double const mul ){
 
 void MCxyData::xunitnormal(){
   // have normalization indicators? 
-  if (denseOk) row_unit_normalize(xDense);
-  if (sparseOk) row_unit_normalize(xSparse);
+  if (denseOk) mcxydata_detail::row_unit_normalize(xDense);
+  if (sparseOk) mcxydata_detail::row_unit_normalize(xSparse);
 }
 
 void MCxyData::xstdnormal(bool colNorm, bool center){
@@ -79,8 +81,26 @@ void MCxyData::xstdnormal(VectorXd& mean, VectorXd& stdev, bool colNorm, bool ce
       sparseOk = false;
       xSparse = SparseM();
     }
-    if (colNorm) col_mean_std_normalize( xDense, mean, stdev, center, useMeanStdev); 
-    else         row_mean_std_normalize( xDense, mean, stdev, center, useMeanStdev);     
+    if (colNorm) mcxydata_detail::col_mean_std_normalize( xDense, mean, stdev, center, useMeanStdev); 
+    else         mcxydata_detail::row_mean_std_normalize( xDense, mean, stdev, center, useMeanStdev);     
+}
+
+void MCxyData::removeRareFeatures(const int minex /*=1*/){
+  std::vector<std::size_t> foo, bar;
+  removeRareFeatures(foo, bar, minex, false);
+}
+
+void MCxyData::removeRareFeatures(std::vector<std::size_t>& feature_map, std::vector<std::size_t>& reverse_feature_map, const int minex /*=1*/, const bool useFeatureMap /*=false*/ ){
+  if (denseOk)  mcxydata_detail::remove_rare_features(xDense, feature_map, reverse_feature_map, minex, useFeatureMap);
+  if (sparseOk) mcxydata_detail::remove_rare_features(xSparse, feature_map, reverse_feature_map, minex, useFeatureMap);
+}
+
+void MCxyData::read( std::string xFile, std::string yFile /*=""*/ ){
+  xread(xFile);
+  if (yFile.size())
+    {
+      yread(yFile);
+    }
 }
 
 void MCxyData::xread( std::string xFile ){
@@ -89,8 +109,8 @@ void MCxyData::xread( std::string xFile ){
   // TODO XXX try Dense-Text, Sparse-Text too?
   try{
     xfs.open(xFile);
+    if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile " + xFile);
     detail::io_bin(xfs,magicHdr);
-    if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile");
     if( MAGIC_EQU(magicHdr,MCxyData::magic_xDense)){
       detail::eigen_io_bin(xfs, xDense);
       if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
@@ -128,9 +148,9 @@ void MCxyData::xread( std::string xFile ){
 	  denseOk= false;
 	  xDense = DenseM();
 	}
-      xfs.close();
-      // Not here [yet]: text formats? libsvm? milde repo?
+      // Not here [yet]: text formats? milde repo?
     }
+    xfs.close();
   }catch(std::exception const& e){
     cerr<<" oops reading x data from "<<xFile<<" ... "<<e.what()<<endl;
     throw;

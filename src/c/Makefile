@@ -13,7 +13,7 @@ endif
 BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
-OPENMP ?= -fopenmp
+OPENMP ?= -fopenmp -DMCTHREADS=1
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
 # 1. no openmp anywhere
 #OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
@@ -22,9 +22,8 @@ OPENMP ?= -fopenmp
 # allow STL experimental threads?
 
 
-#CPPFLAGS += -fopenmp
 # testing...
-MKLROOT:=/opt/intel/composer_xe_2015.3.187/mkl
+#MKLROOT:=/opt/intel/compilers_and_libraries/linux/mkl/
 #CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include -I$(MAKEFILE_DIR)
 
 ifneq ($(wildcard /usr/include/octave-3.8.2),)
@@ -110,7 +109,7 @@ oct_kmeans.oct: oct_kmeans.o utils.o printing.o EigenOctave.o normalize.o
 DBGFLAGS := $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
 DBGFLAGS := $(DBGFLAGS) -ggdb3 -Wall -Wno-sign-compare # -Werror
 # for better tracing...
-DBGFLAGS += -O1
+# DBGFLAGS += -O1
 %-dbg.o: %.cpp
 	$(CXX) -o $@ $(DBGFLAGS) -c $<
 %.lo: %.cpp
@@ -128,7 +127,7 @@ settings:
 	echo "BOOSTLIB       = $(BOOSTLIB)"
 /tmp/%.chk: %
 	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-CHECK_HEADERS := mcfilter.h mcfilter.hh mcpredict.h mcpredict.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcupdate.hh objective.h mcsolver_detail.hh mcsolver_init.hh boolmatrix.h EigenIO.h typedefs.h constants.h normalize.h evaluate.h evaluate.hh mutexlock.h filter.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojProg.hpp PredictionSet.h printing.h printing.hh utils.h WeightVector.h LPSR.h # predict.h predict.hh
+CHECK_HEADERS := mcfilter.h mcfilter.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcxydata_detail.h mcxydata_detail.hh mcupdate.hh objective.h mcsolver_detail.hh mcsolver_init.hh boolmatrix.h typedefs.h constants.h mutexlock.h filter.h KMeans.h parameter.h parameter-args.h mcsolveProg.hpp mcprojector.h linearModel.h linearModel.hh linearModel_detail.h linearModel_detail.hh mclinearClass.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h LPSR.h # predict.h predict.hh EigenIO.h mcpredict.h mcpredict.hh evaluate.h evaluate.hh 
 # faster version (can run in parallel)
 check-headers chk-headers:
 	rm -f /tmp/*.chk
@@ -140,7 +139,7 @@ check-oct-headers: EigenOctave.h
 	done; \
 	echo "DONE checking octave-related standalone header compilation"
 
-LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp EigenIO.cpp parameter.cpp parameter-args.cpp evaluate.cpp normalize.cpp mcsolveProg.cpp mcprojProg.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp # predict.cpp
+LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp  parameter.cpp parameter-args.cpp mcsolveProg.cpp mcprojector.cpp linearModel.cpp mclinearClass.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp # predict.cpp  EigenIO.cpp evaluate.cpp 
 
 lib: hdr-stamp
 #	$(MAKE) -f$(THIS_MAKEFILE) -j15 libs-only demo-proj1 demo-quick || { echo -e '\n\n\n\n\n'; $(MAKE) -f$(THIS_MAKEFILE) libs-only demo-proj1 demo-quick; }
@@ -370,19 +369,13 @@ mcgenx: erik/mcgen.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
 	$(CXX) -o $@ -DUSE_LIBMCFILTER -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcdumpsoln: erik/mcdumpsoln.cpp libmcfilter-dbg.a | libmcfilter-dbg.a
 	$(CXX) -o $@ -I$(MAKEFILE_DIR) $(DBGFLAGS) -Wno-error=maybe-uninitialized $^
-erik/mcsolve0: erik/mcsolve0.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
-	# mcsolve0 is an initial version, before opt::MCsolveProgram was written
-	mkdir -p erik
-	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcsolve: mcsolve.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a $(CROARINGLIB)/libroaring.a
 	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
-mcproj0: erik/mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a
-	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
 mcproj: mcproj.cpp libmcfilter-dbg.a $(BOOSTLIB)/libboost_program_options.a $(CROARINGLIB)/libroaring.a
-	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) $^
+	$(CXX) -o $@ -Wno-error=maybe-uninitialized -I$(MAKEFILE_DIR) $(DBGFLAGS) -fpic -L$(HOME)/local/lib $^ -lprofiler -lunwind -llzma
 .PHONY: run-mcproj
 run-mcproj:
-	rm -f mcproj mcproj0; $(MAKE) -f$(THIS_MAKEFILE) hdr-stamp
+	rm -f mcproj; $(MAKE) -f$(THIS_MAKEFILE) hdr-stamp
 	make -j20 mcproj mcproj0 mcgenx || { make mcproj mcproj0 mcgenx; }
 	./mcgenx > mcgenx.log 2>&1
 	./mcproj0 --solnfile mcgen-a3-mlc-bin.soln -x mcgen-a3-x-D.bin > s0.log 2>&1 & \

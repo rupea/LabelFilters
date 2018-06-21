@@ -28,24 +28,11 @@ SparseMb labelVec2Mat (const Eigen::VectorXd& yVec)
 }
 
 
-// check if a file exists and is ready for reading
+// // check if a file exists and is ready for reading
 
-bool fexists(const char *filename)
-{
-  std::ifstream ifile(filename);
-  return ifile;
-}
+// bool fexists(const char *filename)
+// {
+//   std::ifstream ifile(filename);
+//   return ifile;
+// }
 
-
-// delete the contents of an ActiveDataSet to free up memory
-
-void free_ActiveDataSet(ActiveDataSet*& active)
-{
-    if (active){   
-        for(ActiveDataSet::iterator actit = active->begin(); actit !=active->end();actit++){
-            delete (*actit);
-        }
-        delete active;
-        active=nullptr;
-    }		
-}
