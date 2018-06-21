@@ -58,14 +58,20 @@ public:
 
     void xscale(double scal);           ///< multiply all x values by const
     double xmul() const {return xscal;} ///< what's global x multiplier?
-
+ 
     //remove features that appear in fewer than minex examples 
     void removeRareFeatures(const int minex=1);
     // remove features that appear in fewer than minex examples. Return a feature map between the new and all columns.
     // if useFeatureMap is true, the provided feature map (and reverse feature map) are used to remove features (minex
     //   is ignored)
     void removeRareFeatures(std::vector<std::size_t>& feature_map, std::vector<std::size_t>& reverse_feature_map, const int minex=1, const bool useFeatureMap=false );
-    
+    //remove labels that appear in fewer than minex examples 
+    void removeRareLabels(const int minex=1);
+    // remove labels that appear in fewer than minex examples. Return a label map between the new and all labels.
+    // if useLabelMap is true, the provided label map (and reverse label map) are used to remove labels (minex
+    //   is ignored)
+    void removeRareLabels(std::vector<std::size_t>& label_map, std::vector<std::size_t>& reverse_label_map, const int minex=1, const bool useLabelMap=false );
+   
     void quadx(double qscal=0.0);       ///< add quadratic dimensions (0.0 autoscales, somehow) \throw if no x data
     double quadmul() const {return qscal;} ///< return the used quadmul (or 0.0 if quadx has not been called)
     

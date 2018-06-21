@@ -390,9 +390,10 @@ po::options_description MCxyDataArgs::getDesc(){
     ("xFiles,x", value<std::vector<std::string>>()->multitoken()->composing()->required(), "Data files. LibSVM, XML or binary dense/sparse formats. LibSVM and XML formats also contain the labels. Binary formats don't contain labels.") 
     ("yFiles,y", value<std::vector<std::string>>()->multitoken()->zero_tokens()->composing(), "Lables for the data. Must be one file used with all xFiles, or the same number and in same order as xFiles.")
     ("rmRareF", value<uint>()->default_value(0U), "Remove features with fewer than this many non-zero values.")
+    ("rmRareL", value<uint>()->default_value(0U), "Remove labels that appear fewer than this many times.")
     ("xnorm", value<bool>()->implicit_value(true)->default_value(false), "Col-normalize the data(mean=0, stdev=1)")
     ("center", value<bool>()->implicit_value(true), "Remove the mean when col-normalizing. Default true for dense data and false for sparse data.")
-    ("normdata", value<std::string>()->default_value(""), "Data to compute statistics for col-normalization or for rare feature removal. If empty, statistis are calculated on the first xFiles argument")
+    ("normdata", value<std::string>()->default_value(""), "Data to compute statistics for col-normalization and/or for rare feature and rare labels remova. If empty, statistis are calculated on the first xFiles argument")
     ("xunit", value<bool>()->implicit_value(true)->default_value(false), "Row-normalize data to unit length")
     ("xscale", value<double>()->default_value(1.0), "scale each x example. rare feature removal, xnorm, xunit, xscal applied in order.")
     ;
@@ -403,6 +404,7 @@ MCxyDataArgs::MCxyDataArgs()
   : xFiles()
   , normData()
   , rmRareF(0U)
+  , rmRareL(0U)
   , xnorm(false)
   , center(-1)
   , xunit(false)
@@ -435,7 +437,12 @@ void MCxyDataArgs::extract(po::variables_map const& vm)
     {
       rmRareF = vm["rmRareF"].as<uint>();
     }
-  
+
+  if (vm.count("rmRareL"))
+    {
+      rmRareL = vm["rmRareL"].as<uint>();
+    }
+
   if (vm.count("xnorm"))
     {
       xnorm = vm["xnorm"].as<bool>();

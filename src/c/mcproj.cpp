@@ -137,17 +137,24 @@ int main(int argc, char**argv){
   Eigen::VectorXd sdev;
   vector<size_t> feature_map;
   vector<size_t> reverse_feature_map;
+  vector<size_t> label_map;
+  vector<size_t> reverse_label_map;
   
   { // get statistics for normalization and for removal of rare features. 
     MCxyData data;
 
-    if (dataargs.rmRareF > 0 || dataargs.xnorm )
+    if (dataargs.rmRareF > 0 || dataargs.rmRareL > 0 || dataargs.xnorm )
       {
 	data.read(normfile);
       }
     if (dataargs.rmRareF > 0)
       {
 	data.removeRareFeatures(feature_map, reverse_feature_map, dataargs.rmRareF, false);
+      }
+
+    if (dataargs.rmRareL > 0)
+      {
+	data.removeRareLabels(label_map, reverse_label_map, dataargs.rmRareL, false);
       }
     
     if (dataargs.xnorm)
@@ -210,6 +217,10 @@ int main(int argc, char**argv){
 	  if (dataargs.rmRareF > 0)
 	    {
 	      data->removeRareFeatures(feature_map, reverse_feature_map, dataargs.rmRareF, true);
+	    }
+	  if (dataargs.rmRareL > 0)
+	    {
+	      data->removeRareLabels(label_map, reverse_label_map, dataargs.rmRareL, true);
 	    }
 	    
 	  if (dataargs.xnorm)

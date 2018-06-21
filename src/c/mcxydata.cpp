@@ -95,6 +95,15 @@ void MCxyData::removeRareFeatures(std::vector<std::size_t>& feature_map, std::ve
   if (sparseOk) mcxydata_detail::remove_rare_features(xSparse, feature_map, reverse_feature_map, minex, useFeatureMap);
 }
 
+void MCxyData::removeRareLabels(const int minex /*=1*/){
+  std::vector<std::size_t> foo, bar;
+  removeRareLabels(foo, bar, minex, false);
+}
+
+void MCxyData::removeRareLabels(std::vector<std::size_t>& label_map, std::vector<std::size_t>& reverse_label_map, const int minex /*=1*/, const bool useLabelMap /*=false*/ ){
+  if (y.cols() > 0)  mcxydata_detail::remove_rare_features(y, label_map, reverse_label_map, minex, useLabelMap);
+}
+
 void MCxyData::read( std::string xFile, std::string yFile /*=""*/ ){
   xread(xFile);
   if (yFile.size())

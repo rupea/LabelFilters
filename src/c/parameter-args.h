@@ -96,6 +96,7 @@ struct MCxyDataArgs {
   std::vector<std::string> yFiles;      ///< optional. If present, same length as xFiles.
   std::string normData;
   uint rmRareF; /*=0*/  // remove features with fewer than rmRareF non-zero entries.   
+  uint rmRareL; /*=0*/  // remove lables with fewer than rmRareL non-zero entries.   
   bool xnorm/*=false*/;   ///< normalize x dims across examples to mean and stdev of 1.0
   int center; ///< center the data when col-normalizing. -1: center for dense data don't center for sparse data. 0: don't center, 1:center. (Default -1) 
   bool xunit/*=false*/;   ///< normalize each x example to unit length
