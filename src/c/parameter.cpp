@@ -10,73 +10,6 @@
 
 using namespace std;
 
-void finalize_default_params(param_struct &p ){
-  if( p.C1 < 0.0 ){
-    throw runtime_error("Parameter C1 must be specified");
-  }
-  if( p.C2 < 0.0 ){
-    throw runtime_error("Parameter C2 must be specified");
-  }
-  
-  switch (p.update_type)
-    {
-    case SAFE_SGD:
-      if (p.default_batch_size) 
-	{
-	  p.batch_size = 1U;
-	  p.default_batch_size = false;
-	}
-      if (p.batch_size !=1U) 
-	{
-	  cerr << "Warning: batch size must be 1 for SAFE_SGD update method. Setting batch size to 1" << endl;
-	  p.batch_size = 1U;
-	}
-      break;
-    case MINIBATCH_SGD:
-      if (p.default_batch_size)
-	{
-	  p.batch_size = 1000U;
-	  p.default_batch_size = false;
-	}
-      break;
-    default:
-      throw runtime_error("Unrecognized update method");
-    }
-
-  if (p.max_iter == 0U) p.max_iter = 1e8/p.batch_size;   
-  if (p.default_report_epoch)
-    {
-      if (p.verbose == 0) 
-	{
-	  p.report_epoch = 0;
-	}
-      else
-	{	  
-	  p.report_epoch = p.max_iter/10;  // report objective value 10 times to check convergence
-	}
-      p.default_report_epoch = false; // report epoch has been initialized
-    }
-
-  if (p.default_optimizeLU_epoch) 
-    {
-      p.optimizeLU_epoch = p.max_iter+1; // only optimize at the beginning and at the end
-      p.default_optimizeLU_epoch = false; // optmizeLU_epoch has been initialized
-    }  
-
-  if (p.eta_type == DEFAULT)
-    {
-      // using defaults recommended by Leon Bottou
-      if (p.avg_epoch > 0 || p.default_avg_epoch)
-	{
-	  //averaging is on by default
-	  p.eta_type = ETA_3_4;
-	}
-      else 
-	{
-	  p.eta_type = ETA_LIN;
-	}
-    }
-}
 
 void print_parameter_usage()
 {
@@ -84,7 +17,7 @@ void print_parameter_usage()
     " parameters - a structure with the optimization parameters."
     "\n              If a parmeter is not present the default is used"
     "\n   Main Parameters (structure field names) are:"
-    "\n     no_projections - number of projections to be learned [5]"
+    "\n     nfilters - number of projections to be learned [5]"
     "\n     C1 - the penalty for an example being outside it's class bounary."
     "\n             Internally it is multiplied by the number of classes."
     "\n     C2 - the penalty for an example being inside other class' boundary"
@@ -95,7 +28,7 @@ void print_parameter_usage()
     "\n     resume - whether to continue with additional projections."
     "\n              Takes previous projections from w_prev l_prev and u_prev. [false]"
     "\n     reoptimize_LU - optimize l and u for given projections w_prev. Implies"
-    "\n              resume is true (i.e. if no_projections > w_prev.cols() additional"
+    "\n              resume is true (i.e. if nfilters > w_prev.cols() additional"
     "\n              projections will be learned. [false]"
     "\n     class_samples - the number of negative classes to sample for each example"
     "\n              at each iteration. 0 to use all classes. [0]"
@@ -138,7 +71,7 @@ void print_parameter_usage()
     "\n              0 - initialize with the zero vector"
     "\n              1 - initialize with the previous projection from w_prev"
     "\n              2 - initialize with a random vector"
-    "\n              3 - initiazlie with the vector between two random class centers"
+    "\n              3 - initialize with the vector between two random class centers"
     "\n     init_norm - renormalize the initial w to init_norm. Negative number means not renormalize. [10]"
     "\n     init_orthogonal - make the initial w orthogonal on previous projections [false]"
     "\n     verbose - output verbosity [1]"
@@ -147,11 +80,17 @@ void print_parameter_usage()
     
 #if GRADIENT_TEST /* || others?*/
       "\n   Compile-time Parameters are:"
-      "\n     finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [0]"
-      "\n     no_finite_diff_tests - number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. [1]"
-      "\n     finite_diff_test_delta - the size of the finite difference. [1e-2]"
+      "\n     finite_diff_test_epoch - number of iterations between testign the gradient with finite differences. 0 for no testing [1]"
+      "\n     no_finite_diff_tests - number of instances to perform the finite differences test at each testing round. The instances are randomly picked from the training set. [1000]"
+      "\n     finite_diff_test_delta - the size of the finite difference. [1e-4]"
 #endif
       <<endl;
+}
+
+std::ostream& operator<<( std::ostream& os, SolverParams const& p )
+{
+  os << p.params();
+  return os;
 }
 
 std::ostream& operator<<( std::ostream& os, param_struct const& p )
@@ -165,38 +104,31 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     uint32_t const c1=23U;
     uint32_t const c2=22U;
     uint32_t const c3=23U;
-    WIDE(os,c1,right<<setw(14)<<"proj "<<left<<p.no_projections);
+    WIDE(os,c1,right<<setw(14)<<"proj "<<left<<p.nfilters);
     WIDE(os,c2,right<<setw(11)<<"maxiter "<<left<<p.max_iter);
     WIDE(os,c3,right<<setw(15)<<"C1 "<<left<<p.C1);
     os<<endl;
+    WIDE(os, c1, right<<setw(14)<<"updatetype "<<left<<tostring(p.update_type));
     WIDE(os,c1,right<<setw(14)<<"batchsize "<<left<<p.batch_size);
-    WIDE(os,c2,right<<setw(11)<<"treport "<<left<<p.report_epoch);
     WIDE(os,c3,right<<setw(15)<<"C2 "<<left<<p.C2);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"etatype "<<left<<tostring(p.eta_type));
     WIDE(os,c2,"   "<<tostring(p.reorder_type));
-    WIDE(os,c3,"      "<<left<<p.adjust_C);
+    WIDE(os,c3,right<<setw(14)<<"adjustC"<<left<<p.adjust_C);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"eta0 "<<left<<p.eta);
+    WIDE(os,c2,right<<setw(11)<<"treport "<<left<<p.report_epoch);
     WIDE(os,c2,right<<setw(11)<<"treorder "<<left<<p.reorder_epoch);
-    WIDE(os,c3,right<<setw(15)<<"sample "<<left<<p.class_samples);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"etamin "<<left<<p.min_eta);
     WIDE(os,c2,right<<setw(11)<<"toptlu "<<left<<p.optimizeLU_epoch);
-#if GRADIENT_TEST
-    WIDE(os,c3,right<<setw(15)<<"tgrad "<<left<<p.finite_diff_test_epoch);
-#endif
+    WIDE(os,c3,right<<setw(15)<<"sample "<<left<<p.class_samples);
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"threads "<<left<<p.num_threads);
-#if GRADIENT_TEST
-    WIDE(os,c3,right<<setw(15)<<"ngrad "<<left<<p.no_finite_diff_tests);
-#endif
+    WIDE(os,c1,right<<setw(14)<<"averaged_gradient "<<left<<p.averaged_gradient);     // bool    
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"remove_constraints "<<left<<p.remove_constraints);     // bool
     WIDE(os,c2,right<<setw(11)<<"avgstart "<<left<<p.avg_epoch);
-#if GRADIENT_TEST
-    WIDE(os,c3,right<<setw(15)<<"grad "<<left<<p.finite_diff_test_delta);
-#endif
     os<<endl;
     WIDE(os,c1,right<<setw(14)<<"remove_class "<<left<<p.remove_class_constraints);       // bool
     WIDE(os,c2,right<<setw(11)<<"resume "<<left<<p.resume);  // bool
@@ -211,6 +143,12 @@ std::ostream& operator<<( std::ostream& os, param_struct const& p )
     WIDE(os, c3, right<<setw(15)<<"initorthogonal "<<left<<p.init_orthogonal);   // bool
     os<<endl;
     WIDE(os, c1, right<<setw(14)<<"verbose "<<left<<p.verbose);
+#if GRADIENT_TEST
+    WIDE(os,c3,right<<setw(15)<<"tgrad "<<left<<p.finite_diff_test_epoch);
+    WIDE(os,c3,right<<setw(15)<<"ngrad "<<left<<p.no_finite_diff_tests);
+    WIDE(os,c3,right<<setw(15)<<"grad "<<left<<p.finite_diff_test_delta);
+    os<<endl;
+#endif
     return os;
 }
 
@@ -337,13 +275,13 @@ namespace detail {
 using namespace detail;
 
 #define PARAM_STRUCT_IO \
-        IO(no_projections); \
+        IO(nfilters); \
         /*IO(tot_projections);*/ \
         IO(C1); \
         IO(C2); \
         IO(max_iter); \
         IO(seed); \
-        IO(num_threads); \
+	IO(num_threads);	     \
         IO_AS(bool,uint32_t,resume); \
         IO_AS(bool,uint32_t,reoptimize_LU); \
         IO(class_samples); \
@@ -352,6 +290,7 @@ using namespace detail;
         IO_enum(eta_type); \
         IO(eta); \
         IO(min_eta); \
+        IO_AS(bool,uint32_t,averaged_gradient); \
         IO(avg_epoch); \
         IO(reorder_epoch); \
         IO(report_epoch); \
@@ -445,3 +384,16 @@ int read_binary( std::istream& is, param_struct& p )
 ERR:
     return 1;   // failed read
 }
+
+
+SolverParams::SolverParams():    
+  default_batch_size(true),
+  default_report_epoch(true),
+  default_optimizeLU_epoch(true),
+  default_init_norm(true),
+  default_eta_type(true),
+  default_max_iter(true)
+{
+  m_params = set_default_params();
+}
+

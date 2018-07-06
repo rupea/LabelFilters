@@ -16,22 +16,12 @@ using namespace std;
 // Complete some of the class declarations before instantiating MCsolver
 MCsolver::MCsolver()
   : MCsoln(),objective_val()
-    // private "solve" variables here TODO
 {
-  // if( solnfile ){
-  //   ifstream ifs(solnfile);
-  //   if( ifs.good() ) try{
-  // 	cout<<" reading "<<solnfile<<endl;
-  // 	this->read( ifs );
-  // 	this->pretty( cout );
-  // 	cout<<" reading "<<solnfile<<" DONE"<<endl;
-  //     }catch(std::exception const& e){
-  // 	ostringstream err;
-  // 	err<<"ERROR: unrecoverable error reading MCsoln from file "<<solnfile;
-  // 	throw(runtime_error(err.str()));
-  //     }
-  // }
 }
+
+MCsolver::MCsolver(MCsoln const& soln)
+  : MCsoln(soln),objective_val()
+{}
 
 MCsolver::~MCsolver()
 {
@@ -100,20 +90,22 @@ void MCsolver::setNProj(uint32_t const nProj, bool keep_weights, bool keep_LU)
 MCpermState::MCpermState( size_t nClass )
   : Perm(nClass)
   , ok_lu(false)
-  , ok_lu_avg(false)
   , ok_sortlu(false)
+  , ok_lu_avg(false)
   , ok_sortlu_avg(false)
     
-  , l( nClass )
-  , u( nClass )
-  , sortlu( nClass*2U )
+  , m_l( nClass )
+  , m_u( nClass )
+  , m_sortlu( nClass*2U )
     
-  , sortlu_acc( nClass*2U )
+  , m_l_acc( nClass )
+  , m_u_acc( nClass )
+  , m_sortlu_acc( nClass*2U )
   , nAccSortlu(0U)
 
-  , l_avg( nClass )
-  , u_avg( nClass )
-  , sortlu_avg( nClass*2U )
+  , m_l_avg( nClass )
+  , m_u_avg( nClass )
+  , m_sortlu_avg( nClass*2U )
     
 {
   reset();            // just in case Eigen does not zero them initially
@@ -121,20 +113,18 @@ MCpermState::MCpermState( size_t nClass )
 
 void MCpermState::reset()
 {
-  l.setZero();
-  u.setZero();
-  sortlu.setZero();
+  // starting from l = u = zero. l and u and sortlu are ok. 
+  ok_lu = true;
+  ok_sortlu = true;
+  m_l.setZero();
+  m_u.setZero();
+  m_sortlu.setZero();
+  reset_acc();
   
-  sortlu_acc.setZero();
-  nAccSortlu = 0U;            // sortlu_avg becomes significant only when this is nonzero
-
-  l_avg.setZero();
-  u_avg.setZero();
-  sortlu_avg.setZero();
-
-  ok_lu = false;
   ok_lu_avg = false;
-  ok_sortlu = false;
+  m_l_avg.setZero();
+  m_u_avg.setZero();
+  m_sortlu_avg.setZero();
   ok_sortlu_avg = false;
 
 }
@@ -143,11 +133,11 @@ void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const
 {
   size_t const nClasses = y.cols();
   size_t const nEx      = y.rows();
-  assert( l.size() == (int)nClasses );
-  assert( u.size() == (int)nClasses );
+  assert( m_l.size() == (int)nClasses );
+  assert( m_u.size() == (int)nClasses );
   assert( projection.size() == (int)nEx );
-  l.setConstant(  0.1 * boost::numeric::bounds<double>::highest() );
-  u.setConstant(  0.1 * boost::numeric::bounds<double>::lowest() );
+  m_l.setConstant(  0.1 * boost::numeric::bounds<double>::highest() );
+  m_u.setConstant(  0.1 * boost::numeric::bounds<double>::lowest() );
   for (size_t i=0; i<nEx; ++i) {
     for (SparseMb::InnerIterator it(y,i); it; ++it) {
       if (it.value()) {
@@ -156,20 +146,15 @@ void MCpermState::init( /* inputs: */ VectorXd const& projection, SparseMb const
 	if (!params.remove_class_constraints || !(filtered.get(i,c)))
 	  {	    
 	    double const pr = projection.coeff(i);
-	    l.coeffRef(c) = min(pr, l.coeff(c));
-	    u.coeffRef(c) = max(pr, u.coeff(c));
+	    m_l.coeffRef(c) = min(pr, m_l.coeff(c));
+	    m_u.coeffRef(c) = max(pr, m_u.coeff(c));
 	  }
       }
     }
   }
-  l_avg = l;
-  u_avg = u;
   ok_lu = true;
   ok_sortlu = false;
-  
-  sortlu_acc.setZero();
-  nAccSortlu = 0U;
-  sortlu_avg.setZero();
+  reset_acc();
   ok_sortlu_avg = false;
   ok_lu_avg = false;
 }
@@ -181,18 +166,14 @@ void MCpermState::optimizeLU( VectorXd const& projection, SparseMb const& y, Vec
                               double const C1, double const C2,
                               param_struct const& params )
 {
-  mcsolver_detail::optimizeLU( l, u, // <--- outputs
-			       projection, y, rev/*class_order*/, perm/*sorted_class*/, wc,
+  assert(nAccSortlu == 0); // we either use optimizeLU or we accumulate gradients. Not both. 
+  mcsolver_detail::optimizeLU( m_l, m_u, // <--- outputs
+			       projection, y, rev()/*class_order*/, perm()/*sorted_class*/, wc,
 			       nclasses, inside_weight, outside_weight, filtered, C1, C2, params );
   ok_lu = true;
   ok_sortlu = false;
-  // reset accumulation since changes to lu do not come from a gradient step
-  if (nAccSortlu > 0U)
-    {
-      nAccSortlu = 0U;
-      sortlu_acc.setZero();
-      ok_sortlu_avg = false;
-    }    
+  reset_acc();
+  ok_sortlu_avg = false;
 }
 
 void MCpermState::optimizeLU_avg( VectorXd const& projection_avg, SparseMb const& y, VectorXd const& wc,
@@ -202,8 +183,9 @@ void MCpermState::optimizeLU_avg( VectorXd const& projection_avg, SparseMb const
                                   double const C1, double const C2,
                                   param_struct const& params )
 {
-  mcsolver_detail::optimizeLU( l_avg, u_avg, // <--- outputs
-			       projection_avg, y, rev/*class_order*/, perm/*ssorted_class*/, wc,
+  assert(nAccSortlu == 0); // we either use optimizeLU or we accumulate gradients. Not both. 
+  mcsolver_detail::optimizeLU( m_l_avg, m_u_avg, // <--- outputs
+			       projection_avg, y, rev()/*class_order*/, perm()/*ssorted_class*/, wc,
 			       nclasses, inside_weight, outside_weight, filtered, C1, C2, params );
   ok_lu_avg = true;
   ok_sortlu_avg = false;
@@ -219,8 +201,8 @@ int MCsolver::getNthreads( param_struct const& params ) const
         nThreads = omp_get_max_threads(); // use OMP_NUM_THREADS
     else
         nThreads = params.num_threads;
-    omp_set_num_threads( nThreads );
-    Eigen::initParallel();
+    //omp_set_num_threads( nThreads );
+    //Eigen::initParallel();
     if (params.verbose >= 1) 
       {
 	cout<<" solve_ with _OPENMP and params.num_threads set to "<<params.num_threads

@@ -281,7 +281,6 @@ int main(int argc, char**argv){
 	      for (vector<int>::iterator npit=filterargs.nProj.begin(); npit != filterargs.nProj.end(); ++npit)
 		{
 		  int np = *npit;
-
 		  if (np == 0 && nofilter_ok)
 		    {
 		      //the results for 0 projections or no filters are the same regardelss of the label filter used.

@@ -1,67 +1,48 @@
 CXX ?= g++
 CC ?= gcc
 
+THIS_MAKEFILE = $(lastword $(MAKEFILE_LIST))
+MAKEFILE_DIR = $(abspath $(dir $(THIS_MAKEFILE)))
+
+
 BOOSTDIR ?= $(HOME)/local
+BOOSTINC ?= -I$(BOOSTDIR)/include
 BOOSTLIB ?= $(BOOSTDIR)/lib
-BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
+BOOSTLINK ?= -L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
 
-CROARINGDIR ?= ../../CRoaring
+CROARINGDIR ?= $(MAKEFILE_DIR)/../CRoaring
 CROARINGINC ?= -I$(CROARINGDIR)
 CROARINGLIB ?= $(CROARINGDIR)
 CROARINGLINK:=-L$(CROARINGLIB) -Wl,-rpath,$(CROARINGLIB) 
 
+BINDIR ?= bin
 
-
-ifneq ($(wildcard /usr/include/octave-3.8.2),)
-OCTAVEDIR ?= /usr
-BINDIR ?= bin-newmlc
-OCT_INC := -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
-OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.8.2
-endif
-ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
-OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
-BINDIR ?= bin-mlc
-OCT_INC := -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
-OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.8.2
-endif
-ifneq ($(wildcard /usr/include/octave-3.8.1),)
-OCTAVEDIR = /usr
-BINDIR ?= bin_oct3.8.1
-OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
-OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.8.1
-endif
-
-
+# OMP options
+# 1. full parallelization 
 OPENMP ?= -fopenmp -DMCTHREADS=1
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
-# 1. no openmp anywhere
+# 2. no openmp anywhere
 #OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
-# 2. allow Eigen/blas threads, but no MCFilter source code threads
-#OPENMP:= -DMCTHREADS=0
+# 3. allow Eigen/blas threads, but no MCFilter source code threads
+#OPENMP:= -fopenmp -DMCTHREADS=0
+# 4. allow MCFilter threads but not Eigen threads
+#OPENMP:= -fopenmp -DEIGEN_DONT_PARALLELIZE
 # allow STL experimental threads?
 
 
+CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG $(BOOSTINC) $(CROARINGINC) -std=c++11 -pipe -ggdb3 -fPIC
 
-HDF5_INC ?= -I/usr/include/hdf5/serial
-OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -std=c++11 -march=native -ffast-math -m64 -pipe $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
-OCTAVE_LDFLAGS ?= -L../c
-OCTAVE_MEX ?= env CXXFLAGS="$(OCTAVE_CFLAGS)" LDFLAGS="$(OCTAVE_LDFLAGS)" CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
-LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -DNDEBUG $(OCT_INC) -I..
+LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring
 
 
+PROFILE_OPENMP = 
+PROFILE_OPENMP += -fopenmp
+PROFILE_OPENMP += -DMCTHREADS=0
+#PROFILE_OPENMP += -DEIGEN_DONT_PARALLELIZE
 
-
-CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) $(CROARINGINC) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
-
-LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK) $(CROARINGLINK) -lroaring
-
-
-PROFILE_OPENMP = $(OPENMP)
 PROFILEDIR = $(HOME)/local
-PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR) $(CROARINGINC) 
-PROFILE_CPPFLAGS+=-DMCTHREADS=0
-#PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include $(BOOSTINC) $(CROARINGINC) 
 PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
 
 
@@ -70,14 +51,13 @@ JOBS:=-j$(NCPUS)
 
 export
 
-C_TARGETS = mcproj clean standalone milde lib learn_projection evaluate_projection run_kmeans run_LPSR \
-	octave oct_find_w.oct oct_normalize_data.oct oct_project_data.oct oct_predict_data.oct \
-	oct_get_projection_measures.oct oct_kmeans.oct #oct_evaluate_model.oct oct_calc_objective.oct
+C_TARGETS = mcproj mcsolve clean lib
+
 PROFILE_TARGETS = $(patsubst %,profile_%,$(C_TARGETS))
 
-.PHONY: all clean octave libsvm liblinear lua libmcfilter
+.PHONY: all clean lib CRoaring clean-all CRoaring-bld
 
-all: octave libsvm liblinear standalone
+all: CRoaring $(C_TARGETS)
 
 $(C_TARGETS):
 	mkdir -p $(BINDIR)
@@ -88,20 +68,6 @@ $(PROFILE_TARGETS):
 	mkdir -p $(BINDIR)-profile
 	$(MAKE) -C $(BINDIR)-profile CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" -f../c/Makefile $(patsubst profile_%,%,$@) 
 
-# lua and libmcfilter targets do not involve octave (just c++ and milde_core's lua)
-lua: libmcfilter | libmcfilter
-	$(MAKE) -C lua-api $(JOBS)
-libmcfilter:
-	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile lib
-mcsolve: 
-	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile mcsolve
-mcproj:
-	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile mcproj
-
-#standalone: 
-#	$(MAKE) -C $(BINDIR) -f../c/Makefile $(MAKECMDGOALS)
-#octave:
-#	$(MAKE) -C $(BINDIR) -f../octave/Makefile
 
 CRoaring:
 	$(MAKE) -C $(CROARINGDIR) -f ../src/Makefile CRoaring-bld
@@ -115,15 +81,4 @@ CRoaring-bld:
 CRoaring-clean:
 	cd $(CROARINGDIR) && rm roaring.o libroaring.a libroaring.so roaring.c roaring.h roaring.hh
 
-libsvm:
-	cd libsvm-3.17/matlab && make OCTAVE_CFLAGS="$(LIBSVM_OCTAVE_CFLAGS)" octave
-
-liblinear:
-	cd liblinear-1.94/matlab && make OCTAVE_CFLAGS="$(LIBSVM_OCTAVE_CFLAGS)" octave
-
-
-libsvm_clean: 
-	cd liblinear-1.94/matlab && make clean
-	cd libsvm-3.17/matlab && make clean
-#	$(MAKE) -C $(BINDIR) -f../c/Makefile clean
-#	$(MAKE) -C lua-api clean
+clean-all: clean CRoaring-clean

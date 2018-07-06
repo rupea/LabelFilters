@@ -52,9 +52,8 @@ void MClinearClassifier::predict()
     
   if (!feasible_ok)
     {
-      runFilter();
-    }        
-
+      runFilter();      
+    }  
   if( m_xy->denseOk ){
     // number of feasible labels is calculated almost for free here, so do it
     m_nfeasible = m_model->predict(m_predictions, m_xy->xDense, m_feasible, verbose, m_keep_thresh, m_keep_size);

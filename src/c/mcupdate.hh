@@ -229,7 +229,7 @@ namespace mcsolver_detail
     
     if( eta >= 1.e-8){ // if we kept overshooting got too small, do not update w at all. 
       eta *= eta_bigger; // last eta did not overshooot so restore it
-      if (params.avg_epoch && t >= params.avg_epoch)      // update current and avg w
+      if (params.averaged_gradient && t >= params.avg_epoch)      // update current and avg w
 	{
 	  w.batch_gradient_update_avg(x, i, multiplier, lambda, eta);
 	}
@@ -366,7 +366,7 @@ namespace mcsolver_detail
 #endif
 	}
     //update w
-    if (params.avg_epoch && t >= params.avg_epoch)
+    if (params.averaged_gradient && t >= params.avg_epoch)
       {
 	// updates both the curent w and the average w
 	w.batch_gradient_update_avg(x, index, multipliers, lambda, eta_t);
@@ -395,16 +395,11 @@ namespace mcsolver_detail
     {
       // make sortlu* variables valid (if possible, and not already valid)
       luPerm.mkok_sortlu();
-      luPerm.mkok_sortlu_avg();
       assert( luPerm.ok_sortlu );
-      //assert( luPerm.ok_sortlu_avg ); // sortlu_avg may be undefined (until t>=epoch_avg)
-      if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t    >    params.avg_epoch){
-	assert( luPerm.ok_sortlu_avg );
-      }
-      VectorXd& sortedLU                          = luPerm.sortlu;
-      VectorXd& sortedLU_acc                      = luPerm.sortlu_acc;
-      std::vector<int> const& sorted_class        = luPerm.perm;
-      std::vector<int> const& class_order         = luPerm.rev;
+      VectorXd& sortedLU                          = luPerm.m_sortlu;
+      VectorXd& sortedLU_acc                      = luPerm.m_sortlu_acc;
+      std::vector<int> const& sorted_class        = luPerm.perm();
+      std::vector<int> const& class_order         = luPerm.rev();
       
       size_t const& batch_size    = updateSettings.batch_size;
       // the following bunch should disappear soon
@@ -418,8 +413,6 @@ namespace mcsolver_detail
       MutexType* idx_locks       = updateSettings.idx_locks;
       MutexType* sc_locks        = updateSettings.sc_locks;
       
-      // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU
-      assert( luPerm.ok_sortlu_avg == true ); // accumulator begins at all zeros, so true
       if (params.update_type == SAFE_SGD)
 	{
 	  mcsolver_detail::update_safe_SGD(w, sortedLU,
@@ -447,12 +440,11 @@ namespace mcsolver_detail
 	{
 	  throw runtime_error("Unrecognized update type");
 	}
-      
-      
+            
       // After some point 'update' BEGINS TO ACCUMULATE sortedLU into sortedLU_acc
       // let's move the accumulation here since it would avoid code duplication and simplify the code 
       
-      if (params.optimizeLU_epoch <= 0 && params.avg_epoch > 0 && t >= params.avg_epoch)
+      if (params.optimizeLU_epoch <= 0 && params.averaged_gradient && t >= params.avg_epoch)
 	{
 	  // move this thing inside MCPermState?
 	  

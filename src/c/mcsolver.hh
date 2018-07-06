@@ -31,8 +31,8 @@
         for (size_t fdtest=0; fdtest<params.no_finite_diff_tests; ++fdtest) { \
             size_t idx = ((size_t) rand_r(&seed)) % n; \
             finite_diff_test( w, x, idx, y, nclasses, maxclasses, inside_weight, outside_weight, \
-			      luPerm.perm/*sorted_class*/, \
-                              luPerm.rev, luPerm.sortlu, filtered, C1, C2, params); \
+			      luPerm.perm()/*sorted_class*/,		\
+                              luPerm.rev(), luPerm.sortlu(), filtered, C1, C2, params); \
         } \
     } \
 }while(0)
@@ -42,6 +42,22 @@
 
 // first let's define mcsolver.h utilities...
 
+/** iteration state that does not need saving -- important stuff is in MCsoln */
+struct MCiterBools
+{
+  /** constructor includes "print some progress" block to cout */
+  MCiterBools( uint64_t const t, param_struct const& params );
+  bool const reorder;              ///< true if param != 0 && t%param==0
+  bool const report;               ///< true if param != 0 && t%param==0
+  bool const optimizeLU;           ///< true if param != 0 && t%param==0
+  //  bool const doing_avg_epoch;      ///< avg_epoch && t >= avg_epoch
+  bool const progress;             ///< params.verbose >= 1 && !params.report_epoch && t % 1000 == 0
+#if GRADIENT_TEST
+  bool const finite_diff_test;     ///< true if param != 0 && t%param==0
+#endif
+};
+
+
 #define MCITER_PERIODIC(XXX) XXX( params.XXX##_epoch && t % params.XXX##_epoch == 0 )
 inline MCiterBools::MCiterBools( uint64_t const t, param_struct const& params )
   : MCITER_PERIODIC( reorder )
@@ -50,41 +66,43 @@ inline MCiterBools::MCiterBools( uint64_t const t, param_struct const& params )
 #if GRADIENT_TEST
   , MCITER_PERIODIC( finite_diff_test )
 #endif
-  , doing_avg_epoch( params.avg_epoch && t >= params.avg_epoch )    // <-- true after a certain 't'
+    //  , doing_avg_epoch( params.averaged_gradient && t >= params.avg_epoch )    // <-- true after a certain 't'
   , progress( params.verbose >= 1 && !params.report_epoch && t % 1000 == 0)  // print some progress
 {
 }
 #undef MCITER_PERIODIC
 
 inline void Perm::rank( VectorXd const& sortkey ){
-    assert( (size_t)sortkey.size() == perm.size() );
-    std::iota( perm.begin(), perm.end(), size_t{0U} );
-    std::sort( perm.begin(), perm.end(), [&sortkey](size_t const i, size_t const j){return sortkey[i]<sortkey[j];} );
-    for(size_t i=0U; i<perm.size(); ++i)
-        rev[perm[i]] = i;
+    assert( (size_t)sortkey.size() == m_perm.size() );
+    std::iota( m_perm.begin(), m_perm.end(), size_t{0U} );
+    std::sort( m_perm.begin(), m_perm.end(), [&sortkey](size_t const i, size_t const j){return sortkey[i]<sortkey[j];} );
+    for(size_t i=0U; i<m_perm.size(); ++i)
+        m_rev[m_perm[i]] = i;
 }
-inline void MCpermState::toLu( VectorXd & ll, VectorXd & uu, VectorXd const& sorted ){
+inline void MCpermState::toLu( VectorXd & ll, VectorXd & uu, VectorXd const& sorted ) const{
   double const* plu = sorted.data();
-  auto pPerm = perm.begin(); // perm ~ old perm
-  for(; pPerm != perm.end(); ++pPerm){
+  auto pPerm = m_perm.begin(); // perm ~ old perm
+  for(; pPerm != m_perm.end(); ++pPerm){
     size_t const cp = *pPerm;
     ll.coeffRef(cp) = *(plu++);
     uu.coeffRef(cp) = *(plu++);
   }
 }
 inline void MCpermState::toSorted( VectorXd & sorted, VectorXd const& ll, VectorXd const& uu ) const{
-  for(size_t i=0; i<perm.size(); ++i){
-    sorted.coeffRef(2U*i)    = ll.coeff(perm[i]);
-    sorted.coeffRef(2U*i+1U) = uu.coeff(perm[i]);
+  for(size_t i=0; i<m_perm.size(); ++i){
+    sorted.coeffRef(2U*i)    = ll.coeff(m_perm[i]);
+    sorted.coeffRef(2U*i+1U) = uu.coeff(m_perm[i]);
   }
 }
 
-// inline void MCpermState::accumulate_sortlu(){
-//   mkok_sortlu();
-//   sortlu_acc = sortlu_acc + sortlu;
-//   ++nAccSortlu;
-//   ok_lu_avg = false; // we've accumulated, which invalidates lu_avg.
-// }
+inline void MCpermState::reset_acc(){
+  // reset accumulation since changes to lu do not come from a gradient step
+  if (nAccSortlu > 0U)
+    {
+      nAccSortlu = 0U;
+      m_sortlu_acc.setZero();
+    }    
+}  
 
 inline void MCpermState::chg_sortlu(){
     ok_lu = false;
@@ -92,87 +110,127 @@ inline void MCpermState::chg_sortlu(){
     ok_sortlu_avg = false;
 }
 
-// inline void MCpermState::chg_lu(){              // multiple calls OK
-//   // this should only be called from optimize_LU, so move the code there
-//   ok_sortlu = false;
-//   ok_sortlu_avg = false;
-// }
-
 inline void MCpermState::mkok_lu(){
   if(!ok_lu)
     {
       assert (ok_sortlu);
-      toLu( l, u, sortlu );
+      toLu( m_l, m_u, m_sortlu );
+      if (nAccSortlu > 0 ) // averaging has started. Need to update l_acc and u_acc from  sortlu_acc
+	{
+	  toLu(m_l_acc, m_u_acc, m_sortlu_acc);
+	}
       ok_lu = true;
     }
 }
+
 inline void MCpermState::mkok_lu_avg(){
   if(!ok_lu_avg)
     {
-      if(nAccSortlu > 0) // averaging has started
+      if (ok_sortlu)
 	{
 	  mkok_sortlu_avg();	  
-	  toLu( l_avg, u_avg, sortlu_avg );
-	  ok_lu_avg = true;
+	  toLu( m_l_avg, m_u_avg, m_sortlu_avg );
 	}
-      else // averaging has not started, Just coppy l and u. 
+      else
 	{
 	  mkok_lu();
-	  l_avg = l;
-	  u_avg = u;
-	}	
+	  if(nAccSortlu > 0) // averaging has started
+	    {
+	      m_l_avg = m_l_acc/nAccSortlu;
+	      m_u_avg = m_u_acc/nAccSortlu;
+	    }
+	  else // averaging has not started 
+	    {
+	      m_l_avg = m_l;
+	      m_u_avg = m_u;
+	    }	      
+	}
+      ok_lu_avg = true;
     }
 }
 
-inline VectorXd& MCpermState::mkok_sortlu(){
+inline void MCpermState::mkok_sortlu(){
   if(!ok_sortlu){
-    assert(ok_lu && nAccSortlu == 0); //the only time sortlu is not ok is when optmize_LU has been called
-                                    // which resets the averaging. 
-    toSorted( sortlu, l, u );
+    assert(ok_lu);
+    toSorted( m_sortlu, m_l, m_u );
+    if (nAccSortlu > 0) //averaging has started
+      {
+	toSorted(m_sortlu_acc, m_l_acc, m_u_acc);
+      }
     ok_sortlu = true;
   }
-  return sortlu;
 }
 
-inline VectorXd& MCpermState::mkok_sortlu_avg(){
-  if(!ok_sortlu_avg) {
+inline void MCpermState::mkok_sortlu_avg(){
+  if(!ok_sortlu_avg) {    
     if (ok_lu_avg){ // if we have good lu_avg then use them
-      toSorted( sortlu_avg, l_avg, u_avg);
-    }else if (nAccSortlu > 0){ // if averaging has started the sortlu must be ok. 
-      assert(ok_sortlu);
-      sortlu_avg = sortlu_acc/nAccSortlu;
-    } else { // averaging has not started. Copy sortlu into sortlu_avg 
+      toSorted( m_sortlu_avg, m_l_avg, m_u_avg);
+    } else {
       mkok_sortlu();
-      sortlu_avg = sortlu;
+      if (nAccSortlu > 0){ // averaging has started
+	m_sortlu_avg = m_sortlu_acc/nAccSortlu;
+      } else { // averaging has not started. Copy sortlu into sortlu_avg 
+	m_sortlu_avg = m_sortlu;
+      }
     }
     ok_sortlu_avg = true;
   }      
-  return sortlu_avg;
 }
 
+inline VectorXd const& MCpermState::l() 
+{
+  mkok_lu();
+  return m_l;
+}
+inline VectorXd const& MCpermState::u()
+{
+  mkok_lu();
+  return m_u;
+}
+inline VectorXd const& MCpermState::sortlu()
+{
+  mkok_sortlu();
+  return m_sortlu;
+}
+inline VectorXd const& MCpermState::l_avg()
+{
+  mkok_lu_avg();
+  return m_l_avg;
+}
+inline VectorXd const& MCpermState::u_avg()
+{
+  mkok_lu_avg();
+  return m_u_avg;
+}
+inline VectorXd const& MCpermState::sortlu_avg()
+{
+  mkok_sortlu_avg();
+  return m_sortlu_avg;
+}
+
+std::vector<int> const& MCpermState::perm() const
+{
+  return Perm::m_perm;
+}
+std::vector<int> const& MCpermState::rev() const
+{
+  return Perm::m_rev;
+}
+
+
+
 inline void MCpermState::rank( VectorXd const& sortkey ){
-    mkok_lu();
-    if (nAccSortlu > 0U)
-      {
-	mkok_lu_avg();  // coppy sortlu_avg to lu_avg
-      }
-    Perm::rank( sortkey );
-    ok_sortlu = false;
-    mkok_sortlu();
-    if (nAccSortlu > 0U)
-      {
-	ok_sortlu_avg = false;
-	// this is a bit wastefull, but avoids new code, and it is not called often. 
-	mkok_sortlu_avg(); // because ok_lu_avg = true, this will coppy lu_avg to sortedlu_avg
-	sortlu_acc = sortlu_avg * nAccSortlu; //restore sortlu_acc
-      }
+  mkok_lu();
+  Perm::rank( sortkey );
+  ok_sortlu = false;
+  mkok_sortlu();
 }
 
 
 
 template< typename EIGENTYPE >
 void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
-		      param_struct const& params_arg /*= nullptr*/ )
+		      param_struct const& params_arg)
 {
   using namespace std;
   
@@ -182,19 +240,18 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   
   
   param_struct params(params_arg);
-  finalize_default_params(params); // just in case it was not done until now
+
   // set the default avg_epoch if not already set
-  if (params.default_avg_epoch)
+  if (params.averaged_gradient && params.avg_epoch == 0)
     {
       params.avg_epoch = nTrain>d?nTrain:d;
-      params.default_avg_epoch = false;
     }
   // multiply C1 by number of classes
   params.C1 = params.C1 * nClass;
     
-  this->nProj = params.no_projections;
+  this->nProj = params.nfilters;
   if( (size_t)nProj >= d ){
-    cerr<<"WARNING: no_projections > example dimensionality"<<endl;
+    cerr<<"WARNING: nfilters > example dimensionality"<<endl;
   }
 
   if ( params.verbose >= 1)
@@ -365,8 +422,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       }
       case REORDER_RANGE_MIDPOINTS:
       {
-	luPerm.mkok_lu();
-	means = luPerm.l+luPerm.u; /*no need to divide by 2 since it is only used for ordering*/
+	means = luPerm.l()+luPerm.u(); /*no need to divide by 2 since it is only used for ordering*/
 	break;
       }
       }
@@ -375,21 +431,19 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
   auto ObjectiveHinge = [&] ( ) -> double
     {
-      luPerm.mkok_sortlu();
       return mcsolver_detail::calculate_objective_hinge( xwProj.std(), y, 
 							 nclasses, inside_weight, outside_weight, 
-							 luPerm.perm, luPerm.rev,
-							 w.norm(), luPerm.sortlu, filtered,
+							 luPerm.perm(), luPerm.rev(),
+							 w.norm(), luPerm.sortlu(), filtered,
 							 lambda, C1, C2, params); 
     };
 
   auto ObjectiveHingeAvg = [&] ( ) -> double
     {
-      luPerm.mkok_sortlu_avg();
       return mcsolver_detail::calculate_objective_hinge( xwProj.avg(), y,
 							 nclasses, inside_weight, outside_weight,
-							 luPerm.perm, luPerm.rev,
-							 w.norm_avg(), luPerm.sortlu_avg, filtered,
+							 luPerm.perm(), luPerm.rev(),
+							 w.norm_avg(), luPerm.sortlu_avg(), filtered,
 							 lambda, C1, C2, params); 
     };
     
@@ -411,8 +465,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       // should update to use the filter class
 
       // if averagin has not started this will be using the non-averaged w,l and u
-      luPerm.mkok_lu_avg(); // should be OK, but just in case
-      mcsolver_detail::update_filtered(filtered, /*inputs:*/ xwProj.avg(), luPerm.l_avg, luPerm.u_avg,
+      mcsolver_detail::update_filtered(filtered, /*inputs:*/ xwProj.avg(), luPerm.l_avg(), luPerm.u_avg(),
 				       y, params.remove_class_constraints);
       
       // recalculate nc, wc if class constraints have been removed
@@ -458,13 +511,13 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
   // ------------- end defining lambda functions --------------------------
 
-  if (params.reoptimize_LU && !params.resume && params.no_projections > nProj)
+  if (params.reoptimize_LU && !params.resume && params.nfilters > nProj)
     throw std::runtime_error("Error, --reoptlu specified with more projections than current solution requested and --resume.\n");
     
   bool const keep_weights = params.resume || params.reoptimize_LU;
   bool const keep_LU = keep_weights && !params.reoptimize_LU;
-  int reuse_dim = keep_weights?min(nProj,params.no_projections):0;
-  setNProj(params.no_projections, keep_weights, keep_LU);
+  int reuse_dim = keep_weights?min(nProj,params.nfilters):0;
+  setNProj(params.nfilters, keep_weights, keep_LU);
     
   if (params.verbose >= 1)
     {
@@ -488,8 +541,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	luPerm.init( xwProj.std(), y, params, filtered );     // try to appease valgrind?
 	luPerm.rank( GetMeans(params.reorder_type) );
 	OptimizeLU(); // w,projection,sort_order ----> luPerm.l,u
-	lower_bounds.col(prjax) = luPerm.l;
-	upper_bounds.col(prjax) = luPerm.u;
+	lower_bounds.col(prjax) = luPerm.l();
+	upper_bounds.col(prjax) = luPerm.u();
       }else{
 	luPerm.set_lu( lower_bounds.col(prjax), upper_bounds.col(prjax) );
       }
@@ -561,7 +614,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	// update 'w' ==> projections of raw 'x' data (projection_avg & projection) invalid.
 	xwProj.w_changed();
 	if(t4.reorder) {
-	  if(params.verbose >= 2){ std::cout<<" REORDER"<<t<<" "; std::cout.flush(); }
 	  luPerm.rank( GetMeans(params.reorder_type) );   // <-- new sort order (sortlu* no good)
 	}
 	if (t4.optimizeLU){  // w, luPerm-ranking constant, optimize {l,u}. Needs valid 'projection'
@@ -611,9 +663,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       }
 			
       weights.col(prjax) = w.getVecAvg();
-      luPerm.mkok_lu_avg();
-      lower_bounds.col(prjax) = luPerm.l_avg;
-      upper_bounds.col(prjax) = luPerm.u_avg;
+      lower_bounds.col(prjax) = luPerm.l_avg();
+      upper_bounds.col(prjax) = luPerm.u_avg();
 	
       if (params.remove_constraints && prjax < (int)nProj-1) 
 	{

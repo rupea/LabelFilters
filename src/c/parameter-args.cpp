@@ -1,5 +1,6 @@
 
 #include "parameter-args.h"
+#include "parameter.h"
 #include <iostream>
 #include <cstdint>
 #include <sstream>
@@ -11,337 +12,226 @@ namespace po = boost::program_options;
 
 using namespace po;
 
-namespace opt {
-    std::vector<std::string> cmdSplit( std::string cmdline, bool haveProgName/*=true*/ )
-    {
-        if( ! haveProgName ){ // insert a dummy program name, which gets ignored
-            cmdline.insert(0,"foo ");
-        }
-        // defaults sep,quote,escape OK: " \t", "'\"", "\\"
-        return boost::program_options::split_unix( cmdline );
-    }
 
-    void helpUsageDummy( std::ostream& os ){
-        os<<" Usage: foo [options]";
-        return;
-    }
+MCsolveArgs::MCsolveArgs():
+  params(),
+  prev_soln_file("")
+{}
 
-    /** When re-using an old run, initial \c p parms come from the MCsoln (.soln or .mc) file.
-     * In this case, command-line args override the MCsoln values, and not the standard default
-     * values.  Probably this should be the \b only \c mcParameterDesc function, with \c p
-     * using the "official" set_default_params() in case a --solnfile is not supplied !!!
-     *
-     * When \em everything has a [client-specified] default, it simplifies
-     * using a variables_map, because you don't need to first check vm.count("foo").
-     */
-    void mcParameterDesc( po::options_description & desc, param_struct const& p )
-    {
-        po::options_description main("Main options");
-        main.add_options()
-	  ("C1", value<double>()->required(), "~ label in correct (l,u)")
-	  ("C2", value<double>()->required(), "~ label outside other (l,u)")
-	  ("nfilters", value<uint32_t>()->default_value(p.no_projections) , "# of label filters")
-	  ("maxiter", value<uint32_t>(), "max iterations per projection. [1e8/batch_size]")
-	  ("eta0", value<double>()->default_value(p.eta), "initial learning rate")
-	  ("seed", value<uint32_t>()->default_value(p.seed), "random number seed. 0 - initizize rn using current time, 1 - do not initialize rng")
-	  ("threads", value<uint32_t>()->default_value(p.num_threads), "# threads, 0 ~ use OMP_NUM_THREADS")
-	  ("resume", value<bool>()->implicit_value(true)->default_value(p.resume), "add more filters to a previous solution")
-	  ("reoptlu", value<bool>()->implicit_value(true)->default_value(p.reoptimize_LU), "reoptimize the intevals [l,u] for previously learned filter directions.")
-	  ("sample", value<uint32_t>()->default_value(p.class_samples)
-	   , "how many negative classes to use for gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all")
-	  ;
-        po::options_description dev("Development options");
-        dev.add_options()
-	  ("update,u", value<std::string>()->default_value(tostring(p.update_type)), "PROJECTED | MINIBATCH : gradient update type\nPROJECTED implies default batchsize of 1")
-	  ("batchsize,b", value<uint32_t>(), "batch size. 0~full gradient, [1 1000 if BATCH]")
-	  ("etatype", value<std::string>()
-	   , "CONST | SQRT | LIN | 3_4 : learning rate schedule [3_4 if using averaged gradiend, LIN if not]")
-	  ("etamin", value<double>()->default_value(p.min_eta), "minimum learning rate limit")
-	  ("toptlu", value<uint32_t>(), "expensive exact {l,u} optmization period [once, at maxiter]")
-	  ("treorder", value<uint32_t>()->default_value(p.reorder_epoch), "reorder iteration period")
-	  ("reorderby", value<std::string>()->default_value(tostring(p.reorder_type))
-	   , "Permutation re-ordering: PROJ mean of projected instances | MID range midpoints.")
-	  ("treport", value<uint32_t>(), "report the objective value every treport iteratoins. 0 for no reporting. [maxiter/10]")
-	  ("avgstart", value<uint32_t>(), "averaging start iteration [max(nExamples,dim)]")
-	  ("remove_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_constraints)
-	   , "after each projection, remove constraints involving incorrect labels already eliminated for the example")
-	  ("remove_class_constraints", value<bool>()->implicit_value(true)->default_value(p.remove_class_constraints)
-	   , "after each projection, remove constraints involving correct labels already eliminated for the example")
-	  ("adjustC", value<bool>()->implicit_value(true)->default_value(p.adjust_C)
-	   , "adjust C1 and C2 to acount for the removed constraints")
-	  //	  ("wt_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_by_nclasses), "UNTESTED")
-	  //	  ("wt_class_by_nclasses", value<bool>()->implicit_value(true)->default_value(p.ml_wt_class_by_nclasses), "UNTESTED")
-            ;
-        // Add generic, main and development option groups	  
-        desc.add(main).add(dev);
-	
+MCsolveArgs::MCsolveArgs(po::variables_map const& vm):
+  MCsolveArgs()
+{
+  this->extract(vm);
+}
+  
+
+po::options_description MCsolveArgs::getDesc()
+{
+  po::options_description desc("Solver Options");
+  po::options_description main("Main Solver Options");
+  main.add_options()
+    ("C1", value<double>()->required(), "penalty for label outside correct (l,u)")
+    ("C2", value<double>()->required(), "penalty for label inside incorrect (l,u)")
+    ("nfilters", value<uint32_t>(), "# of label filters [5]")
+    ("maxiter", value<uint32_t>(), "max iterations per projection. [1e8/batch_size]")
+    ("eta0", value<double>(), "initial learning rate [0.1]")
+    ("seed", value<uint32_t>(), "random nmber seed. 0 - initizize rn using current time, 1 - do not initialize rng [0]")
+    ("prevsoln", value<string>(), "file with solution to be used by resume, reoptlu and/or initWtype=PREV")
+    ("resume", value<bool>()->implicit_value(true), "add more filters to a previous solution")
+    ("reoptlu", value<bool>()->implicit_value(true), "reoptimize the intevals [l,u] for previously learned filter directions.")
+    ("sample", value<uint32_t>()
+     , "how many negative classes to use for gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all [0]")
+    ("threads", value<uint32_t>(), "# of threads, 0 ~ use OMP_NUM_THREADS")
+    ;
+  po::options_description dev("Advanced Solver Options");
+  dev.add_options()
+    ("update,u", value<std::string>(), "PROJECTED | MINIBATCH : gradient update type\n   PROJECTED requires batchsize of 1")
+    ("batchsize,b", value<uint32_t>(), "batch size. 0~full gradient, [1 if PROJECTED,  1000 if MINIBATCH]")
+    ("avgrad", value<bool>()->implicit_value(true), "Use averaged gradient [true]")
+    ("avgradstart", value<uint32_t>(), "averaging gradient start iteration [max(nExamples,dim)]")
+    ("etatype", value<std::string>()
+     , "CONST | SQRT | LIN | 3_4 : learning rate schedule [3_4 if using averaged gradiend, LIN if not]")
+    ("etamin", value<double>(), "minimum learning rate limit [0.0]")
+    ("toptlu", value<uint32_t>(), "expensive exact {l,u} optmization period. 0 for no optimization. [once, at maxiter]")
+    ("treorder", value<uint32_t>(), "reorder iteration period [1000]")
+    ("reorderby", value<std::string>()
+     , "Permutation re-ordering: PROJ ~ mean of projected instances | MID ~ range midpoints.")
+    ("treport", value<uint32_t>(), "report the objective value every treport iteratoins. 0 for no reporting. [maxiter/10]")
+    ("remove_constraints", value<bool>()->implicit_value(true)
+     , "after each projection, remove constraints involving incorrect labels already eliminated for the example [true]")
+    ("remove_class_constraints", value<bool>()->implicit_value(true)
+     , "after each projection, remove constraints involving correct labels already eliminated for the example [false]")
+    ("adjustC", value<bool>()->implicit_value(true)
+     , "adjust C1 and C2 to acount for the removed constraints [true]")
+    ("initWtype", value<string>(), "How to initialize filter direction w [DIFF]. Options are:\n  DIFF ~ difference between centers of two random classes\n  ZERO ~ zero vector\n  RAND ~ random\n  PREV ~ from a given vector (given as a prevoius solution). Incompatible with resume or reoptlu.")
+    ("initWnorm", value<double>(), "Norm of the initial filter direction. Used only for initWtype=DIFF|RAND. [10]")
+    ("init_orthogonal", value<bool>()->implicit_value(true), "UNTESTED - Initialize new filter direction orthogonal on previous filter directions. Used only for initWtype = RAND. [false]")
+    ("wt_by_nclasses", value<bool>()->implicit_value(true), "UNTESTED - weight example by the inverse of the number of labels it has when considering outside incorrect interval constraints (C2->C2/#labels) [false]")
+    ("wt_class_by_nclasses", value<bool>()->implicit_value(true), "UNTESTED - weight example by the inverse of the number of labels it has when considering inside correct interval constraints (C1->C1/#labels) [false]")
+    ;
+  // Add generic, main and development option groups	  
+  desc.add(main).add(dev);
+  
 #if GRADIENT_TEST /*|| others?*/
-        po::options_description compiled("Compile-time options (enabled by compile flags)");
+  po::options_description compiled("Compile-time options (enabled by compile flags)");
 #if GRADIENT_TEST
-        compiled_add_options()
-	  ("tgrad", value<uint32_t>()->default_value(p.finite_diff_test_epoch), "iter period for finite difference gradient test")
-	  ("ngrad", value<uint32_t>()->default_value(p.no_finite_diff_tests), "directions per gradient test")
-	  ("grad", value<double>()->default_value(p.finite_diff_test_delta), "step size per gradient test")
-	  ;
+  compiled_add_options()
+    ("tgradtest", value<uint32_t>(), "iter period for finite difference gradient test[1]")
+    ("ngradtest", value<uint32_t>(), "directions per gradient test [1000]")
+    ("deltagradtest", value<double>(), "step size per gradient test [1e-4]")
+    ;
 #endif
-        desc.add(compiled);
+  desc.add(compiled);
 #endif
-    }
+  return desc;
+}
 
-    void extract( po::variables_map const& vm, param_struct & parms ){
-      parms.no_projections            =vm["nfilters"].as<uint32_t>();
-      parms.C1	                =vm["C1"].as<double>();  //required
-      parms.C2	                =vm["C2"].as<double>();  //required
-      if (vm.count("maxiter"))
-	parms.max_iter	                =vm["maxiter"].as<uint32_t>();  
-      parms.eta	                =vm["eta0"].as<double>();       //0.1;
-      parms.seed 	                =vm["seed"].as<uint32_t>(); // 0;
-      parms.num_threads 	        =vm["threads"].as<uint32_t>(); // 0;          // use OMP_NUM_THREADS
-      parms.resume 	                =vm["resume"].as<bool>(); // false;
-      parms.reoptimize_LU 	        =vm["reoptlu"].as<bool>(); // false;
-      parms.class_samples 	        =vm["sample"].as<uint32_t>(); // 0;
-      // Development options
-      fromstring( vm["update"].as<string>(), parms.update_type );
-      if (vm.count("batchsize"))
-	{
-	  parms.default_batch_size = false;
-	  parms.batch_size	        =vm["batchsize"].as<uint32_t>(); //100;
-	}
-      if (vm.count("etatype"))
-	fromstring( vm["etatype"].as<string>(), parms.eta_type );
-      
-      parms.min_eta	                =vm["etamin"].as<double>(); // 0;
-      if (vm.count("toptlu"))
-	{
-	  parms.optimizeLU_epoch	        =vm["toptlu"].as<uint32_t>(); // expensive
-	  parms.default_optimizeLU_epoch = false;
-	}
-      
-      parms.reorder_epoch	        =vm["treorder"].as<uint32_t>(); //1000;
-      fromstring( vm["reorderby"].as<string>(), parms.reorder_type );
-      if (vm.count("treport"))
-	{	  
-	  parms.report_epoch	        =vm["treport"].as<uint32_t>(); //;
-	  parms.default_report_epoch = false;
-	}
-      if (vm.count("avgstart"))
-	{
-	  parms.avg_epoch	        =vm["avgstart"].as<uint32_t>();
-	  parms.default_avg_epoch = false;
-	}      
-
-      parms.remove_constraints 	=vm["remove_constraints"].as<bool>(); // true;
-      parms.remove_class_constraints =vm["remove_class_constraints"].as<bool>(); // false;
-      parms.adjust_C = vm["adjustC"].as<bool>(); //true
-
-      //parms.ml_wt_by_nclasses 	=vm["wt_by_nclasses"].as<bool>(); // false;
-      //parms.ml_wt_class_by_nclasses 	=vm["wt_class_by_nclasses"].as<bool>(); // false;
-      
-      parms.verbose = vm["verbose"].as<int>();
-
-        // Compile-time options
-#if GRADIENT_TEST
-        parms.finite_diff_test_epoch	=vm["tgrad"].as<uint32_t>(); //0;
-        parms.no_finite_diff_tests	=vm["ngrad"].as<uint32_t>(); //1000;
-        parms.finite_diff_test_delta	=vm["grad"].as<double>(); //1e-4;
-#endif
-    }
-
-    std::string helpMcParms(){
-        ostringstream oss;
-        {
-            po::options_description desc("MCFilter solver options");
-            mcParameterDesc( desc, set_default_params());
-            oss<<desc;
-        }
-        return oss.str();
-    }
-    std::vector<std::string> mcArgs( int argc, char**argv, param_struct & parms
-                                     , void(*usageFunc)(std::ostream&)/*=helpUsageDummy*/ )
+  
+void MCsolveArgs::extract(po::variables_map const& vm)
+{
+  if (vm.count("C1"))
     {
-        vector<string> ret;
-        po::options_description desc("Options");
-
-        // define defaults equivalent to current parms
-        mcParameterDesc( desc, parms ); // <-- parms MUST be fully initialized by caller !
-
-        po::variables_map vm;
-        try {
-
-            po::parsed_options parsed
-                = po::command_line_parser( argc, argv )
-                .options( desc )
-                //.positional( po::positional_options_description() ) // empty, none allowed.
-                .allow_unregistered()
-                .run();
-            po::store( parsed, vm );
-
-            if( vm.count("help") ) {
-                (*usageFunc)( cout );       // some customizable Usage intro
-                cout<<desc<<endl;           // param_struct options
-                //helpExamples(cout);
-                //return ret;
-                exit(0);
-            }
-
-            po::notify(vm); // at this point, raise any exceptions for 'required' args
-	    
-            // In your custom program, you would interrogate vm HERE to get additional
-            // variables particular to your program.
-	    
-            extract( vm, parms ); // MODIFY parms to match anything from vm
-
-            if( vm.count("help") ) {
-                exit(0);
-            }
-
-            ret = collect_unrecognized( parsed.options, include_positional );
-            return ret;
-        }        
-	catch(po::error& e)
-        {
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
-        }
-        catch(...)
-        {
-            cerr<<"Command-line parsing exception of unknown type!"<<endl;
-            throw;
-        }
-        return ret;
+      params.C1(vm["C1"].as<double>());
+    }
+  if (vm.count("C2"))
+    {
+      params.C2(vm["C2"].as<double>());
+    }
+  if (vm.count("nfilters"))
+    {
+      params.nfilters(vm["nfilters"].as<uint32_t>());
+    }
+  if (vm.count("maxiter"))
+    {
+      params.max_iter(vm["maxiter"].as<uint32_t>());
+    }
+  if (vm.count("eta0"))
+    {
+      params.eta(vm["eta0"].as<double>());
+    }
+  if (vm.count("seed"))
+    {
+      params.seed(vm["seed"].as<uint32_t>());
+    }
+  if (vm.count("prevsoln"))
+    {
+      prev_soln_file = vm["prevsoln"].as<string>();
+    }  
+  if (vm.count("resume"))
+    {
+      params.resume(vm["resume"].as<bool>());
+    }
+  if (vm.count("reoptlu"))
+    {
+      params.reoptimize_LU(vm["reoptlu"].as<bool>());
+    }
+  if (vm.count("sample"))
+    {
+      params.class_samples(vm["sample"].as<uint32_t>());
+    }
+  // if (vm.count("threads"))
+  //   {
+  //     params.num_threads(vm["threads"].as<uint32_t>());
+  //   }
+  //update before batchsize
+  if (vm.count("update"))
+    {
+      Update_Type ut;
+      fromstring(vm["update"].as<string>(), ut);
+      params.update_type(ut);
+    }
+  if (vm.count("batchsize"))
+    {
+      params.batch_size(vm["batchsize"].as<uint32_t>());
+    }  
+  if (vm.count("avgrad"))
+    {
+      params.averaged_gradient(vm["avgrad"].as<bool>());
+    }
+  if (vm.count("avgradstart"))
+    {
+      params.avg_epoch(vm["avgradstart"].as<uint32_t>());
+    }
+  if (vm.count("etatype"))
+    {
+      Eta_Type et;
+      fromstring(vm["etatype"].as<string>(), et);
+      params.eta_type(et);
+    }
+  if (vm.count("etamin"))
+    {
+      params.min_eta(vm["etamin"].as<double>());
+    }
+  if (vm.count("toptlu"))
+    {
+      params.optimizeLU_epoch(vm["toptlu"].as<uint32_t>());
+    }
+  if (vm.count("treorder"))
+    {
+      params.reorder_epoch(vm["treorder"].as<uint32_t>());
+    }
+  if (vm.count("reorderby"))
+    {
+      Reorder_Type rt;
+      fromstring(vm["reorderby"].as<string>(), rt);
+      params.reorder_type(rt);
+    }
+  if (vm.count("treport"))
+    {
+      params.report_epoch(vm["treport"].as<uint32_t>());
+    }
+  if (vm.count("remove_constraints"))
+    {
+      params.remove_constraints(vm["remove_constraints"].as<bool>());
+    }
+  if (vm.count("remove_class_constraints"))
+    {
+      params.remove_class_constraints(vm["remove_class_constraints"].as<bool>());
+    }
+  if (vm.count("adjustC"))
+    {
+      params.adjust_C(vm["adjustC"].as<bool>());
+    }
+  // initWtype before initWnorm and init_orthogonal
+  if (vm.count("initWtype"))
+    {
+      Init_W_Type it;
+      fromstring(vm["initWtype"].as<string>(), it);
+      params.init_type(it);
+    }
+  if (vm.count("initWnorm"))
+    {
+      params.init_norm(vm["initWnorm"].as<double>());
+    }
+  if (vm.count("init_orthogonal"))
+    {
+      params.init_orthogonal(vm["init_orthogonal"].as<bool>());
+    }  
+  if (vm.count("wt_by_nclasses"))
+    {
+      params.ml_wt_by_nclasses(vm["wt_by_nclasses"].as<bool>());
+    }
+  if (vm.count("wt_class_by_nclasses"))
+    {
+      params.ml_wt_class_by_nclasses(vm["wt_class_by_nclasses"].as<bool>());
     }
 
-    //
-    // ----------------------- MCsolveArgs --------------------
-    //
-
-    void MCsolveArgs::helpUsage( std::ostream& os ){
-        os  <<" Function:   Solve for Multi-Class Label Filter projection lines"
-            <<"\n    Determine a number (--proj) of projection lines. Any example whose projection"
-            <<"\n    lies outside bounds for that class is 'filtered'.  With many projecting lines,"
-            <<"\n    potentially many classes can be filtered out, leaving few potential classes"
-            <<"\n    for each example."
-            <<"\n Usage:"
-            <<"\n    <mcsolve> --xfile=... --yfile=... [--solnfile=...] [--output=...] [ARGS...]"
-            <<"\n where ARGS guide the optimization procedure"
-            <<"\n - Without solnfile, use random initial conditions."
-            <<"\n - xfile is a plain eigen DenseM or SparseM (always stored as float)"
-            <<"\n - yfile is an Eigen SparseMb matrix of bool storing only the true values,"
-            <<"\n         read/written via 'eigen_io_binbool'"
-            <<endl;
+#if GRADIENT_TEST  // Off, by default, at compile time
+  if (vm.count("tgradtest"))
+    {
+      params.finite_diff_test_epoch(vm["tgradtest"].as<uint32_t>());
     }
-    void MCsolveArgs::init( po::options_description & desc ){
-        desc.add_options()
-	  ("xfile,x", value<string>(&xFile)->required(), "x data (row-wise nExamples x dim)")
-	  ("yfile,y", value<string>(&yFile)->default_value(string("")), "y data (if absent, try reading as libsvm format)")
-	  ("solnfile,s", value<string>(&solnFile)->default_value(string("")), "solnfile starting solver state")
-	  ("output,o", value<string>(&outFile)->default_value(string("mc")), "output file base name")
-	  (",B", value<bool>(&outBinary)->implicit_value(true)->default_value(false),"output solution in  BINARY (default: TEXT")
-	  ("xnorm", value<bool>(&xnorm)->implicit_value(true)->default_value(false), "col-normalize x dimensions (mean=stdev=1)\n(forces Dense x)")
-	  ("xunit", value<bool>(&xunit)->implicit_value(true)->default_value(false), "row-normalize x examples")
-	  ("xscale", value<double>(&xscale)->default_value(1.0), "scale each x example.  xnorm, xunit, xscal applied in order, during read.")
-	  // xquad ?
-	  ("help,h", "")
-	  
-	  //("threads,t", value<uint32_t>()->default_value(1U), "TBD: threads")
-	  ("verbose,v", value<int>(&verbose)->implicit_value(1)->default_value(1), "--verbosity=-1 may reduce output")
-	  ;
+  if (vm.count("ngradtest"))
+    {
+      params.no_finite_diff_tests(vm["ngradtest"].as<uint32_t>());
     }
-    MCsolveArgs::MCsolveArgs()
-        : parms(set_default_params())   // parameter.h parses these options
-          // MCsolveArgs::parse output...
-          , xFile()
-          , yFile()
-          , solnFile()
-          , outFile()
-          , outBinary(false)
-          , xnorm(false)
-          , xunit(false)
-          , xscale(1.0)
-          //, threads(0U)           // unused?
-          , verbose(1)            // cmdline value can be -ve to reduce output
-        {}
-
-  MCsolveArgs::MCsolveArgs(int argc, char**argv)
-    : MCsolveArgs()
-  {
-    this->parse(argc,argv);
-  }
-
-  void MCsolveArgs::parse( int argc, char**argv ){
-#if ARGSDEBUG > 0
-    cout<<" parse( argc="<<argc<<", argv, ... )"<<endl;
-    for( int i=0; i<argc; ++i ) {
-      cout<<"    argv["<<i<<"] = "<<argv[i]<<endl;
+  if (vm.count("deltagradtest"))
+    {
+      params.finite_diff_test_delta(vm["deltagradtest"].as<double>());
     }
-#endif
-    try {
-      po::options_description descAll("Allowed options");
-      po::options_description descMcsolve("mcsolve options");
-      init( descMcsolve );                        // create a description of the options
-      po::options_description descParms("solver args");
-      opt::mcParameterDesc( descParms, parms );   // add the param_struct options
-      descAll.add(descMcsolve).add(descParms);
-      
-      po::variables_map vm;
-      {
-	po::parsed_options parsed
-	  = po::command_line_parser( argc, argv )
-	  .options( descAll )
-	  .run();
-	po::store( parsed, vm );
-      }
-      
-      if( vm.count("help") ) {
-	helpUsage( cout );
-	cout<<descAll<<endl;
-	//helpExamples(cout);
-	exit(0);
-      }
-      
-      po::notify(vm); // at this point, raise any exceptions for 'required' args
-      
-      assert( vm.count("xfile") );
-      
-      opt::extract(vm,parms);         // retrieve McSolver parameters
-      finalize_default_params(parms);      
-    }
-    catch(po::error& e)
-        {
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
-        }
-    return;
-    }
+#endif  
+}
 
-    // static fn -- no 'this'
-    std::string MCsolveArgs::defaultHelp(){
-        std::ostringstream oss;
-        try {
-            MCsolveArgs mcsa;                                   // make sure we generate *default* help
-            po::options_description descAll("Allowed options");
-            po::options_description descMcsolve("mcsolve options");
-            mcsa.init( descMcsolve );                           // create a description of the options
-            po::options_description descParms("solver args");
-            opt::mcParameterDesc( descParms, mcsa.parms );      // add the param_struct options
-            descAll.add(descMcsolve).add(descParms);
-
-            helpUsage( oss );
-            oss<<descAll<<endl;
-        }catch(po::error& e){
-            cerr<<"Invalid argument: "<<e.what()<<endl;
-            throw;
-        }catch(std::exception const& e){
-            cerr<<"Error: "<<e.what()<<endl;
-            throw;
-        }catch(...){
-            cerr<<"Command-line parsing exception of unknown type!"<<endl;
-            throw;
-        }
-        return oss.str();
-    }
-
-} //opt::
 
 
 //
@@ -378,7 +268,7 @@ void MCprojectorArgs::extract(po::variables_map const& vm)
     
   if (vm.count("nProj"))
     {
-      nProj = std::vector<int>(vm["lfFiles"].as<std::vector<int>>());
+      nProj = std::vector<int>(vm["nProj"].as<std::vector<int>>());
     }
 }
   

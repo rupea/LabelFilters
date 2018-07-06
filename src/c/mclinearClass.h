@@ -24,6 +24,8 @@ public:
   MClinearClassifier(DP data, LMP classifier, FP filter = FP(), int const vb=MCprojector::defaultVerbose);
   ~MClinearClassifier();
   
+  //changin the number of projections invalidates the predictions. 
+  inline void nProj(int const np){if (m_nProj != np) {preds_ok = false;} MCprojector::nProj(np);}    
   void predict();            ///< make predictions using the model and filter. 
   PerfStruct evaluate(double threshold = 0, uint32_t min_labels = 1);         ///< evaluate predictions
   void writePreds(std::string fname = "");            ///< save predictions

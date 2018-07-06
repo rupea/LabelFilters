@@ -99,7 +99,7 @@ namespace mcsolver_detail{
 	{
 	  cout << " zero"; cout.flush();
 	}
-      init.setZero();
+      init.setZero(); normalize=false;
       break;      
     case INIT_PREV:
       if(projection_dim <= weights.cols()) 
