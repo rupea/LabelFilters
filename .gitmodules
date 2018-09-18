@@ -1,3 +1,6 @@
 [submodule "CRoaring"]
 	path = CRoaring
 	url = https://github.com/RoaringBitmap/CRoaring.git
+[submodule "Eigen"]
+	path = Eigen
+	url = https://github.com/eigenteam/eigen-git-mirror.git
