@@ -13,7 +13,6 @@ struct MutexType
   bool TestLock() { return omp_test_lock(&lock); }
   void YieldLock() 
   {
-    //cout << "YieldLock:" << &lock << endl;fflush(stdout);
     while (!omp_test_lock(&lock)){
       #pragma omp taskyield
     }

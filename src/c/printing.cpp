@@ -78,8 +78,6 @@ namespace detail {
         if( ! x.isCompressed() )
             throw std::runtime_error(" eigen_io_binbool output requires a COMPRESSED matrix"
                                      " pruned to contain only true values");
-        // following Map is not resolved by gcc-4.9
-        //auto const trueCount = ( Eigen::Map<Eigen::VectorXi>(x.valuePtr(), x.nonZeros()).array()!=false ).count();
         size_t trueCount = 0U;
         for(int i=0; i<x.nonZeros(); ++i) trueCount += (x.valuePtr()[i] == true);
         if( trueCount != x.nonZeros() )
@@ -177,7 +175,6 @@ namespace detail {
                 Idx tmp;
                 for(size_t i=0U; i<rows + 1U ; ++i){
                     *idxp++ = NEXT_IDX(tmp);
-                    //cout<<" oip["<<i<<"]="<<x.outerIndexPtr()[i]<<endl;
                 }
             }
         }
@@ -199,7 +196,6 @@ namespace detail {
                 Idx tmp;
                 for(size_t i=0U; i<nData; ++i){
                     *idxp++ = NEXT_IDX(tmp);
-                    //cout<<" iip["<<i<<"]="<<x.innerIndexPtr()[i]<<endl;
                 }
             }
         }
@@ -403,8 +399,6 @@ namespace detail {
 	    << "Offending line: " << line <<endl;
 	throw;
       }
-      //no label is ok            assert( yIdx.size() > 0U );
-      //should not happen            assert( xIdx.size() == xVal.size() );
       // move class and data items onto respective TripletLists
       for(size_t i=0U; i<yIdx.size(); ++i){
 	if( yIdx[i] > maxClass ) maxClass = yIdx[i];
@@ -432,15 +426,6 @@ namespace detail {
       {
 	cerr<< "WARNING: No labels with indices below " << minClass << endl 
 	    << "The code assumes label indices start at 0!" <<endl;
-	// for(size_t i=0U; i<yTriplets.size(); ++i){
-	//   auto & yi = yTriplets[i];
-	//   assert( yi.value() == true );
-	//   assert( yi.col() >= minClass && yi.col() <= maxClass );
-	//   B bnew( yi.row(), yi.col()-minClass, yi.value() );
-	//   yi = bnew;
-	// }
-	// maxClass -= minClass;
-	// minClass = 0U;       
       }    
     if (nClass > 0)
       {
@@ -495,14 +480,10 @@ namespace detail {
   
   template
   std::istream& eigen_read_libsvm( std::istream& is,
-				   // aka SparseMf
-				   //typename Eigen::SparseMatrix<float,Eigen::RowMajor> &x,
 				   SparseMf &x,
 				   SparseMb &y );
   template
   std::istream& eigen_read_libsvm( std::istream& is,
-				   // aka SparseM
-				   //typename Eigen::SparseMatrix<double,Eigen::RowMajor> &x,
 				   SparseM &x,
 				   SparseMb &y );
 }//detail::

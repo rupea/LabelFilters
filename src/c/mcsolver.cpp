@@ -1,8 +1,5 @@
 #include "mcsolver.h"
 #include "mcsolver.hh"
-//#include "mcxydata.h"
-
-//#include "find_w_detail.h"      // ::optimizeLU
 #include <boost/numeric/conversion/bounds.hpp>  // boost::numeric::bounds<T>
 #include <omp.h>
 #include <iostream>
@@ -201,8 +198,6 @@ int MCsolver::getNthreads( param_struct const& params ) const
         nThreads = omp_get_max_threads(); // use OMP_NUM_THREADS
     else
         nThreads = params.num_threads;
-    //omp_set_num_threads( nThreads );
-    //Eigen::initParallel();
     if (params.verbose >= 1) 
       {
 	cout<<" solve_ with _OPENMP and params.num_threads set to "<<params.num_threads
@@ -239,14 +234,12 @@ MCupdateChunking::MCupdateChunking( size_t const nTrain, size_t const nClass,
     , idx_chunks        ( nThreads/sc_chunks )
     , idx_chunk_size    ( batch_size / idx_chunks )
     , idx_remaining     ( batch_size % idx_chunks )
-    , idx_locks         ( new MutexType[idx_chunks] )
-    , sc_locks          ( new MutexType[sc_chunks] )
-    //, idx_locks         ( params.update_type==MINIBATCH_SGD? new MutexType[idx_chunks]: nullptr )
-    //, sc_locks          ( params.update_type==MINIBATCH_SGD? new MutexType[sc_chunks]: nullptr )
+    , idx_locks         ( params.update_type==MINIBATCH_SGD? new MutexType[idx_chunks]: nullptr )
+    , sc_locks          ( params.update_type==MINIBATCH_SGD? new MutexType[sc_chunks]: nullptr )
 {}
 MCupdateChunking::~MCupdateChunking(){
-    delete[] idx_locks; const_cast<MutexType*&>(idx_locks) = nullptr;
-    delete[]  sc_locks; const_cast<MutexType*&>( sc_locks) = nullptr;
+  if (idx_locks) {delete[] idx_locks; const_cast<MutexType*&>(idx_locks) = nullptr;}
+  if (sc_locks) {delete[]  sc_locks; const_cast<MutexType*&>( sc_locks) = nullptr;}
 }
 
 

@@ -42,7 +42,6 @@ public:
                                     std::lower_bound(_sortedLU.data(),
                                                      _sortedLU.data()+_sortedLU.size(),
                                                      xproj
-                                                     //,[](double const i, double const j){return i<=j;}
                                                      ));
         return ret;
     }
@@ -80,7 +79,7 @@ inline const Roaring* Filter::filter(double xproj) const
 }
 
 #if 0
-/** Filter with fast access for a batch of projection values.
+/** TO IMPLEMENT: Filter with fast access for a batch of projection values.
  * - Best used when
  *   - we have a "batch" of values to process, just once, and
  *   - number of calls to \c Filter::filter(double) is << number of classes.
@@ -97,7 +96,7 @@ class FilterBatch
      * \return vector of bitsets, <b>up to client to \c delete returned pointer</b> */
     std::vector<Roaring>* filter (vector<double> xproj) const;
 private:
-    Roaring bs;
+    Eigen::VectorXd _sortedLU;
 };
 #endif
 

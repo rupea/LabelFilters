@@ -217,7 +217,6 @@ void fromstring( std::string s, enum Eta_Type &e )
 }
 void fromstring( std::string s, enum Update_Type &e )
 {
-    //cout<<"fromstring("<<s<<", Update_type&="<<(int)e<<")"<<endl;
     ENUM_FIND(MINIBATCH, MINIBATCH_SGD);
     ENUM_FIND(SAFE, SAFE_SGD);
     ENUM_FIND(PROJECTED, SAFE_SGD);
@@ -240,43 +239,10 @@ void fromstring( std::string s, enum Init_W_Type &e )
 #undef ENUM_FIND
 
 
-using std::ostream;
-using std::istream;
-using std::string;
-
-#if 0
-namespace detail {
-    template<typename T> inline ostream& io_txt( ostream& os, T const& x, char const* ws="\n" ){ return os << x << ws; }
-    template<typename T> inline istream& io_txt( istream& is, T& x )                    { return is >> x; }
-    template<typename T> inline ostream& io_bin( ostream& os, T const& x ) { return os.write(reinterpret_cast<char const*>(&x),sizeof(T)); }
-    template<typename T> inline istream& io_bin( istream& is, T& x ) { return is.read (reinterpret_cast<char*>(&x),sizeof(T)); }
-
-    // specializations
-    //   strings as length + blob (no intervening space)
-    template<> inline ostream& io_txt( std::ostream& os, std::string const& x, char const* /*ws="\n"*/ ){
-        uint32_t len=(uint32_t)(x.size() * sizeof(string::traits_type::char_type));
-        io_txt(os,len,"");      // no intervening whitespace
-        if(os.fail()) throw std::overflow_error("failed string-len-->ostream");
-        os<<x;
-        if(os.fail()) throw std::overflow_error("failed string-data-->ostream");
-        return os;
-    }
-    template<> inline istream& io_txt( istream& is, string& x ){
-        uint32_t len;
-        io_txt(is,len);
-        if(is.fail()) throw std::underflow_error("failed istream-->string-len");
-        x.resize(len,'\0');     // reserve string memory
-        is.read(&x[0], len);    // read full string content
-        if(is.fail()) throw std::underflow_error("failed istream-->string-data");
-        return is;
-    }
-}
-#endif
 using namespace detail;
 
 #define PARAM_STRUCT_IO \
         IO(nfilters); \
-        /*IO(tot_projections);*/ \
         IO(C1); \
         IO(C2); \
         IO(max_iter); \

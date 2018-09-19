@@ -1,10 +1,8 @@
 #ifndef _OBJECTIVE_H
 #define _OBJECTIVE_H
 
-//#include "Eigen/Dense"
 #include "typedefs.h"
 #include "parameter.h"
-//#include <vector>
 
 class boolmatrix;
 
@@ -33,19 +31,6 @@ namespace mcsolver_detail{
 					double C1, double C2,
 					const ::param_struct& params);
 
-    /* // *********************************** */
-    /* // calculates the objective value for a subset of instances and classes */
-
-    /* double compute_objective(const VectorXd& projection, const SparseMb& y, */
-    /* 			 const VectorXi& nclasses, int maxclasses, */
-    /* 			 size_t i_start, size_t i_end, */
-    /* 			 int sc_start, int sc_end, */
-    /* 			 const std::vector<int>& sorted_class, */
-    /* 			 const std::vector<int>& class_order, */
-    /* 			 const VectorXd& sortedLU, */
-    /* 			 const boolmatrix& filtered, */
-    /* 			 double C1, double C2, */
-    /* 			 const ::param_struct& params); */
 
     // *******************************
     // Calculates the objective function

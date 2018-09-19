@@ -1,10 +1,6 @@
 #include "mclearnFilter.h"
 #include "mcxydata.h"
 #include "printing.hh"
-//#include "normalize.h"
-
-//#include <omp.h>
-
 #include <stdexcept>
 #include <iostream>
 #include <fstream>
@@ -13,7 +9,7 @@
 using namespace std;
 
 MClearnFilter::MClearnFilter( DP data, MCsoln const& soln /*=MCsoln()*/, SolverParams const& params /*=SolverParams()*/):
-   MCsolver(soln) // solnFile.size()? solnFile.c_str(): (char const* const)nullptr )
+   MCsolver(soln) 
   , m_xy(data)
   , m_params(params)
 {
@@ -41,9 +37,6 @@ MClearnFilter::MClearnFilter( DP data, MCsoln const& soln /*=MCsoln()*/, SolverP
 MClearnFilter::~MClearnFilter(){}
 
 
-/** \sa mcsolver.hh for \ref MCsolver::solve implementation.
- * \ref MCsolver::solve is a compact rewrite of the original
- * \ref solve_optimization routine. */
 void MClearnFilter::learn(){
   if(m_params.verbose() >= 1) cout<<"MClearnFilter::learn() "<<(m_xy->denseOk?"dense":m_xy->sparseOk?"sparse":"HUH?")<< " data" <<endl;
   if( m_xy->denseOk ){
@@ -160,11 +153,9 @@ static size_t printWideIntervals( std::ostream&  os, size_t const maxWide,
     // shift entries of wide[] to make room for new entry (if nec.)
     if( wide.size() >= maxWide ){ // insert-before, without growing
       if( big == 0 ) continue;  // width not big enough to save
-      //if(verbose>=2) cout<<" c="<<c<<" wid:"<<width<<" Xbig="<<big;
       --big;                    // copy elements towards wide.begin();
       for(size_t b=0; b<big; ++b) wide[b] = wide[b+1];
     }else{ // insert-before, with growing
-      //if(verbose>=2) cout<<" c="<<c<<" wid:"<<width<<" big="<<big;
       wide.push_back(0);       // copy elements towards wide.end()
       for(size_t b=wide.size()-1U; b>big; --b) wide[b] = wide[b-1];
     }
@@ -177,7 +168,6 @@ static size_t printWideIntervals( std::ostream&  os, size_t const maxWide,
 	size_t cls=wide[i];
 	cout<<setw(6)<<cls<<" {"<<setw(10)<<l.coeff(cls,p)
 	    <<", "<<u.coeff(cls,p)<<"}"<<u.coeff(cls,p)-l.coeff(cls,p);
-	//cout<<endl;
       }
       cout<<endl;
     }

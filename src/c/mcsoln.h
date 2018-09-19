@@ -8,14 +8,7 @@
 /** Corresponds to data stored in an MCFilter "solution" file.
  * - Contains:
  *   - dimensionality data
- *   - \c param_struct of last call to MCsolveMCsolver::solve()
- *   - some <em>final iteration</em> values
- *   - {w,l,u,obj} data outputs of time-average solution
- *   - [opt. if len=="long"] {w,l,u,obj} of final iteration
- * - during MCsolver::solve, we expand data to LONG format,
- *   - but the solution can still be saved to disk in SHORT
- *   - and after \c solve, we can \c keep() just a \c SHORT data
- * - other operations (TBD) only need the \c SHORT data
+ *   - {w,l,u} data outputs of time-average solution
  */
 class MCsoln {
 public:
@@ -58,12 +51,6 @@ public:
     uint32_t d;                         ///< d is x.cols example dimensionality
     uint32_t nProj;                     ///< w is d x nProj
     uint32_t nClass;                    ///< l and u are nClass x nProj, objective[nClass]
-    //@}
-
-    /// \name parameters used for last/current call to MCsolver::solve(...)
-    /// not used for now because it invalidates saved solutions if new parameters are added
-    //@{
-    //    param_struct parms;
     //@}
 
     /// \name data.

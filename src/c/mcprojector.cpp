@@ -2,8 +2,6 @@
 #include "mcxydata.h"
 #include "mcfilter.h"
 #include "printing.hh"
-//#include "normalize.h"
-//#include "mcpredict.hh"
 #include "utils.h"              // OUTWIDE
 
 #include <stdexcept>
@@ -28,56 +26,6 @@ MCprojector::~MCprojector()
 {
   if (m_feasible) delete m_feasible;
 }
-
-
-  /* this needs to be moved somewhere else
-  void MCprojProgram::readData(std::string const& xfile)
-  {
-    // obtain this->xy->MCxyData::{xDense, denseOk, xSparse,sparseOk}
-    xy = std::make_shared<::MCxyData>();
-    if(verbose>=1) cout<<"Reading from xfile="<<xfile<<endl;
-    xy->xread(xfile);    // tries binary dense, sparse, libsvm, XML            
-    if( A::xnorm ){
-      // SHOULD USE THE MEAN/SDEV CALCULATED FOR THE TRAINIGN SET, NOT THE ONES FOR THE PROJECTION SET!!!
-      ::Eigen::VectorXd xmean;
-      ::Eigen::VectorXd xstdev;
-      if(verbose>=1){
-	cout<<" xnorm!"<<endl;
-      }
-      //for sparse data do not center (should be an option)
-      cerr << "Warning: column normalization is done using statistics on the prediction set.\n"
-	   << "         Training set statistics should probably be used" << endl
-	   << endl; 
-      if (xy->sparseOk)
-	cerr << "Warning: --xnorm is used with sparse data. Features are not centered to maintain sparsity" << endl;	      
-      xy->xstdnormal(xmean, xstdev, true, !xy->sparseOk, false);
-      if(verbose>=1){
-	cout<<"xmeans"<<prettyDims(xmean)<<":\n"<<xmean.transpose()<<endl;
-	cout<<"xstdev"<<prettyDims(xstdev)<<":\n"<<xstdev.transpose()<<endl;
-      }
-    }
-    
-    if( A::xunit ){
-      xy->xunitnormal();
-    }
-    
-    if( A::xscale != 1.0 ){
-      xy-> xscale( A::xscale );
-    }
-    
-    if(verbose>=1){
-      if( xy->denseOk ){
-	cout<<"--------- xy->xDense"<<prettyDims(xy->xDense)<<":\n";
-	if(xy->xDense.size()<1000&&verbose>=3) cout<<xy->xDense<<endl;
-      }else{ //xy->sparseOk
-	cout<<"--------- xy->xSparse"<<prettyDims(xy->xSparse)<<":\n";
-	if(xy->xSparse.size()<1000&&verbose>=3) cout<<xy->xSparse<<endl;
-      }
-    }
-  }  
-
-  */
-
   
 void MCprojector::runFilter()
 {

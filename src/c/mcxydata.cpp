@@ -1,15 +1,11 @@
 #include "mcxydata.h"
 #include "mcxydata_detail.h"
 #include "mcxydata_detail.hh"
-//#include "normalize.hh"
 #include "printing.h"
 #include "printing.hh"
 
-//#include <stdexcept>
 #include <iostream>
 #include <fstream>
-//#include <sstream>
-//#include <iomanip>
 
 // ... MCxyData magic headers (simplify I/O)
 std::array<char,4> MCxyData::magic_xSparse = {0,'X','s','4'}; // value saved as floats
@@ -311,18 +307,13 @@ void MCxyData::quadx(double qscal /*=0.0*/){
         // so as not to ruin sparsity (if any)
         if( sparseOk ){
             if(!xSparse.isCompressed()) xSparse.makeCompressed();
-#if 0 // not available for sparse..   l_{\inf} norm == max absolute value
-            qscal = xSparse.lpNorm<Eigen::Infinity>();
-#else
             SparseM::Index const nData = xSparse.outerIndexPtr()[ xSparse.outerSize() ];
             auto       b = xSparse.valuePtr();
             auto const e = b + nData;
             SparseM::Scalar maxabs=0.0;
             for( ; b<e; ++b) maxabs = std::max( maxabs, std::abs(*b) );
             qscal = maxabs;
-#endif
         }else{
-            // not supported: qscal = xDense.cwiseAbs().max();
             qscal = xDense.lpNorm<Eigen::Infinity>();
         }
         qscal = 1.0/qscal;

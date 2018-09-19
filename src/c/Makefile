@@ -27,18 +27,7 @@ LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring
 VPATH = $(MAKEFILE_DIR) #../c
 
 
-
-#/tmp/%.chk: %
-#	@$(CXX) -c $* $(CPPFLAGS) -o /dev/null && { echo 'OK:   $*'; touch $@; } || { echo 'ERROR: $*'; rm -f $@; }
-#
-#CHECK_HEADERS := mcfilter.h mcfilter.hh mcsolver.h mcsolver.hh mcsoln.h mcxydata.h mcxydata_detail.h mcxydata_detail.hh mcupdate.hh objective.h mcsolver_detail.hh mcsolver_init.hh boolmatrix.h typedefs.h constants.h mutexlock.h filter.h KMeans.h parameter.h parameter-args.h mclearnFilter.h mcprojector.h linearModel.h linearModel.hh linearModel_detail.h linearModel_detail.hh mclinearClass.h PredictionSet.h printing.h printing.hh utils.h WeightVector.h LPSR.h
-
-# faster version (can run in parallel)
-#check-headers chk-headers:
-#	rm -f /tmp/*.chk
-#	$(MAKE) -f$(THIS_MAKEFILE) -j10 $(patsubst %,/tmp/%.chk,$(CHECK_HEADERS))
-
-LIB_CPPFILES:= mcfilter.cpp mcpredict.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp  parameter.cpp parameter-args.cpp mclearnFilter.cpp mcprojector.cpp linearModel.cpp mclinearClass.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp
+LIB_CPPFILES:= mcfilter.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp  parameter.cpp parameter-args.cpp mclearnFilter.cpp mcprojector.cpp linearModel.cpp mclinearClass.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp
 
 SRCS:= $(LIB_CPPFILES) mcsolve.cpp mcproj.cpp 
 DEP:= $(SRCS:%.cpp=%.d)

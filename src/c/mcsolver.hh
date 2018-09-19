@@ -66,7 +66,6 @@ inline MCiterBools::MCiterBools( uint64_t const t, param_struct const& params )
 #if GRADIENT_TEST
   , MCITER_PERIODIC( finite_diff_test )
 #endif
-    //  , doing_avg_epoch( params.averaged_gradient && t >= params.avg_epoch )    // <-- true after a certain 't'
   , progress( params.verbose >= 1 && !params.report_epoch && t % 1000 == 0)  // print some progress
 {
 }
@@ -285,8 +284,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     Proj( EIGENTYPE const& x, WeightVector const& w ) : x(x), w(w), v(x.rows()), ngetSTD(0U), ngetAVG(0U), nReuse(0U), nSwitch(0U), nDemote(0U), valid(false)
     {}
     ~Proj(){
-      //	  std::cout<<" ~Proj{ngetSTD="<<ngetSTD<<",ngetAVG="<<ngetAVG<<",nReuse="<<nReuse
-      //               <<",nSwitch="<<nSwitch<<",nDemote="<<nDemote<<"}"<<std::endl;
     }
     /** Every time client changes \c w, \c Proj \b must be informed that the world is now different. */
     void w_changed() {
@@ -327,7 +324,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
     VectorXd const& avg(){ return operator()(AVG); }
     /// for assertions
     bool isValid() const {return valid;}
-    //VectorXd const& get() const {return v;}       ///< even if it's invalid
   private:
     EIGENTYPE const& x;
     WeightVector const& w;
@@ -357,31 +353,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   // how to split the work for gradient update iterations
   int const nThreads = this->getNthreads( params );
   MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, nThreads, params );
-  //MCupdateChunking updateSettings( nTrain/*x.rows()*/, nClass, 2, params );  // 2 might be fastest?
-#ifndef NDEBUG
-  {// in debug mode check no change from original settings
-    const size_t batch_size = (params.batch_size < 1 || params.batch_size > nTrain) ? (size_t) nTrain : params.batch_size;
-    if (params.verbose >= 1) cout<<" batch_size = "<<batch_size<<endl;
-    int const sc_chunks = nThreads;
-    int const sc_chunk_size = (params.class_samples?params.class_samples:nClass)/sc_chunks;
-    int const sc_remaining = (params.class_samples?params.class_samples:nClass) % sc_chunks;
-    int const idx_chunks = nThreads/sc_chunks;
-    if (params.verbose >= 1) std::cout<<" idx_chunks="<<idx_chunks<<std::endl;
-    int const idx_chunk_size = batch_size/idx_chunks;
-    int const idx_remaining = batch_size % idx_chunks;
-    assert( idx_chunks == updateSettings.idx_chunks );
-    assert( idx_chunk_size == updateSettings.idx_chunk_size );
-    assert( idx_remaining == updateSettings.idx_remaining );
-    assert( sc_chunks == updateSettings.sc_chunks );
-    assert( sc_chunk_size == updateSettings.sc_chunk_size );
-    assert( sc_remaining == updateSettings.sc_remaining );
-    //MutexType* sc_locks = new MutexType [sc_chunks];
-    //MutexType* idx_locks = new MutexType [idx_chunks];
-    assert( updateSettings.idx_locks != nullptr );
-     
-    assert( updateSettings.sc_locks != nullptr );
-  }
-#endif
 
   //keep track of which classes have been elimninated for a particular example
   boolmatrix filtered(nTrain,nClass);    

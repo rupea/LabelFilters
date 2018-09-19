@@ -67,7 +67,6 @@ namespace mcsolver_detail{
     VectorXd gradl(noClasses); // by ranked classes, to minimize cache misses/false sharing
 #if MCTHREADS && defined(_OPENMP)
     size_t const ck = std::max(size_t{256U},size_t{noClasses/omp_get_max_threads()});
-    //#pragma omp parallel for simd schedule(static,ck)
 #pragma omp parallel for schedule(static,ck)
 #endif
     for (size_t sc = 0; sc <noClasses; ++sc) {
@@ -111,7 +110,6 @@ namespace mcsolver_detail{
 	  if (plus) { // only the upper bounds of the classes of this example are affected
 	    double const class_weight = C1*inside_weight.coeff(idx);
 	    for (SparseMb::InnerIterator it(y,idx); it; ++it) {
-	      //assert( it.value() ); if (it.value()) ...
 	      int const cs = it.col();                // raw [unsorted] class
 	      int const sc = class_order[cs];         // sorted class number
 	      if( gradu.coeff(sc) >= 0 && (gradu.coeffRef(sc) -= class_weight) <  std::numeric_limits<double>::epsilon()*class_weight*10){

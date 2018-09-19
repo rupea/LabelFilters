@@ -15,7 +15,7 @@ std::array<char,4> MCsoln::magicTxt = {'M', 'C', 's', 't' };
 std::array<char,4> MCsoln::magicBin = {'M', 'C', 's', 'b' };
 std::array<char,4> MCsoln::magicCnt = {'M', 'C', 's', 'c' };
 std::array<char,4> MCsoln::magicEof = {'M', 'C', 's', 'z' };
-//#define MAGIC_U32( ARRAY4C ) (*reinterpret_cast<uint_least32_t const*>( ARRAY4C.cbegin() ))
+
 #define MAGIC_EQU( A, B ) (A[0]==B[0] && A[1]==B[1] && A[2]==B[2] && A[3]==B[3])
 
 MCsoln::MCsoln()
@@ -24,14 +24,12 @@ MCsoln::MCsoln()
     , nProj( 0U )
     , nClass( 0U )
 
-  //    , parms(set_default_params())
-
     , magicData( magicCnt )
 
     , weights()
     , lower_bounds()
     , upper_bounds()
-    , magicEof1( magicEof )     // default SHORT i/o would stop here
+    , magicEof1( magicEof )    
 {};
 void MCsoln::write( std::ostream& os, enum Fmt fmt/*=BINARY*/) const
 {
@@ -53,7 +51,6 @@ void MCsoln::read( std::istream& is ){
 void MCsoln::pretty( std::ostream& os, int verbose /*=0*/) const {
   if (verbose >= 1) {
     os<<"--------- d="<<d<<" nProj="<<nProj<<" nClass="<<nClass<<endl;
-    //    os<<"--------- MCsolver parameters:\n"<<parms; //<<endl;
     os<<"--------- weights"<<prettyDims(weights)
         <<" lower_bounds"<<prettyDims(lower_bounds)
         <<" upper_bounds"<<prettyDims(upper_bounds)<<endl;
@@ -87,7 +84,6 @@ void MCsoln::write_ascii( std::ostream& os) const
         io_txt(os,d);
         io_txt(os,nProj);
         io_txt(os,nClass);
-	//       ::write_ascii(os,parms);
         magicData = magicCnt;
         io_txt(os,magicData);
     }catch(exception const& e){
@@ -113,7 +109,6 @@ void MCsoln::read_ascii( std::istream& is ){
         io_txt(is,d);
         io_txt(is,nProj);
         io_txt(is,nClass);
-	//        ::read_ascii(is,parms);
         while(is.peek()=='\n'|| is.peek()==' ') is.get();
         io_txt(is,magicData);
         if( ! MAGIC_EQU(magicData,magicCnt) )
@@ -142,7 +137,6 @@ void MCsoln::write_binary( std::ostream& os) const
         io_bin(os,d);
         io_bin(os,nProj);
         io_bin(os,nClass);
-	//        ::write_binary(os,parms);
         magicData = magicCnt;
         io_bin(os,magicData);
     }catch(exception const& e){
@@ -168,7 +162,6 @@ void MCsoln::read_binary( std::istream& is ){
         io_bin(is,d);
         io_bin(is,nProj);
         io_bin(is,nClass);
-	//        ::read_binary(is,parms);
         io_bin(is,magicData);
         if( ! MAGIC_EQU(magicData,magicCnt) )
             throw runtime_error("MCsoln header length has changed");

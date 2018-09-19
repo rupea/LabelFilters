@@ -2,10 +2,6 @@
 #include "constants.h" //MCTHREADS
 #include "printing.hh"
 
-//#include "Eigen/Dense"
-//#include "Eigen/Sparse"
-
-
 bool PredVec::AddWarned = false;
 bool PredVec::ThreshWarned = false;
 bool PredVec::TopWarned = false;

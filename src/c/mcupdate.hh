@@ -8,6 +8,7 @@
 #include "typedefs.h"
 #include "parameter.h"
 #include "WeightVector.h"
+#include "constants.h"
 #include <vector>
 
 
@@ -162,7 +163,6 @@ namespace mcsolver_detail
       
       
 #if MCTHREADS
-    //#pragma omp parallel for default(shared) reduction(+:multiplier) schedule(static,1)
 #pragma omp parallel for default(shared) reduction(+:multiplier)
 #endif
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
@@ -198,7 +198,6 @@ namespace mcsolver_detail
 	new_proj = proj - eta*lambda*proj - eta*multiplier*iSqNorm;
 	new_multiplier=0;
 #if MCTHREADS
-	//#pragma omp parallel for  default(shared) reduction(+:new_multiplier) schedule(static,1)
 #pragma omp parallel for  default(shared) reduction(+:new_multiplier)
 #endif
 	for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
@@ -245,7 +244,6 @@ namespace mcsolver_detail
     // use new_proj since it is exactly the projection obtained with the new w
 
 #if MCTHREADS
-    //#pragma omp parallel for default(shared) schedule(static,1)
 #pragma omp parallel for default(shared)
 #endif
     for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
@@ -458,7 +456,6 @@ namespace mcsolver_detail
 	  // for now we leave it like this since we almost always we optimize LU at the end
 	  
 #if MCTHREADS
-	  //#pragma omp parallel for default(shared) schedule(static,1)
 #pragma omp parallel for default(shared)
 	  for (int sc_chunk = 0; sc_chunk < sc_chunks; sc_chunk++)
 	    {

@@ -39,10 +39,6 @@ namespace mcxydata_detail{
 
   template< typename Scalar, int Options, typename Index >    
     void remove_rare_features (Eigen::SparseMatrix<Scalar, Options, Index> &x, std::vector<std::size_t>& feature_map, std::vector<std::size_t>& reverse_feature_map, const int minex = 1, const bool useFeatureMap = false);
-
-  //  template <typename EigenType>
-  //  void remove_rare_labels(EigenType x, SparseMb y, const int minex = 1, const bool remove_ex = false); // new label map??
-
 }
 
 #endif //__MCXYDATA_DETAIL_H

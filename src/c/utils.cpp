@@ -28,11 +28,3 @@ SparseMb labelVec2Mat (const Eigen::VectorXd& yVec)
 }
 
 
-// // check if a file exists and is ready for reading
-
-// bool fexists(const char *filename)
-// {
-//   std::ifstream ifile(filename);
-//   return ifile;
-// }
-

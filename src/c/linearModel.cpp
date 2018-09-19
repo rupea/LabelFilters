@@ -71,7 +71,7 @@ void linearModel::write(std::string fname, bool binary /*=true*/) const{ // writ
 	    }
 	  else
 	    {
-	      throw std::runtime_error("Dense text format in timplemented for linear models");
+	      throw std::runtime_error("Dense text format not implemented for linear models");
 	      //detail::eigen_io_txt(ofs, WDense);
 	      //if (intercept.size() > 0) detail::eigen_io_txt(ofs, intercept);
 	    }

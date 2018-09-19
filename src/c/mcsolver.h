@@ -4,7 +4,6 @@
  * helper classes to make MCsolver::solve more readable
  */
 #include "mcsoln.h"
-//#include "boolmatrix.h"
 
 class Perm;             ///< an internal detail class -- no user access
 class MCpermState;      ///< track which versions of {l,u}{,_avg} and sortedLU{,_avg} are official
@@ -28,12 +27,10 @@ public:
 
     /**TODO: fix \b \c solve_optimization so proper resume can be done. */
 
-  //    MCsolver( char const* const solnfile = nullptr );
   MCsolver();
   MCsolver(MCsoln const& soln);
   ~MCsolver();
   
-  //    param_struct const& getParms() const {return this->parms;}
   MCsoln       const& getSoln()  const {return *this;}
   MCsoln            & getSoln()        {return *this;}
   void read( std::istream& is )
@@ -172,7 +169,6 @@ public:
     void toSorted( Eigen::VectorXd & sorted, Eigen::VectorXd const& ll, Eigen::VectorXd const& uu ) const;
     void toLu( Eigen::VectorXd & ll, Eigen::VectorXd & uu, Eigen::VectorXd const& sorted ) const;
  private:
-    //MCsoln & const mcs;
     bool ok_lu;                 ///< after init, one or two of ok_lu and ok_sortlu are always true
     bool ok_sortlu;
     bool ok_lu_avg;             ///< l_avg and u_avg are ok. Set by optimizeLU_avg or by mkok_lu_avg()

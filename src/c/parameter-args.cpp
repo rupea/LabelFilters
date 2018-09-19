@@ -129,10 +129,6 @@ void MCsolveArgs::extract(po::variables_map const& vm)
     {
       params.class_samples(vm["sample"].as<uint32_t>());
     }
-  // if (vm.count("threads"))
-  //   {
-  //     params.num_threads(vm["threads"].as<uint32_t>());
-  //   }
   //update before batchsize
   if (vm.count("update"))
     {

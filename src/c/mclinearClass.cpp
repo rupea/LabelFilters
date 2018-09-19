@@ -1,8 +1,6 @@
 #include "mclinearClass.h"
 #include "mcxydata.h"
 #include "printing.hh"
-//#include "normalize.h"
-//#include "mcpredict.hh"
 #include "utils.h"              // OUTWIDE
 #include "linearModel.h"
 #include "linearModel.hh"

@@ -3,8 +3,6 @@
 
 #include <boost/dynamic_bitset.hpp>
 
-//using namespace boost;
-
 class boolmatrix
 {
  public:

@@ -70,6 +70,7 @@ public:
     // remove labels that appear in fewer than minex examples. Return a label map between the new and all labels.
     // if useLabelMap is true, the provided label map (and reverse label map) are used to remove labels (minex
     //   is ignored)
+    // does not remove exmaples that are left with zero labels. 
     void removeRareLabels(std::vector<std::size_t>& label_map, std::vector<std::size_t>& reverse_label_map, const int minex=1, const bool useLabelMap=false );
    
     void quadx(double qscal=0.0);       ///< add quadratic dimensions (0.0 autoscales, somehow) \throw if no x data

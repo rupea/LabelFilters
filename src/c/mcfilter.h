@@ -12,14 +12,11 @@ class MCfilter : protected MCsoln
 {
  public:
   
-  //    MCfilter( char const* const solnfile = nullptr );
   MCfilter();
   MCfilter(MCsoln const& s);
   ~MCfilter();
   
-  //    param_struct const& getParms() const {return this->parms;}
   MCsoln       const& getSoln()  const {return *this;}
-  //    MCsoln            & getSoln()        {return *this;}
   void read( std::string const& fname )
   {						
     std::ifstream is(fname);
@@ -54,7 +51,6 @@ class MCfilter : protected MCsoln
   std::vector<Filter*> _filters;
   void init_filters();
   void delete_filters();
-  //    int getNthreads( param_struct const& params ) const;
 };
 
 

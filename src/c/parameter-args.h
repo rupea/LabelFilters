@@ -46,12 +46,7 @@ struct MCprojectorArgs {
   void extract(po::variables_map const& vm);
   
   std::vector<std::string> lfFiles;   ///< files to read the trained label filters from
-  
-  // feasible set changes with each dataset/nprojections/lablel filter. Need some naming convention
-  //      std::string feasibleFile;    ///< outputs feasible set in feasibleFile. [.proj] file basename (or cout)
-  // bool feasibleBinary;         ///< outFile format
-  // bool feasibleDense;          ///< outFile format
-  
+    
   std::vector<int> nProj;    ///< numbers of filters (projections) to use. -1 means use all filters. -2 means {0,1,2,...,no_fiters}
 };
 
@@ -63,10 +58,7 @@ struct MCclassifierArgs{
   void extract(po::variables_map const& vm);
   
   std::vector<std::string> modelFiles;
-  
-  // prediction set changes with every dataset/nprojection/label filter/model file/etc. Need some naming convention
-  // std::string predsFile;
-  
+    
   double keep_thresh;
   uint32_t keep_top;
   double threshold;

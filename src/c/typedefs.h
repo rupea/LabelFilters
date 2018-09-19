@@ -20,8 +20,8 @@ typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::ColMajor> De
 typedef Eigen::Matrix< bool, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor > MatrixXb;
 typedef Eigen::SparseMatrix<bool, Eigen::RowMajor> SparseMb;
 typedef Eigen::SparseMatrix<double,Eigen::RowMajor>  SparseM;
-typedef Eigen::MappedSparseMatrix<double, Eigen::RowMajor> ExtSparseM;
-typedef Eigen::MappedSparseMatrix<double, Eigen::RowMajor> ExtConstSparseM;
+typedef Eigen::Map<Eigen::SparseMatrix<double, Eigen::RowMajor>> ExtSparseM;
+typedef Eigen::Map<Eigen::SparseMatrix<double, Eigen::RowMajor>> ExtConstSparseM;
 
 typedef std::vector<Roaring> ActiveSet;
 
