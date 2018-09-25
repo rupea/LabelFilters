@@ -25,7 +25,7 @@ PROFILELIB ?= $(PROFILEDIR)/lib
 PROFILELINK ?= -L$(PROFILELIB) -Wl,-rpath,$(PROFILELIB)
 
 
-BINDIR ?= bin
+BINDIR ?= $(MAKEFILE_DIR)/../bin
 
 # OMP options
 # 1. full parallelization 
