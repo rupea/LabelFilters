@@ -98,7 +98,7 @@ void linearModel::write(std::string fname, bool binary /*=true*/) const{ // writ
 void linearModel::read( std::string fname ){
   ifstream ifs;
   std::array<char,4> magicHdr;
-  // TODO XXX try Dense-Text, Sparse-Text too?
+  // TODO XXX try Dense-Text too?
   try{
     ifs.open(fname);
     if( ! ifs.good() ) throw std::runtime_error("trouble opening fname");
@@ -176,7 +176,7 @@ void linearModel::read( ifstream& ifs, bool sparse, bool binary){
       if (!ifs.eof())
 	{ // read the intercepts
 	  detail::eigen_io_txt(ifs,intercept);
-	  if (ifs.fail()) throw std::runtime_error("problem reading linear model intercepts form file with eigen_io_bin");
+	  if (ifs.fail()) throw std::runtime_error("problem reading linear model intercepts from file with eigen_io_bin");
 	  if (intercept.size() != WSparse.cols()) throw std::runtime_error("Dimmensions of intercept and weight matrix do not match");
 	  ifs >> ws;
 	  if( ! ifs.eof() ) throw std::overflow_error("linear model read did not use full file");

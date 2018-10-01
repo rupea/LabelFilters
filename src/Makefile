@@ -86,7 +86,7 @@ all: CRoaring lib mcproj mcsolve
 
 $(C_TARGETS):
 	mkdir -p $(BINDIR)
-	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile $@
+	$(MAKE) -C $(BINDIR) $(JOBS) -f../src/c/Makefile $@
 
 #enable profiling
 $(PROFILE_TARGETS):

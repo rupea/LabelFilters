@@ -94,6 +94,18 @@ namespace linearmodel_detail{
 	  // CRoaring is fatster if using toArray than using iterators. 
 	  // allocate here to avoid multiple alocations. Will hold the active classes
 	  uint32_t* act = new uint32_t[noClasses]; 
+
+	  //to aviod testing for intercpt, just use zeros if no intercept is present
+	  Eigen::RowVectorXd I;
+	  if (intercept.size())
+	    {
+	      I = intercept;
+	    }
+	  else
+	    {
+	      I.setZero(noClasses);
+	    }
+	    
 #if MCTHREADS
 #pragma omp for
 #endif
@@ -105,7 +117,7 @@ namespace linearmodel_detail{
 	      PredVec& pv = predictions[i];
 	      for (uint32_t* cptr = act; cptr != act + nactive; cptr++)
 		{
-		  predtype out = static_cast<predtype>(DotProductInnerVector(x,i,w,*cptr) + intercept.coeff(*cptr)) ;
+		  predtype out = static_cast<predtype>(DotProductInnerVector(x,i,w,*cptr) + I.coeff(*cptr)) ;
 		  pv.add_and_prune(out,*cptr);
 		}
 	    }
