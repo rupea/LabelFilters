@@ -17,7 +17,6 @@
 using namespace std;
 using namespace detail;     // see printing.h
 
-std::array<char,4> MCsoln::magicTxt = {'M', 'C', 's', 't' };
 std::array<char,4> MCsoln::magicBin = {'M', 'C', 's', 'b' };
 std::array<char,4> MCsoln::magicCnt = {'M', 'C', 's', 'c' };
 std::array<char,4> MCsoln::magicEof = {'M', 'C', 's', 'z' };
@@ -40,7 +39,6 @@ MCsoln::MCsoln()
 void MCsoln::write( std::ostream& os, enum Fmt fmt/*=BINARY*/) const
 {
     if(fmt!=BINARY){
-        io_txt(os,magicTxt);
         write_ascii(os);
     }else{
         io_bin(os,magicBin);
@@ -50,9 +48,12 @@ void MCsoln::write( std::ostream& os, enum Fmt fmt/*=BINARY*/) const
 
 void MCsoln::read( std::istream& is ){
     io_bin(is,magicHdr);
-    if(      MAGIC_EQU(magicHdr,magicTxt) ) read_ascii( is );
-    else if( MAGIC_EQU(magicHdr,magicBin) ) read_binary( is );
-    else throw std::runtime_error("ERROR: bad magicHdr reading MCsoln");
+    if(      MAGIC_EQU(magicHdr,magicBin) ) read_binary( is );
+    else
+      {
+	is.seekg(ios::beg);
+	read_ascii(is);
+      }
 }
 void MCsoln::pretty( std::ostream& os, int verbose /*=0*/) const {
   if (verbose >= 1) {
@@ -87,26 +88,20 @@ void MCsoln::pretty( std::ostream& os, int verbose /*=0*/) const {
 void MCsoln::write_ascii( std::ostream& os) const
 {
     try{
-        io_txt(os,d);
-        io_txt(os,nProj);
-        io_txt(os,nClass);
-        magicData = magicCnt;
-        io_txt(os,magicData);
+      io_txt(os,d, " ");
+      io_txt(os,nProj, " ");
+      io_txt(os,nClass, "\n");
     }catch(exception const& e){
         cout<<e.what();
         throw std::runtime_error("MCsoln header data write error");
     }
 
 #define IO_MAT( OS, MAT, R, C, ERRMSG ) do{eigen_io_txt(OS,MAT); CHK_MAT_DIM( MAT,R,C,ERRMSG );}while(0)
-#define IO_VEC( OS, VEC, SZ, ERRMSG ) do {eigen_io_txt(OS,VEC); CHK_VEC_DIM( VEC,SZ,ERRMSG );}while(0)
     try{
         IO_MAT(os, weights    , d     , nProj, "write_ascii Bad weights dimensions");
         IO_MAT(os, lower_bounds, nClass, nProj, "write_ascii Bad lower_bounds dimensions");
         IO_MAT(os, upper_bounds, nClass, nProj, "write_ascii Bad upper_bounds dimensions");
-        magicEof1 = magicEof;
-        io_txt(os,magicEof1);
     } catch(exception const& e){ RETHROW("MCsoln data write error"); }
-#undef IO_VEC
 #undef IO_MAT
 }
 
@@ -115,25 +110,17 @@ void MCsoln::read_ascii( std::istream& is ){
         io_txt(is,d);
         io_txt(is,nProj);
         io_txt(is,nClass);
-        while(is.peek()=='\n'|| is.peek()==' ') is.get();
-        io_txt(is,magicData);
-        if( ! MAGIC_EQU(magicData,magicCnt) )
-            throw runtime_error("MCsoln read_ascii header length has changed");
+	is >> ws;
     }catch(exception const& e){
         cout<<e.what();
         throw std::runtime_error("MCsoln header data read error");
     }
 #define IO_MAT( IS, MAT, R, C, ERRMSG ) do{eigen_io_txt(IS,MAT); CHK_MAT_DIM( MAT,R,C,ERRMSG );}while(0)
-#define IO_VEC( IS, VEC, SZ, ERRMSG ) do {eigen_io_txt(IS,VEC); CHK_VEC_DIM( VEC,SZ,ERRMSG );}while(0)
     try{
         IO_MAT(is, weights     , d     , nProj, "read_ascii Bad weights dimensions");
         IO_MAT(is, lower_bounds, nClass, nProj, "read_ascii Bad lower_bounds dimensions");
         IO_MAT(is, upper_bounds, nClass, nProj, "read_ascii Bad upper_bounds dimensions");
-        while(is.peek()=='\n'|| is.peek()==' ') is.get();       // <--- gotcha
-        io_txt(is,magicEof1);
-        if(!MAGIC_EQU(magicEof1,magicEof) ) throw runtime_error("MCsoln bad data terminator");
     } catch(exception const& e){ RETHROW("MCsoln data read error"); }
-#undef IO_VEC
 #undef IO_MAT
 }
 
@@ -151,7 +138,6 @@ void MCsoln::write_binary( std::ostream& os) const
     }
 
 #define IO_MAT( OS, MAT, R, C, ERRMSG ) do{eigen_io_bin(OS,MAT); CHK_MAT_DIM( MAT,R,C,ERRMSG );}while(0)
-#define IO_VEC( OS, VEC, SZ, ERRMSG ) do {eigen_io_bin(OS,VEC); CHK_VEC_DIM( VEC,SZ,ERRMSG );}while(0)
     try{
         IO_MAT(os, weights     , d     , nProj, "write_binary Bad weights dimensions");
         IO_MAT(os, lower_bounds, nClass, nProj, "write_binary Bad lower_bounds dimensions");
@@ -159,8 +145,6 @@ void MCsoln::write_binary( std::ostream& os) const
         magicEof1 = magicEof;
         io_bin(os,magicEof1);
     } catch(exception const& e){ RETHROW("MCsoln data write error"); }
-
-#undef IO_VEC
 #undef IO_MAT
 }
 void MCsoln::read_binary( std::istream& is ){
@@ -176,7 +160,6 @@ void MCsoln::read_binary( std::istream& is ){
         throw std::runtime_error("MCsoln header data read error");
     }
 #define IO_MAT( IS, MAT, R, C, ERRMSG ) do{eigen_io_bin(IS,MAT); CHK_MAT_DIM( MAT,R,C,ERRMSG );}while(0)
-#define IO_VEC( IS, VEC, SZ, ERRMSG ) do {eigen_io_bin(IS,VEC); CHK_VEC_DIM( VEC,SZ,ERRMSG );}while(0)
     try{
         IO_MAT(is,      weights, d     , nProj, "read_binary Bad weights dimensions");
         IO_MAT(is, lower_bounds, nClass, nProj, "read_binary Bad lower_bounds dimensions");
@@ -185,7 +168,6 @@ void MCsoln::read_binary( std::istream& is ){
         if(!MAGIC_EQU(magicEof1,magicEof)) throw runtime_error("MCsoln bad data terminator");
     } catch(exception const& e){ RETHROW("MCsoln data read error"); }
     return;
-#undef IO_VEC
 #undef IO_MAT
 }
 

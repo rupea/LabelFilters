@@ -13,7 +13,7 @@
 /** NEW: introduce a data wrapper.
  *
  * - This allows base x [,y] data to be passed/shared easily between solver
- *   and projector objects, \c MCprojProg and \c MCsolveProgram.
+ *   and projector objects.
  * - Another benefit is removing duplicate code for reading data.
  * - Eventually, may help move template code into the library? */
 class MCxyData {

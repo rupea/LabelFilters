@@ -41,7 +41,6 @@ private: // after the 4-byte magic header we specialize I/O routines
     void read_binary( std::istream& is );
     void write_ascii( std::ostream& is) const;
     void write_binary( std::ostream& is) const;
-    static std::array<char,4> magicTxt; ///< MCst text?
     static std::array<char,4> magicBin; ///< MCsb binary?
     static std::array<char,4> magicCnt; ///< MCsc continue?
     static std::array<char,4> magicEof; ///< MCsz eof?
@@ -64,9 +63,9 @@ public:
 private:
     mutable std::array<char,4> magicData;                  ///< MCsc
 public:
-    DenseM weights;                 ///< [ d x nProj ] time-avg'd projection matrix
-    DenseM lower_bounds;            ///< [ nClass x nProj ]
-    DenseM upper_bounds;            ///< [ nClass x nProj ]
+    DenseColM weights;                 ///< [ d x nProj ] time-avg'd projection matrix
+    DenseColM lower_bounds;            ///< [ nClass x nProj ]
+    DenseColM upper_bounds;            ///< [ nClass x nProj ]
 private:
     mutable std::array<char,4> magicEof1;                  ///< MCs{c|z}
     //@}
