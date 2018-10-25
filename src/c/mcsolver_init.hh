@@ -56,7 +56,7 @@ namespace mcsolver_detail{
     for (size_t row=0;row<n; ++row) {
       if (y.coeff(row,c1)) {
 	if (!params.remove_class_constraints || !(filtered.get(row,c1)))
-	  {	    
+	  {
 	    typename EigenType::InnerIterator it(x,row);
 	    for (; it; ++it)
 	      difference.coeffRef(it.col())+=it.value()*wt1;

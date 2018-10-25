@@ -28,27 +28,29 @@ using namespace detail;
 
 #define MAGIC_EQU( A, B ) (A[0]==B[0] && A[1]==B[1] && A[2]==B[2] && A[3]==B[3])
 
-MCxyData::MCxyData() : xDense(), denseOk(false), xSparse(), sparseOk(false)
-                       , y(), qscal(0.0), xscal(0.0) {}
-
-MCxyData::MCxyData(DenseM const& x): 
+MCxyData::MCxyData(int const verb /*=0*/) :
+  xDense(), denseOk(false), xSparse(), sparseOk(false)
+  , y(), qscal(0.0), xscal(0.0), verbose(verb)
+{}
+  
+MCxyData::MCxyData(DenseM const& x, int const verb /*=0*/): 
   xDense(x), denseOk(true), xSparse(), sparseOk(false)
-  , y(), qscal(0.0), xscal(1.0)
+  , y(), qscal(0.0), xscal(1.0), verbose(verb)
 {}
 
-MCxyData::MCxyData(DenseM const& x, SparseMb const& y): 
+MCxyData::MCxyData(DenseM const& x, SparseMb const& y, int const verb /*=0*/): 
   xDense(x), denseOk(true), xSparse(), sparseOk(false)
-  , y(y), qscal(0.0), xscal(1.0)
+  , y(y), qscal(0.0), xscal(1.0), verbose(verb)
 {}
 
-MCxyData::MCxyData(SparseM const& x): 
+MCxyData::MCxyData(SparseM const& x, int const verb /*=0*/): 
   xDense(),denseOk(false),xSparse(x), sparseOk(true)
-  , y(), qscal(0.0), xscal(1.0)
+  , y(), qscal(0.0), xscal(1.0), verbose(verb)
 {}
 
-MCxyData::MCxyData(SparseM const& x, SparseMb const& y): 
+MCxyData::MCxyData(SparseM const& x, SparseMb const& y, int const verb /*=0*/): 
   xDense(), denseOk(false), xSparse(x), sparseOk(true)
-  , y(y), qscal(0.0), xscal(1.0)
+  , y(y), qscal(0.0), xscal(1.0), verbose(verb)
 {}
   
 
@@ -123,6 +125,7 @@ void MCxyData::xread( std::string xFile ){
     if( ! xfs.good() ) throw std::runtime_error("trouble opening xFile " + xFile);
     detail::io_bin(xfs,magicHdr);
     if( MAGIC_EQU(magicHdr,MCxyData::magic_xDense)){
+      if (verbose) cout << "reading data in dense binary format from " << xFile << "..." << endl;
       detail::eigen_io_bin(xfs, xDense);
       if( xfs.fail() ) throw std::underflow_error("problem reading DenseM from xfile with eigen_io_bin");
       char c;
@@ -138,6 +141,7 @@ void MCxyData::xread( std::string xFile ){
 	  xSparse = SparseM();
 	}
     }else if( MAGIC_EQU(magicHdr,MCxyData::magic_xSparse)){
+      if (verbose) cout << "reading data in sparse binary format from " << xFile << "..." << endl;
       detail::eigen_io_bin( xfs, xSparse );
       if( xfs.fail() ) throw std::underflow_error("problem reading SparseM from xfile with eigen_io_bin");
       xfs.close();
@@ -152,7 +156,7 @@ void MCxyData::xread( std::string xFile ){
     }else{
       // not binary. Try libSVM/XML format
       xfs.seekg(ios::beg);
-      detail::eigen_read_libsvm(xfs, xSparse, y);
+      detail::eigen_read_libsvm(xfs, xSparse, y, verbose);
       sparseOk = true;
       if (denseOk)
 	{
@@ -192,51 +196,52 @@ void MCxyData::xwrite( std::string fname ) const { // write binary (either spars
 void MCxyData::yread( std::string yFile ){
   std::array<char,4> magicHdr;
   ifstream yfs;
-  bool yOk = false;
   try{
     yfs.open(yFile);
     if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
     detail::io_bin(yfs,magicHdr);
-    if( MAGIC_EQU(magicHdr,magic_yBin) ){
-      detail::eigen_io_binbool( yfs, y );
-      assert( y.cols() > 0U );
-      if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_binbool");
-      yOk = true;
-    }
-  }catch(std::runtime_error const& e){
-    cerr<<e.what()<<endl;
-    //throw; // continue execution -- try text format
+    if( MAGIC_EQU(magicHdr,magic_yBin) )
+      {
+	if (verbose) cout << "reading labels in binary format from " << yFile << "..." << endl;
+	// for some reason the compiler fails to match the correct template. 
+	detail::eigen_io_bin( yfs, y );
+	assert( y.cols() > 0U );
+	if( yfs.fail() ) throw std::underflow_error("problem reading yfile with eigen_io_bin");
+      }
+    else
+      {
+	yfs.seekg(ios::beg);
+	if (verbose) cout << "reading labels in list-of-classes format from " << yFile << "..." << endl;
+	detail::eigen_io_txt( yfs, y);
+	assert( y.cols() > 0U );
+	// yfs.fail() is expected
+	if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txt");
+      }
+    yfs.close();
   }catch(std::exception const& e){
     cerr<<"ERROR: during read of classes from "<<yFile<<" -- "<<e.what()<<endl;
+    yfs.close();
     throw;
   }
-  if( !yOk ){
-    cerr<<"Retrying --yfile as text mode list-of-classes format (eigen_io_txtbool)"<<endl;
-    try{
-      yfs.close();
-      yfs.open(yFile);
-      if( ! yfs.good() ) throw std::runtime_error("ERROR: opening SparseMb yfile");
-      detail::eigen_io_txtbool( yfs, y );
-      assert( y.cols() > 0U );
-      // yfs.fail() is expected
-      if( ! yfs.eof() ) throw std::underflow_error("problem reading yfile with eigen_io_txtbool");
-      yOk=true;
-    }
-    catch(std::exception const& e){
-      cerr<<" --file could not be read in text mode from "<<yFile<<" -- "<<e.what()<<endl;
-      throw;
-    }
-  }
 }
-void MCxyData::ywrite( std::string yFile ) const { // write binary y data (not very compact!)
+
+void MCxyData::ywrite( std::string yFile, bool bin /*=true*/ ) const { // write binary y data (not very compact!)
     ofstream ofs;
     try{
         ofs.open(yFile);
         if( ! ofs.good() ) throw std::runtime_error("ywrite trouble opening file");
-	detail::io_bin(ofs,MCxyData::magic_yBin);
-        detail::eigen_io_binbool(ofs, y);
-        if( ! ofs.good() ) throw std::runtime_error("ywrite trouble writing file");
-        ofs.close();
+	if (bin)
+	  {
+	    detail::io_bin(ofs,MCxyData::magic_yBin);
+	    // for some reason the compiler fails to match the correct template. 
+	    detail::eigen_io_bin(ofs, y);
+	    if( ! ofs.good() ) throw std::runtime_error("ywrite trouble writing file");
+	  }
+	else
+	  {
+	    detail::eigen_io_txt(ofs,y);
+	  }
+	ofs.close();
     }catch(std::exception const& e){
         cerr<<" ywrite trouble writing "<<yFile<<" : unknown exception"<<e.what()<<endl;
         ofs.close();

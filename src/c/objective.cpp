@@ -121,7 +121,7 @@ namespace mcsolver_detail{
     bool none_filtered = filtered.count()==0;
 #if MCTHREADS
 #pragma omp parallel for default(shared) reduction(+:obj_val)
-#endif
+#endif    
     for (size_t i = 0; i < projection.size(); i++)
       {
 	obj_val += calculate_ex_objective_hinge(i, projection.coeff(i),  y,

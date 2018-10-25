@@ -13,18 +13,18 @@
 #include <iostream>
 
 template< typename EIGENTYPE >
-void MCfilter::filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int np/* = 0*/) const{  
+void MCfilter::filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int np/* = -1*/) const{  
 
   size_t const nExamples = x.rows();  
   assert(x.cols() == this->d);
   
-  np = np?np:nProj;
-  if (np > nProj)
+  np = np>=0?np:nFilters();
+  if (np > nFilters())
     {
       std::cerr << "Warning: MCfilter::filter requested " << np 
 		<< " projections, but only " << nProj
 		<< " are available" << std::endl;
-      np = nProj;
+      np = nFilters();
     }
   DenseM const projections = (x * weights.leftCols(np));
 

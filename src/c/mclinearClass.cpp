@@ -19,13 +19,13 @@
 
 using namespace std;
 
-MClinearClassifier::MClinearClassifier(DP data, LMP classifier, FP filter /*= FP()*/, int const vb /*=0*/)
+MClinearClassifier::MClinearClassifier(DP data, LMP classifier, FP filter /*= FP()*/, int const vb /*=1*/)
   : MCprojector(data, filter, vb)
   , m_model(classifier)
   , m_predictions()
   , preds_ok(false)
   , m_keep_thresh(0.0)
-  , m_keep_size(10)      
+  , m_keep_size(10)   
 {
 }
 

@@ -18,11 +18,11 @@
  * - Eventually, may help move template code into the library? */
 class MCxyData {
 public:
-    MCxyData();
-    MCxyData(DenseM const& x);   
-    MCxyData(DenseM const& x, SparseMb const& y);
-    MCxyData(SparseM const& x);   
-    MCxyData(SparseM const& x, SparseMb const& y);
+    MCxyData(int const verb = 0);
+    MCxyData(DenseM const& x, int const verb = 0);   
+    MCxyData(DenseM const& x, SparseMb const& y, int const verb = 0);
+    MCxyData(SparseM const& x, int const verb = 0);   
+    MCxyData(SparseM const& x, SparseMb const& y, int const verb = 0);
     
     ~MCxyData(){};
     /// \name row-wise test data matrix
@@ -39,16 +39,16 @@ public:
 private:
     double qscal; ///< if >0, the multiplier used for \c quadx dimensions
     double xscal; ///< if >0, the global x multipler used for \c xscale
-
+    int verbose;
 
 
 public:
     //@}
     void read (std::string xFile, std::string yFile="");  ///< read x and y
     void xread( std::string xFile );    ///< read x (binary, sparse/dense, libsvm, xml) 
-    void yread( std::string yFile );    ///< read x (sparse binary or text)
+    void yread( std::string yFile );    ///< read y (sparse binary or text)
     void xwrite( std::string xFile ) const; ///< save x (binary only, for now)
-    void ywrite( std::string yFile ) const; ///< save y (binary only, for now)
+    void ywrite( std::string yFile, bool bin = true ) const; ///< save y
 
     std::string shortMsg() const;       ///< format+dimensions
 

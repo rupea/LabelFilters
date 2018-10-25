@@ -108,12 +108,14 @@ namespace detail {
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x );
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws="\n" );
     TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x );
-    template<int Options, typename Index> // bool override:
-    std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x );
-    template<int Options, typename Index> // bool override:
-    std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index>      & x );
+    /* template<int Options, typename Index> // bool override: */
+    /* std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x ); */
+    /* template<int Options, typename Index> // bool override: */
+    /* std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index>      & x ); */
 #undef MATRIX
 #undef TMATRIX
+
+#if 0
     extern std::array<char,4> magicSparseMbBin; ///< "SMbb"
     extern std::array<char,4> magicSparseMbTxt; ///< "SMbt"
     /** Compressed SparseMb output, with magic header bytes and only-true values.
@@ -129,12 +131,12 @@ namespace detail {
      * \throw if bad magic header bytes. */
     std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x );
     //@}
-
+#endif
     /** input only - read text libsvm-format. \throw on error. */
-    template< typename X_REAL >
     std::istream& eigen_read_libsvm( std::istream& is,
-                                     typename Eigen::SparseMatrix<X_REAL,Eigen::RowMajor> &x,
-                                     Eigen::SparseMatrix<bool,Eigen::RowMajor> &y );
+                                     SparseM &x,
+                                     SparseMb &y,
+				     int const verbose = 0);
 
 }//detail::
 

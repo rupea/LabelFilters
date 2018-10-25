@@ -35,8 +35,8 @@ typedef Eigen::SparseMatrix<float,Eigen::RowMajor> SparseMf;
 
 
 //use float to save space
-typedef double ovaCoeffType;
-typedef double predtype;
+typedef float ovaCoeffType;
+typedef float predtype;
 
 
 typedef Eigen::Matrix<ovaCoeffType, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> ovaDenseRowM;

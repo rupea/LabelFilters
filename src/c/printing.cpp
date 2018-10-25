@@ -8,18 +8,19 @@
 #include <stdio.h>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
-#include "typedefs.h"
 #include "printing.hh"
 #include <sstream>
 
 using Eigen::VectorXd;
 using namespace std;
 
+#if 0
 #define MAGIC_EQU( A, B ) (A[0]==B[0] && A[1]==B[1] && A[2]==B[2] && A[3]==B[3])
 namespace detail {
     std::array<char,4> magicSparseMbBin = {'S', 'M', 'b', 'b' };
     std::array<char,4> magicSparseMbTxt = {'S', 'M', 'b', 't' };
 }//detail::
+#endif
 
 ostream& operator<<(ostream& os, PrettyDimensions const& pd )
 {
@@ -79,6 +80,7 @@ void print_report(const int projection_dim, const int batch_size,
 }
 
 namespace detail {
+#if 0  
     std::ostream& eigen_io_binbool( std::ostream& os, SparseMb const& x )
     {
         if( ! x.isCompressed() )
@@ -146,9 +148,8 @@ namespace detail {
     }
 #undef IDX_IO
 
-    std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x )
+  std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x, int const verbose /*=0*/)
     {
-        int const verbose=1;
         std::array<char,4> magic;
         io_bin( is, magic );
         if( ! MAGIC_EQU(magic,magicSparseMbBin) )
@@ -227,8 +228,6 @@ namespace detail {
         for(int i=0; i<x.outerSize(); ++i){
             for(SparseMb::InnerIterator it(x,i); it; ++it){
                 bool const val = it.value();
-                cout<<" line="<<line<<" it.col,row = "<<it.col()<<","<<it.row()
-                    <<" val="<<val<<endl;
                 if( val != false ){
                     if( it.row() == line && !firstitem ) os<<" ";
                     else{
@@ -244,8 +243,7 @@ namespace detail {
     }
     /** eigen_io_txtbool \em should return with \c is.eof(), and may normally
      * return with \c is.fail(). */
-    std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x ){
-        int const verbose=0;
+  std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x, int const verbose /*=0*/ ){    
         typedef uint64_t Idx;
         Idx rows;
         Idx cols;
@@ -274,18 +272,18 @@ namespace detail {
         if(verbose)cout<<" eigen_io_txtbool read SUCCESS"<<endl;
         return is;
     }
-
-  template< typename X_REAL >
+#endif
+  
   std::istream& eigen_read_libsvm( std::istream& is,
-				   typename Eigen::SparseMatrix<X_REAL,Eigen::RowMajor> &xSparse,
-				   Eigen::SparseMatrix<bool,Eigen::RowMajor> &y ){
+				   SparseM &xSparse,
+				   SparseMb &y,
+				   int const verbose /*=0*/){
     xSparse.resize(0,0);
     y.resize(0,0);
     
-    int const verbose=1; //
     typedef size_t Idx;
     typedef Eigen::Triplet<bool> B;
-    typedef typename Eigen::Triplet<X_REAL> D;
+    typedef typename Eigen::Triplet<double> D;
     std::vector<B> yTriplets;
     std::vector<D> xTriplets;
     std::string line;
@@ -301,7 +299,7 @@ namespace detail {
     Idx nFeats=0U;
     Idx nClass=0U;
     bool checkHeader = true;
-
+   
     for(;getline(is,line);){
       istringstream iss(line);
       iss>>ws;
@@ -317,18 +315,7 @@ namespace detail {
 	  // only do it once.
 	  checkHeader = false;
 	  istringstream header(line);	  
-	  if (!(header>>ws>>nEx)) 
-	    {
-	      //this was not a header so no XML format. Reset values and reparse the line. 
-	      nEx = 0U;
-	    }
-	  else if ( !(header>>ws>>nFeats))
-	    {
-	      //this was not a header so no XML format. Reset values and reparse the line. 
-	      nEx = 0U;	      
-	      nFeats = 0U;
-	    }
-	  else if (!(header>>ws>>nClass))
+	  if (!(header>>nEx>>nFeats>>nClass)) 
 	    {
 	      //this was not a header so no XML format. Reset values and reparse the line. 
 	      nEx = 0U;
@@ -368,38 +355,42 @@ namespace detail {
 	while(iss>>idx){
 	  yIdx.push_back(idx);
 	  iss>>ws;
+	  if (iss.eof()) break;
 	  if((sep=iss.peek()) == ':') break;
 	  if (sep == ',') iss>>sep>>ws;
 	}
-	if(sep==':'){
-	  iss>>sep;
-	  xIdx.push_back( yIdx.back() );
-	  yIdx.pop_back();
-	  double val;
-	  if( !(iss>>val) )
-	    throw std::runtime_error(" bad double input?");
-	  xVal.push_back(val);
-	  for(;iss.good();){
-	    iss>>ws;
-	    if (iss.eof())
-	      break;
-	    if(iss.peek() == '#' ) //ignore trailing comments 
-	      break;
-	    if( !(iss>>idx>>sep>>val))
-	      {
-		throw std::runtime_error(" libsvm-fmt parse error");
-	      }
-	    if( sep != ':' ) throw std::runtime_error(" bad sep");
-	    xIdx.push_back(idx);
-	    xVal.push_back(val);
-	  }		  
-	  if (iss.fail()) 
-	    {
-	      throw std::runtime_error(" libsvm parse error"); 
+	if (!iss.eof())
+	  {
+	    if(sep==':'){
+	      iss>>sep;
+	      xIdx.push_back( yIdx.back() );
+	      yIdx.pop_back();
+	      double val;
+	      if( !(iss>>val) )
+		throw std::runtime_error(" bad double input?");
+	      xVal.push_back(val);
+	      for(;iss.good();){
+		iss>>ws;
+		if (iss.eof())
+		  break;
+		if(iss.peek() == '#' ) //ignore trailing comments 
+		  break;
+		if( !(iss>>idx>>sep>>val))
+		  {
+		    throw std::runtime_error(" libsvm-fmt parse error");
+		  }
+		if( sep != ':' ) throw std::runtime_error(" bad sep");
+		xIdx.push_back(idx);
+		xVal.push_back(val);
+	      }		  
+	      if (iss.fail()) 
+		{
+		  throw std::runtime_error(" libsvm parse error"); 
+		}
+	    }else{
+	      throw std::runtime_error(" illegal input line");
 	    }
-	}else{
-	  throw std::runtime_error(" illegal input line");
-	}
+	  }
       }catch(std::exception const& e){
 	cerr<<" Error: " <<e.what() << endl
 	    << "Offending line: " << line <<endl;
@@ -483,15 +474,7 @@ namespace detail {
     
     return is;
   }  
-  
-  template
-  std::istream& eigen_read_libsvm( std::istream& is,
-				   SparseMf &x,
-				   SparseMb &y );
-  template
-  std::istream& eigen_read_libsvm( std::istream& is,
-				   SparseM &x,
-				   SparseMb &y );
+
 }//detail::
 
 

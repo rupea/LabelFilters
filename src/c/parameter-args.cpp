@@ -47,7 +47,6 @@ po::options_description MCsolveArgs::getDesc()
     ("reoptlu", value<bool>()->implicit_value(true), "reoptimize the intevals [l,u] for previously learned filter directions.")
     ("sample", value<uint32_t>()
      , "how many negative classes to use for gradient estimate.\nTry 100 or 1000 to speed up. 0 ~ all [0]")
-    ("threads", value<uint32_t>(), "# of threads, 0 ~ use OMP_NUM_THREADS")
     ;
   po::options_description dev("Advanced Solver Options");
   dev.add_options()
@@ -355,7 +354,7 @@ void MCxyDataArgs::extract(po::variables_map const& vm)
     }
   if (vm.count("xscale"))
     {
-      xunit = vm["xscale"].as<double>();
+      xscale = vm["xscale"].as<double>();
     }
 }
 

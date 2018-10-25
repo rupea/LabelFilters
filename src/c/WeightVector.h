@@ -366,7 +366,7 @@ class WeightVector
     for(size_t i=0U; i<x.rows(); ++i){
       //proj.coeffRef(i) = project_row( x, i );
       //proj.coeffRef(i) = x.row(i) .dot(my_weights) * my_scale;
-      proj.coeffRef(i) = project_row_sparse( x, i ) * my_scale;
+      proj.coeffRef(i) = project_row_sparse( x, i );
     }
   }
   

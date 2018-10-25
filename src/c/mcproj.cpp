@@ -24,6 +24,7 @@ using namespace po;
 #define PRINT_PERF(PERF) do {out<<#PERF << ": ";  for (int i = 0; i < perfs.size(); i++) {out << perfs[i].PERF << " ";} out<<endl;} while(0)
 void outputPerfs(ostream& out, string const& modelfile, string const& datafile, string const& filterfile, vector<int> const& nProj, vector<PerfStruct> const& perfs)
 {
+  out << "---------------------------------" << endl;
   out << "Model: " << modelfile << endl;
   out << "Data: " << datafile << endl;
   out << "Filter: "<< filterfile << endl;
@@ -51,27 +52,23 @@ void outputPerfs(ostream& out, string const& modelfile, string const& datafile, 
   PRINT_PERF(MicroPrecision);
   PRINT_PERF(MicroRecall);
   PRINT_PERF(MicroF1);
+  out << "---------------------------------" << endl;
 }
 #undef PRINT_PERF
 
 
 int main(int argc, char**argv){
-#ifndef NDEBUG
-  int const verb = +1;        // verbosity modifier
-#else
-  int const verb = 0;         // verbosity modifier
-#endif
-  
+
   po::variables_map vm;
 
   vector<PerfStruct> perfs;
   PerfStruct nofilter_perfs;
   bool nofilter_ok = false;
-  int verbose = 0;
-  
+  int verbose = 1;
+
+  po::options_description desc;
   try {
-    po::options_description desc;
-    po::options_description general("Genral Options");      
+    po::options_description general("General Options");      
     
     general.add_options()      
       ("verbose,v",value<int>()->default_value(1),"Verbosity level")
@@ -95,20 +92,19 @@ int main(int argc, char**argv){
     
     po::notify(vm); // at this point, raise any exceptions for 'required' args
     
-  }catch(po::error& e){
-    cerr<<"Invalid argument: "<<e.what()<<endl;
-    throw;
   }catch(std::exception const& e){
-    cerr<<"Error: "<<e.what()<<endl;
-    throw;
+    cerr << "Error: "<<e.what()<<endl<<endl;
+    cerr << desc << endl;
+    exit(-1);
   }catch(...){
     cerr<<"Command-line parsing exception of unknown type!"<<endl;
-    throw;
+    cerr << desc << endl;
+    exit(-2);
   }
 
   if (vm.count("verbose"))
     {
-      verbose = vm["verbose"].as<int>() + verb;
+      verbose = vm["verbose"].as<int>();
     }
 
 #ifdef _OPENMP
@@ -187,7 +183,7 @@ int main(int argc, char**argv){
   for (vector<string>::iterator mit = modelargs.modelFiles.begin(); mit != modelargs.modelFiles.end(); ++mit)
     {
       // prepare the classifier 
-      
+
       shared_ptr<linearModel> model = make_shared<linearModel>();
       model->read(*mit);
       // done with changing the model. Make it const
@@ -217,8 +213,7 @@ int main(int argc, char**argv){
 	    {
 	      throw runtime_error("xFiles and yFiles do not match");
 	    }
-	  
-	  shared_ptr<MCxyData> data = make_shared<MCxyData>();
+	  shared_ptr<MCxyData> data = make_shared<MCxyData>(verbose);
 	  data->read(xfile, yfile);
 	  if (dataargs.rmRareF > 0)
 	    {
@@ -250,7 +245,6 @@ int main(int argc, char**argv){
 	  for (int l=0; l<filterargs.lfFiles.size(); l++)
 	    {
 	      // prepare filter.
-
 	      shared_ptr<MCfilter> lf = make_shared<MCfilter>();
 	      if (filterargs.lfFiles[l].size())
 		{
@@ -259,32 +253,37 @@ int main(int argc, char**argv){
 	      
 	      //done with modifying the label filter. Make it const
 	      shared_ptr<const MCfilter> const_lf = static_pointer_cast<const MCfilter>(lf);
-	      
 	      // we have the model, data and filter. We can predict/evaluate models using a linear classifier		
 	      MClinearClassifier classifier(const_data, const_model, const_lf, verbose);
 	      // set keep_top, keep_thresh
 	      classifier.setPruneParams(modelargs.keep_thresh, modelargs.keep_top);
-
+	      
 	      // replace -2 and -1 nProj arguments with the correct values.
+	      std::vector<int> nproj;
+	      
 	      if (std::find(filterargs.nProj.begin(), filterargs.nProj.end(), -2) != filterargs.nProj.end())
 		{
-		  filterargs.nProj.clear();
-		  for (int i = 0; i < const_lf->nFilters(); i++)
+		  nproj.clear();
+		  for (int i = 0; i <= const_lf->nFilters(); i++)
 		    {
-		      filterargs.nProj.push_back(i);
+		      nproj.push_back(i);
 		    }
 		}
 	      else
 		{
-		  vector<int>::iterator it = std::find(filterargs.nProj.begin(), filterargs.nProj.end(), -1);		   
-		  if ( it != filterargs.nProj.end())
-		    {
-		      *it = const_lf->nFilters();
-		    }
+		  for (vector<int>::iterator npit = filterargs.nProj.begin(); npit != filterargs.nProj.end();++npit)		    
+		    if ( *npit == -1 )
+		      {
+			nproj.push_back(const_lf->nFilters());
+		      }
+		    else
+		      {
+			nproj.push_back(*npit);
+		      }
 		}
-		  
+
 	      // set the nubmer of filters to apply
-	      for (vector<int>::iterator npit=filterargs.nProj.begin(); npit != filterargs.nProj.end(); ++npit)
+	      for (vector<int>::iterator npit=nproj.begin(); npit != nproj.end(); ++npit)
 		{
 		  int np = *npit;
 		  if (np == 0 && nofilter_ok)
@@ -315,8 +314,8 @@ int main(int argc, char**argv){
 		}
 	      
 	      // Done. Output the performances 
-	      outputPerfs(cout, *mit, dataargs.xFiles[dta], filterargs.lfFiles[l], filterargs.nProj, perfs);
-	      
+	      outputPerfs(cout, *mit, dataargs.xFiles[dta], filterargs.lfFiles[l], nproj, perfs);
+	      perfs.clear();
 	    }
 	  nofilter_ok = false; // data or model has changed, so result with no filter are not valid any more
 	}

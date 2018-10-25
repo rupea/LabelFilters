@@ -21,13 +21,9 @@ class MCprojector
   typedef std::shared_ptr<const MCxyData> DP;
   typedef std::shared_ptr<const MCfilter> FP;
 public:
-#ifdef NDBEUG
-  static const int defaultVerbose=0;
-#else
   static const int defaultVerbose=1;
-#endif
   
-  MCprojector( DP data, FP filter = FP(), int const nf = -1, int const vb=defaultVerbose );    
+  MCprojector( DP data, FP filter = FP(), int const vb=defaultVerbose );    
   ~MCprojector();
   
   void runFilter();            ///< project data and fiter classes

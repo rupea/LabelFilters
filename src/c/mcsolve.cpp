@@ -19,7 +19,7 @@ using namespace boost::program_options;
 
 int main(int argc, char**argv){
 #ifndef NDEBUG
-  int const verb = +1;        // verbosity modifier
+  int const verb = 1;        // verbosity modifier
 #else
   int const verb = 0;         // verbosity modifier
 #endif
@@ -27,8 +27,8 @@ int main(int argc, char**argv){
   po::variables_map vm;
   int verbose= 1;
   
-  try {
     po::options_description desc;
+  try {
     po::options_description general("Genral Options");      
     
     general.add_options()      
@@ -55,15 +55,13 @@ int main(int argc, char**argv){
     
     po::notify(vm); // at this point, raise any exceptions for 'required' args
     
-  }catch(po::error& e){
-    cerr<<"Invalid argument: "<<e.what()<<endl;
-    throw;
   }catch(std::exception const& e){
     cerr<<"Error: "<<e.what()<<endl;
-    throw;
+    cerr << desc << endl;
+    exit(-1);
   }catch(...){
     cerr<<"Command-line parsing exception of unknown type!"<<endl;
-    throw;
+    exit(-2);
   }
   
   if (vm.count("verbose"))
@@ -197,13 +195,12 @@ int main(int argc, char**argv){
       data->xunitnormal();
     }
   data->xscale(dataargs.xscale);
-  
+
   // done with modifying the data. Make it const.
   shared_ptr<const MCxyData> const_data = static_pointer_cast<const MCxyData>(data);
   data = nullptr;  // only use the const version from now on to make sure the data does not change. 
   
   MCsoln prev_soln;
-  cout << "solfile" << solverargs.prev_soln_file << endl;
   if (solverargs.prev_soln_file.size() > 0)
     {
       ifstream is;

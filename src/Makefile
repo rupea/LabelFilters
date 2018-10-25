@@ -82,7 +82,7 @@ DBG_TARGETS = $(patsubst %,%-dbg,$(C_TARGETS))
 
 .PHONY: all clean lib CRoaring clean-all CRoaring-bld
 
-all: CRoaring lib mcproj mcsolve 
+all: lib mcproj mcsolve 
 
 $(C_TARGETS):
 	mkdir -p $(BINDIR)

@@ -36,7 +36,7 @@ class MCfilter : protected MCsoln
     is.close();
   }
   
-  inline void read( std::istream& is ){ MCsoln::read(is);init_filters();}
+  inline void read( std::istream& is ) { MCsoln::read(is); init_filters();}
   inline void write( std::ostream& os, enum Fmt fmt=BINARY) const {MCsoln::write(os,fmt);}  
   inline bool isempty()const {return !_filters.size();}
   inline uint32_t nFilters() const {return _filters.size();}
@@ -52,7 +52,7 @@ class MCfilter : protected MCsoln
    *   - Please only include \c find_w_detail.hh for \em strange 'x' types.
    */
   template< typename EIGENTYPE >
-    void filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int np = 0) const;
+    void filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int np = -1) const;
  private:
   std::vector<Filter*> _filters;
   void init_filters();

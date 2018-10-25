@@ -364,7 +364,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   boolmatrix filtered(nTrain,nClass);    
   VectorXi nclasses; // nclasses[example] = number of classes assigned to each training example
   VectorXd inside_weight; // inside_weight[example] = weight of this example in the inside interval constraints 
-  VectorXd outside_weight; // inside_weight[example] = weight of this example in the outside interval constraints 
+  VectorXd outside_weight; // outside_weight[example] = weight of this example in the outside interval constraints 
   mcsolver_detail::init_nclasses(nclasses, inside_weight, outside_weight, y, params);
   int maxclasses = nclasses.maxCoeff(); // the maximum number of classes an example might have
   // Suppose example y[i] --> weight of 1.0, or if params.ml_wt_class_by_nclasses, 1.0/nclasses[i]
@@ -408,6 +408,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
   auto ObjectiveHinge = [&] ( ) -> double
     {
+      luPerm.mkok_sortlu();
       return mcsolver_detail::calculate_objective_hinge( xwProj.std(), y, 
 							 nclasses, inside_weight, outside_weight, 
 							 luPerm.perm(), luPerm.rev(),
@@ -417,6 +418,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 
   auto ObjectiveHingeAvg = [&] ( ) -> double
     {
+      luPerm.mkok_sortlu_avg();
       return mcsolver_detail::calculate_objective_hinge( xwProj.avg(), y,
 							 nclasses, inside_weight, outside_weight,
 							 luPerm.perm(), luPerm.rev(),
@@ -552,7 +554,6 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
   for(; prjax < nProj; ++prjax)
     {
       mcsolver_detail::init_w( w, weights, x, y, nc,  prjax, params, filtered);
-	
       if (params.verbose >= 1)
 	cout<<" start projection "<<prjax<<" w.norm="<<w.norm() << endl;
       xwProj.w_changed();                     // invalidate w-dependent stuff (projections)
@@ -569,7 +570,8 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
       if(params.verbose >= 1){
 	cout<<"Iteration   "<<setw(10)<<"Objective   "<<"w.norm"<<endl;
 	cout<<"----------  ----------  -------"<<endl;	
-      } 
+      }
+ 
       uint64_t t = 0;   	// -------- main iteration loop --------
       while (t < params.max_iter) {
 	++t;
@@ -591,7 +593,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	// update 'w' ==> projections of raw 'x' data (projection_avg & projection) invalid.
 	xwProj.w_changed();
 	if(t4.reorder) {
-	  luPerm.rank( GetMeans(params.reorder_type) );   // <-- new sort order (sortlu* no good)
+	  luPerm.rank( GetMeans(params.reorder_type) );   // <-- new sort order
 	}
 	if (t4.optimizeLU){  // w, luPerm-ranking constant, optimize {l,u}. Needs valid 'projection'
 	  // optimize the lower and upper bounds (done after class ranking)
@@ -612,7 +614,7 @@ void MCsolver::solve( EIGENTYPE const& x, SparseMb const& y,
 	  cout<<setw(10)<<t<<"  "<<setw(10)<<objective_val[obj_idx-1]<<"  "<<w.norm()<<endl;
 	}
       }
-
+      
       if(params.verbose >= 1)
 	{
 	  cout<<"----------  ----------  -------"<<endl;	

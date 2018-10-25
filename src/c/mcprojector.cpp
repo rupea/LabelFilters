@@ -18,12 +18,12 @@
 
 using namespace std;
 
-MCprojector::MCprojector ( DP data, FP lf /* = FP()*/, int const nf /*=-1*/, int const vb /*=0*/)
+MCprojector::MCprojector ( DP data, FP lf /* = FP()*/, int const vb /*=0*/)
   : m_xy( data )
   , m_filter(lf)
   , m_feasible(nullptr)
   , feasible_ok(false)
-  , m_nProj(nf)
+  , m_nProj(lf->nFilters())
   , m_nfeasible(0)
   , verbose(vb)
 {}
