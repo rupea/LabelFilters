@@ -244,6 +244,7 @@ po::options_description MCprojectorArgs::getDesc(){
   projopt.add_options()
     ("lfFiles,f", value<std::vector<std::string>>()->multitoken()->zero_tokens()->composing(), "label filter files") 
     ("nProj", value<std::vector<int>>()->multitoken()->composing(), "number of filters to apply. 0 = no filters, -1 = all filters. -2 = {0,1,2,..., all filters}")
+    ("logtime", value<int>()->default_value(0)->implicit_value(-1), "number of filters to enable log-time filtering for. 0 = no log-time, -1 = log-time for all filters.  While log-time filtering is slightly faster, it requires time and memory to precompute the class assignments. It is not recommended to enable log-time filterng unless there are significantly more test examples than classes.")
     ;
   return projopt;
 }
@@ -252,6 +253,7 @@ MCprojectorArgs::MCprojectorArgs()
   : 
   lfFiles()	    
   , nProj({-1})
+  , nlogtime(0)
 {}
   
 MCprojectorArgs::MCprojectorArgs(po::variables_map const& vm)
@@ -271,6 +273,10 @@ void MCprojectorArgs::extract(po::variables_map const& vm)
     {
       nProj = std::vector<int>(vm["nProj"].as<std::vector<int>>());
     }
+  if (vm.count("logtime"))
+    {
+      nlogtime = vm["logtime"].as<int>();
+    }    
 }
   
   

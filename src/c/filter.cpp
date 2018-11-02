@@ -8,6 +8,7 @@
 #include "Eigen/Dense"
 #include "utils.h"
 #include "roaring.hh"
+#include "mutexlock.h"
 #include <vector>
 #include <iostream>
 
@@ -17,8 +18,9 @@ using namespace std;
 int const Filter::verbose = 0;
 
     Filter::Filter(const VectorXd& l, const VectorXd& u)
-    : _sortedLU( 2*l.size() )
+      :_l(l), _u(u), _sortedLU( 2*l.size() ), _sortedClasses(2*l.size())
       , _map()
+      , _mapok(false)
 #ifndef NDEBUG
       , nCalls(0)
 #endif
@@ -35,16 +37,17 @@ int const Filter::verbose = 0;
             _sortedLU.coeffRef(2*i+1) = u.coeff(i);
         }
     }
-    vector<int> ranks(_sortedLU.size());
-    sort_index(_sortedLU, ranks);
+    //    vector<int> ranks(_sortedLU.size());
+    //    sort_index(_sortedLU, ranks);
+    sort_index(_sortedLU, _sortedClasses);
     std::sort(_sortedLU.data(), _sortedLU.data()+_sortedLU.size());
+    for (auto &c :_sortedClasses) c = c/2;
     if(verbose>=2){
         cout<<" Filter    lower : "<<l.transpose()<<endl;
         cout<<" Filter    upper : "<<u.transpose()<<endl;
         cout<<" Filter _sortedLU: "<<_sortedLU.transpose()<<endl;
-        cout<<" Filter     ranks: "; for(auto const r: ranks) cout<<" "<<r; cout<<endl;
+        cout<<" Filter     ranks: "; for(auto const r: _sortedClasses) cout<<" "<<r; cout<<endl;
     }
-    init_map(ranks);
 }
 
 Filter::~Filter()
@@ -59,9 +62,10 @@ Filter::~Filter()
 #endif
 }
 
-void Filter::init_map(vector<int>& ranks)
+void Filter::init_map()
 {
-  size_t const noClasses = ranks.size()/2U;
+  if (_mapok) return; // already initialized 
+  size_t const noClasses = _sortedLU.size()/2;
   size_t const nBitmaps = 2U*noClasses + 1U;
   assert( _map.size() == 0U );
   _map.reserve( nBitmaps );
@@ -70,12 +74,44 @@ void Filter::init_map(vector<int>& ranks)
   if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back().toString()<<endl;
   for(size_t i=0U; i<nBitmaps-1U; ++i){
     _map.emplace_back( _map.back() ); // push a copy of the last bitmap
-    // this depends on lower bounds being smaller than upper bounds. 
-    ranks[i]&1?_map.back().remove(ranks[i]/2):_map.back().add(ranks[i]/2); // toggle 1 bit as cross a lower or upper bound
-    // could try if this is faster
-    // _map.back().flip( ranks[i]/2, ranks[i]/2+1 ); 
-    if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back().toString()<<endl;
+    // this depends on lower bounds being smaller than upper bounds.
+    _map.back().flip( _sortedClasses[i], _sortedClasses[i]+1 ); 
   }
   assert( _map.size() == nBitmaps );
+  _mapok = true;
 }
 
+void Filter::filterBatch (Eigen::VectorXd proj, ActiveSet& active, vector<MutexType>& mutex) const
+{
+  size_t nEx = proj.size();
+
+  if (active.size() != nEx)
+    {
+      throw("ERROR: Filter::filterBatch, proj and active not the same size");
+    }
+  if (mutex.size() != nEx)
+    {
+      throw("ERROR: Filter::filterBatch, active and mutex not the same size");
+    }
+  
+  vector<int> ranks(nEx);
+  sort_index(proj, ranks);
+  
+  std::sort(proj.data(), proj.data()+proj.size());
+  size_t n = 0;
+  size_t i = 0;
+  Roaring current;
+  while (n < nEx)
+    {
+      while (proj[n] > _sortedLU[i] && i < _sortedLU.size())
+	{
+	  int c=_sortedClasses[i++];
+	  current.flip(c,c+1);
+	}
+      mutex[ranks[n]].Lock();
+      active[ranks[n]] &= current;
+      mutex[ranks[n]].Unlock();
+      n++;
+    }
+}
+  

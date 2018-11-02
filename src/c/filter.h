@@ -9,8 +9,9 @@
 
 #include "Eigen/Dense"
 #include "roaring.hh"
+#include "typedefs.h"
 #include <vector>
-
+#include <list>
 /** Filter with fast random-access by individual projection values.
  * - Best used when
  *   - need to evaluate projections serially in random order, or
@@ -25,6 +26,9 @@
  *     data), data points that fall \em precisely on an {l,u}
  *     class boundary may \b incorrectly be rejected.
  */
+
+struct MutexType;
+
 class Filter
 {
 public:
@@ -41,6 +45,8 @@ public:
      * \return bitset pointer \b unusable after \c Filter destructor runs.
      */
     Roaring const* filter (double xproj) const;
+    void filter(double xproj, std::list<int>& active) const;
+    void filterBatch (Eigen::VectorXd proj, ActiveSet& active, std::vector<MutexType>& mutex) const;
 
     /** debug... */
     ssize_t idx(double xproj) const{
@@ -51,15 +57,22 @@ public:
                                                      ));
         return ret;
     }
+    /** Tabulate {classes} given where projection value falls in \c _sortedLU.
+     * - As projection values pass l/u boundaries in \c _sortedLU,
+     * - one bit in the class bitmap changes.
+     * - So save these easily-constructed bitmaps. */
+    void init_map(); 
 private:
-    void init_map(std::vector<int>& ranks); ///< construction helper
-
+    Eigen::VectorXd _l;
+    Eigen::VectorXd _u;
     Eigen::VectorXd _sortedLU; ///< sort the concatenation of all (lower,upper) values
+    std::vector<int> _sortedClasses; ///< used to recover the classes that coresponds to each in _sortedLU. 
     /** Tabulate {classes} given where projection value falls in \c _sortedLU.
      * - As projection values pass l/u boundaries in \c _sortedLU,
      * - one bit in the class bitmap changes.
      * - So save these easily-constructed bitmaps. */
     std::vector<Roaring> _map;
+    bool _mapok;
 #ifndef NDEBUG
     mutable uint64_t nCalls;
 #endif
@@ -84,27 +97,18 @@ inline const Roaring* Filter::filter(double xproj) const
                                                  xproj))];
 }
 
-#if 0
-/** TO IMPLEMENT: Filter with fast access for a batch of projection values.
- * - Best used when
- *   - we have a "batch" of values to process, just once, and
- *   - number of calls to \c Filter::filter(double) is << number of classes.
- * \detail
- *   - sort the projection values
- *   - and bitmap can be modified as we ascend the projection values.
- *     - and we can stop whenever we have no more projection values.
- */
-class FilterBatch
-{
-    FilterBatch(const Eigen::VectorXd& l, const Eigen::VectorXd& u);
-    ~FilterBatch();
-    /** Given a projection value, \c xproj, what classes are possible?
-     * \return vector of bitsets, <b>up to client to \c delete returned pointer</b> */
-    std::vector<Roaring>* filter (vector<double> xproj) const;
-private:
-    Eigen::VectorXd _sortedLU;
-};
-#endif
 
+// very slow. Do optimized. 
+inline void Filter::filter(double xproj, std::list<int>& active) const
+{
+#ifndef NDEBUG
+  ++nCalls;
+#endif
+  std::list<int>::iterator it = active.begin();
+  while (it != active.end())
+    {
+      (xproj < _l[*it] || xproj > _u[*it])?(it=active.erase(it)):++it;
+    }    
+}
 
 #endif

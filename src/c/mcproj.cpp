@@ -251,20 +251,13 @@ int main(int argc, char**argv){
 		  lf->read(filterargs.lfFiles[l]);
 		}
 	      
-	      //done with modifying the label filter. Make it const
-	      shared_ptr<const MCfilter> const_lf = static_pointer_cast<const MCfilter>(lf);
-	      // we have the model, data and filter. We can predict/evaluate models using a linear classifier		
-	      MClinearClassifier classifier(const_data, const_model, const_lf, verbose);
-	      // set keep_top, keep_thresh
-	      classifier.setPruneParams(modelargs.keep_thresh, modelargs.keep_top);
-	      
 	      // replace -2 and -1 nProj arguments with the correct values.
 	      std::vector<int> nproj;
 	      
 	      if (std::find(filterargs.nProj.begin(), filterargs.nProj.end(), -2) != filterargs.nProj.end())
 		{
 		  nproj.clear();
-		  for (int i = 0; i <= const_lf->nFilters(); i++)
+		  for (int i = 0; i <= lf->nFilters(); i++)
 		    {
 		      nproj.push_back(i);
 		    }
@@ -274,14 +267,27 @@ int main(int argc, char**argv){
 		  for (vector<int>::iterator npit = filterargs.nProj.begin(); npit != filterargs.nProj.end();++npit)		    
 		    if ( *npit == -1 )
 		      {
-			nproj.push_back(const_lf->nFilters());
+			nproj.push_back(lf->nFilters());
 		      }
 		    else
 		      {
 			nproj.push_back(*npit);
 		      }
 		}
-
+	      int nlogtime = filterargs.nlogtime;
+	      if (nlogtime < 0) nlogtime = *std::max_element(nproj.begin(),nproj.end());
+	      if (nlogtime > 0)
+		{
+		  lf->init_logtime(nlogtime);
+		}
+	      
+	      //done with modifying the label filter. Make it const
+	      shared_ptr<const MCfilter> const_lf = static_pointer_cast<const MCfilter>(lf);
+	      // we have the model, data and filter. We can predict/evaluate models using a linear classifier		
+	      MClinearClassifier classifier(const_data, const_model, const_lf, verbose);
+	      // set keep_top, keep_thresh
+	      classifier.setPruneParams(modelargs.keep_thresh, modelargs.keep_top);
+	      
 	      // set the nubmer of filters to apply
 	      for (vector<int>::iterator npit=nproj.begin(); npit != nproj.end(); ++npit)
 		{

@@ -17,9 +17,9 @@
 class MCfilter : protected MCsoln
 {
  public:
-  
-  MCfilter();
-  MCfilter(MCsoln const& s);
+  static const int defaultVerbose=1;
+  MCfilter(int const vb=defaultVerbose);
+  MCfilter(MCsoln const& s, int const vb=defaultVerbose);
   ~MCfilter();
   
   MCsoln       const& getSoln()  const {return *this;}
@@ -40,6 +40,7 @@ class MCfilter : protected MCsoln
   inline void write( std::ostream& os, enum Fmt fmt=BINARY) const {MCsoln::write(os,fmt);}  
   inline bool isempty()const {return !_filters.size();}
   inline uint32_t nFilters() const {return _filters.size();}
+  void init_logtime(int np = -1);
   
   /** apply the MC filter on data 
    * \p active  bit matrix indicating if a class is active or has been filtered out 
@@ -55,6 +56,8 @@ class MCfilter : protected MCsoln
     void filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int np = -1) const;
  private:
   std::vector<Filter*> _filters;
+  bool _verbose;
+  int _logtime;
   void init_filters();
   void delete_filters();
 };

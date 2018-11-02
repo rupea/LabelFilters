@@ -18,6 +18,8 @@ class MCfilter;
 
 class MCprojector
 {
+  // If the data or the filter changes, the feasible set is invalidated
+  // hence the const to make sure they are not changed outside the class
   typedef std::shared_ptr<const MCxyData> DP;
   typedef std::shared_ptr<const MCfilter> FP;
 public:

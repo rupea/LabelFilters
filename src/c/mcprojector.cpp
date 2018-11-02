@@ -32,7 +32,7 @@ MCprojector::~MCprojector()
 {
   if (m_feasible) delete m_feasible;
 }
-  
+
 void MCprojector::runFilter()
 {
   if(verbose>=1) cout<<" MCprojProgram::runFilter() "<<(m_xy->denseOk?"dense":m_xy->sparseOk?"sparse":"HUH?")<<endl;

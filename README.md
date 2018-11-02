@@ -8,7 +8,8 @@ Alexandru Niculescu-Mizil, Ehsan Abbasnejad: "[Label Filters for Large Scale Mul
 ### Dependencies
 The code requires the following libraries:
 
-- [boost](https://www.boost.org)
+- [boost](https://www.boost.org) for Dynamic Bitset and Program Options libraries
+- [gperftools](https://github.com/gperftools/gperftools) for tcmalloc and profiler
 - [Eigen](http://eigen.tuxfamily.org)  (included as a submodule)
 - [CRoaring](http://roaringbitmap.org)  (included as a submodule)
 
@@ -44,7 +45,7 @@ gunzip train_split1_Mediamill_data.txt.gz test_split1_Mediamill_data.txt.gz
 ../bin/mcsolve -o mediamill_C1_0.1_C2_0.1.filter --C1=0.1 --C2=0.1 --nfilters=2 -x train_split1_Mediamill_data.txt --maxiter=1000000
 
 # classify using an SVM model
-../bin/mcproj --nProj={0,2} -f mediamill_C1_0.1_C2_0.1.filter -x test_split1_Mediamill_data.txt --modelFiles svm_C10_split1_Mediamil.svmmodel
+numactl --interleave=all -- ../bin/mcproj --nProj={0,2} -f mediamill_C1_0.1_C2_0.1.filter -x test_split1_Mediamill_data.txt --modelFiles svm_C10_split1_Mediamil.svmmodel
 
 # list all options
 ../bin/mcsolve --help

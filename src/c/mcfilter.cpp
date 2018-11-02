@@ -21,15 +21,40 @@ void MCfilter::init_filters()
     {
       fp->_filters[p] = new Filter(fp->lower_bounds.col(p), fp->upper_bounds.col(p));
     }
+  _logtime = 0;
+}    
+
+void MCfilter::init_logtime(int np /*=-1*/)
+{
+  time_t start, stop;
+  // if filters have not been initialized, do it now. This should not happen.  
+  if (isempty())
+    {
+      init_filters();
+    }
+  if (np < 0 || np > nProj) np = nProj;
+
+  MCfilter* fp = this; // for openmp
+  time(&start);
+#if MCTHREADS
+#pragma omp parallel for shared(fp)
+#endif
+  for(size_t p=0U; p<np; ++p)
+    {
+      fp->_filters[p]->init_map();
+    }
+  time(&stop);
+  if (_verbose) std::cout << stop-start << " seconds to initialize log-time filtering" << std::endl;
+  _logtime = np;
 }    
 
 
-MCfilter::MCfilter()
-  :MCsoln(), _filters()
+MCfilter::MCfilter(int const vb /*=defaultVerbose*/)
+  :MCsoln(), _filters(), _verbose(vb), _logtime(0)
 {}
-
-MCfilter::MCfilter(MCsoln const& s):
-  MCsoln(s), _filters()
+		   
+MCfilter::MCfilter(MCsoln const& s, int const vb /*=defaultVerbose*/ ):
+  MCsoln(s), _filters(), _verbose(vb), _logtime(0)
 {
   init_filters();
 }
@@ -41,6 +66,7 @@ void MCfilter::delete_filters()
       delete _filters[i];
     }    
   _filters.clear();
+  _logtime = false;
 }  
     
 MCfilter::~MCfilter()

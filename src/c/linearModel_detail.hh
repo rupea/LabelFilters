@@ -12,13 +12,10 @@
 #include "roaring.hh"
 #include "utils.h"
 #include "typedefs.h"
+#include "profile.h"
 #include <cstddef>
 
 #include <ctime>
-
-#ifdef PROFILE
-#include <gperftools/profiler.h>
-#endif
 
 namespace linearmodel_detail{
   using namespace std;
@@ -42,6 +39,9 @@ namespace linearmodel_detail{
       {
 	cout << "Predicting " << n << "    " << noClasses << endl;
       }
+
+    time_t start,stop;
+    time(&start);
     
     predictions.clear();
     predictions.resize(n);
@@ -49,17 +49,14 @@ namespace linearmodel_detail{
     
     predictions.set_prune_params(keep_size, keep_thresh);
     
-    size_t i;
     if (feasible == NULL)
       {
-#ifdef PROFILE
-	ProfilerStart("full_predict.profile");
-#endif
+	PROFILER_START("full_predict.profile");
 	Eigen::RowVectorXd outs(noClasses);
 #if MCTHREADS
 #pragma omp parallel for firstprivate(outs) default(shared)
 #endif
-	for (i = 0; i < n; i++)
+	for (size_t i = 0; i < n; i++)
 	  {
 	    DotProductInnerVector(outs,x,i,w);
 	    if (intercept.size())
@@ -73,15 +70,11 @@ namespace linearmodel_detail{
 	      }
 	  }	 
 	npreds = n*noClasses;
-#ifdef PROFILE
-	ProfilerStop();
-#endif
+	PROFILER_STOP;
       }
     else
       {
-#ifdef PROFILE
-	ProfilerStart("projected_predict.profile");
-#endif
+	PROFILER_START("projected_predict.profile");
 	if(feasible->size() != n)
 	  {
 	    throw std::runtime_error("Dimensions of feasible set and data  do not agree");
@@ -109,7 +102,7 @@ namespace linearmodel_detail{
 #if MCTHREADS
 #pragma omp for
 #endif
-	  for (i = 0; i < n; i++)
+	  for (size_t i = 0; i < n; i++)
 	    {
 	      feasible->at(i).toUint32Array(act);
 	      size_t nactive = feasible->at(i).cardinality();	  
@@ -123,10 +116,10 @@ namespace linearmodel_detail{
 	    }
 	  delete[] act;
 	}
-#ifdef PROFILE
-	ProfilerStop();
-#endif
+	PROFILER_STOP;
       }
+    time(&stop);
+    if(verbose) std::cout << stop - start << " seconds to make " << npreds << " predictions" << std::endl;
     return npreds;
   }
 

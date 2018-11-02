@@ -10,6 +10,8 @@
 #include "mcfilter.h"
 #include "roaring.hh"
 #include "typedefs.h" //DenseM, ActiveSet
+#include "mutexlock.h"
+#include "profile.h"
 #include <iostream>
 
 template< typename EIGENTYPE >
@@ -26,12 +28,13 @@ void MCfilter::filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int 
 		<< " are available" << std::endl;
       np = nFilters();
     }
+
+  time_t start, stop;
+  time(&start);
   DenseM const projections = (x * weights.leftCols(np));
 
-
-
-  // initialize with all labels active.   
   active.clear();
+  // initialize with all labels active.   
   active.reserve(nExamples);  
   Roaring full; //empty set
   full.flip(0,nClass); // full set
@@ -39,20 +42,40 @@ void MCfilter::filter(/*out*/ ActiveSet& active, /*in*/ EIGENTYPE const& x, int 
   for(size_t i=0U; i<nExamples; ++i){
     active.emplace_back(full);
   }
-
-  assert( active.size() == nExamples );
-  
-  // TODO if ! nProj >> nExamples, provide a faster impl ???
+  if (np == 0 ) return;
+      
   MCfilter const* fp = this; // to work with omp
+  if (_logtime > 0){
+  PROFILER_START("log_filtering.profile");
 #if MCTHREADS
-#pragma omp parallel for shared(fp, active)
+#pragma omp parallel for shared(np, fp, active) default(none)
 #endif
-  for(size_t e=0U; e<nExamples; ++e){
-    for(size_t p=0U; p<np; ++p){
-      Roaring const* dbitset = fp->_filters[p]->filter(projections.coeff(e,p));
-      active[e] &= *dbitset;
+    for(size_t e=0U; e<nExamples; ++e){
+      for(size_t p=0U; p<std::min(np,_logtime); ++p){
+	Roaring const* dbitset = fp->_filters[p]->filter(projections.coeff(e,p));
+	active[e] &= *dbitset;
+      }
     }
   }
+  PROFILER_STOP;
+  
+  if (_logtime < np)
+    {
+      time(&start);
+      PROFILER_START("linear_filter.profile");
+      // the parallelism here is limited by the nubmer of filters.
+      // better results might be achievable with more complex schemes.
+      std::vector<MutexType> mutex(nExamples);
+#if MCTHREADS
+#pragma omp parallel for default(shared)
+#endif
+      for(size_t p=_logtime; p<np; ++p){
+	fp->_filters[p]->filterBatch(projections.col(p), active, mutex);
+      }
+      PROFILER_STOP;
+    }       	 
+  time(&stop);
+  if (_verbose) std::cout << stop - start << " seconds to apply " << np << " filters" << std::endl;
 }
 
 #endif //MCFILTER_HH

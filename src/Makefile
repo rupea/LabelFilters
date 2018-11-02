@@ -17,13 +17,11 @@ BOOSTINC ?= -I$(BOOSTDIR)/include
 BOOSTLIB ?= $(BOOSTDIR)/lib
 BOOSTLINK ?= -L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
-
-#using gperftools to profile the code. Change this to point to your instalation of gperftools 
-PROFILEDIR ?= $(HOME)/local
-PROFILEINC ?= -I$(PROFILEDIR)/include
-PROFILELIB ?= $(PROFILEDIR)/lib
-PROFILELINK ?= -L$(PROFILELIB) -Wl,-rpath,$(PROFILELIB)
-
+#using gperftools tcmalloc and profiler. Change this to point to your instalation of gperftools 
+GPERFTOOLSDIR ?= $(HOME)/local
+GPERFTOOLSINC ?= $(GPERFTOOLSDIR)/include
+GPERFTOOLSLIB ?=  $(GPERFTOOLSDIR)/lib
+GPERFTOOLSLINK ?= -L$(GPERFTOOLSLIB) -Wl,-rpath,$(GPERFTOOLSLIB)
 
 BINDIR ?= $(MAKEFILE_DIR)/../bin
 
@@ -32,7 +30,7 @@ BINDIR ?= $(MAKEFILE_DIR)/../bin
 OPENMP ?= -fopenmp -DMCTHREADS=1
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
 # 2. no openmp anywhere
-#OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
+# OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
 # 3. allow Eigen/blas threads, but no MCFilter source code threads
 #OPENMP:= -fopenmp -DMCTHREADS=0
 # 4. allow MCFilter threads but not Eigen threads
@@ -43,18 +41,18 @@ CXX ?= g++
 CC ?= gcc
 
 
-CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG $(BOOSTINC) $(CROARINGINC) $(EIGENINC) -std=c++11 -pipe 
-LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring
+CPPFLAGS ?= -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG $(BOOSTINC) $(CROARINGINC) $(EIGENINC) -march=native -ffast-math -m64  -std=c++11 -pipe -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free 
+LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring $(GPERFTOOLSLINK) -ltcmalloc 
 
 
 #profileing settings 
 PROFILE_OPENMP = 
 PROFILE_OPENMP += -fopenmp
-PROFILE_OPENMP += -DMCTHREADS=0
+PROFILE_OPENMP += -DMCTHREADS=1
 #PROFILE_OPENMP += -DEIGEN_DONT_PARALLELIZE
 
-PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE $(PROFILEINC) $(BOOSTINC) $(CROARINGINC) $(EIGENINC)
-PROFILE_LDFLAGS = $(LDFLAGS) $(PROFILELINK) -lprofiler 
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP)  -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE $(GPERFTOOLSINC) $(BOOSTINC) $(CROARINGINC) $(EIGENINC) -march=native -ffast-math -m64 -std=c++11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free
+PROFILE_LDFLAGS = $(LDFLAGS) -lprofiler 
 
 
 DBGFLAGS ?= $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
@@ -91,7 +89,7 @@ $(C_TARGETS):
 #enable profiling
 $(PROFILE_TARGETS):
 	mkdir -p $(BINDIR)-prof
-	$(MAKE) -C $(BINDIR)-prof CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" -f../c/Makefile $(patsubst %-prof,%,$@) 
+	$(MAKE) -C $(BINDIR)-prof CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" -f../src/c/Makefile $(patsubst %-prof,%,$@) 
 
 #enable debug
 $(DBG_TARGETS):
@@ -104,9 +102,18 @@ CRoaring:
 
 CRoaring-bld:
 	./amalgamation.sh 
-	$(CC) -march=native -O3 -std=c11 -o roaring.o -c roaring.c
+	$(CC) -O3-march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -o roaring.o -c roaring.c 
 	$(AR) -Uvru libroaring.a roaring.o
-	$(CC) -O3 -std=c11 -shared -o libroaring.so -fPIC roaring.c
+	$(CC) -O3 -march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -shared -o libroaring.so -fPIC roaring.c
+
+CRoaring-prof:
+	$(MAKE) -C $(CROARINGDIR) -f ../src/Makefile CRoaring-bld-prof
+
+CRoaring-bld-prof:
+	./amalgamation.sh 
+	$(CC) -ggdb3 -O3 -march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -o roaring.o -c roaring.c
+	$(AR) -Uvru libroaring.a roaring.o
+	$(CC) -ggdb3 -O3 -march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -shared -o libroaring.so -fPIC roaring.c
 
 CRoaring-clean:
 	cd $(CROARINGDIR) && rm roaring.o libroaring.a libroaring.so roaring.c roaring.h roaring.hh

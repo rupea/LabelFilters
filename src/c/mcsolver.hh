@@ -13,19 +13,11 @@
 #include "mcsolver.h"
 #include "mcsolver_detail.hh"
 #include "printing.hh"          // print_report
+#include "profile.h"
 #include <time.h>
 #include <iomanip>
 #include <vector>
 
-#ifdef PROFILE
-#define PROFILER_START( CSTR )      do{ ProfilerStart(CSTR); }while(0)
-#define PROFILER_STOP_START( CSTR ) do{ ProfilerStop(); ProfilerStart(CSTR); }while(0)
-#define PROFILER_STOP               ProfilerStop()
-#else
-#define PROFILER_START( CSTR )      do{}while(0)
-#define PROFILER_STOP_START( CSTR ) do{}while(0)
-#define PROFILER_STOP               do{}while(0)
-#endif
 
 #if GRADIENT_TEST // compile-time option, disabled by default, macro to unclutter iteration loop
 #include "gradient_test.h"

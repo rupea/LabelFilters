@@ -54,6 +54,7 @@ struct MCprojectorArgs {
   std::vector<std::string> lfFiles;   ///< files to read the trained label filters from
     
   std::vector<int> nProj;    ///< numbers of filters (projections) to use. -1 means use all filters. -2 means {0,1,2,...,no_fiters}
+  int nlogtime;
 };
 
 struct MCclassifierArgs{
