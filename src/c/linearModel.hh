@@ -9,6 +9,7 @@
 
 #include "linearModel_detail.hh"
 
+
 template <typename Eigentype> inline
 size_t linearModel::predict (PredictionSet& predictions, Eigentype const& x, ActiveSet const* feasible, bool verbose, predtype keep_thresh, size_t keep_size) const
 {
@@ -22,7 +23,7 @@ size_t linearModel::predict (PredictionSet& predictions, Eigentype const& x, Act
     }
   else
     {
-      throw runtime_error("LinearModel: predict called without a valid model");
+      throw std::runtime_error("LinearModel: predict called without a valid model");
     }
 }
 #endif //__LINEAEMODEL_HH

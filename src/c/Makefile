@@ -29,7 +29,7 @@ VPATH = $(MAKEFILE_DIR) #../c
 
 LIB_CPPFILES:= mcfilter.cpp mcsolver.cpp mcsoln.cpp mcxydata.cpp filter.cpp PredictionSet.cpp printing.cpp utils.cpp  parameter.cpp parameter-args.cpp mclearnFilter.cpp mcprojector.cpp linearModel.cpp mclinearClass.cpp optimizelu.cpp mcupdate.cpp mcsolver_detail.cpp mcsolver_init.cpp objective.cpp
 
-SRCS:= $(LIB_CPPFILES) mcsolve.cpp mcproj.cpp 
+SRCS:= $(LIB_CPPFILES) mcsolve.cpp mcproj.cpp convert_linearmodel.cpp
 DEP:= $(SRCS:%.cpp=%.d)
 DEP += $(SRCS:%.cpp=%.ld)
 
@@ -38,7 +38,7 @@ DEP += $(SRCS:%.cpp=%.ld)
 .PHONY: lib lib-clean libs-only clean realclean lib-clean depend .depend
 
 
-all: lib mcsolve mcproj
+all: lib mcsolve mcproj convert_linearmodel
 
 %.o: %.cpp
 	$(CXX) -o $@ $(CPPFLAGS) -MMD -MF $*.d -c $<
@@ -72,6 +72,9 @@ mcsolve: mcsolve.cpp libmcfilter.so
 	$(CXX) -o $@ $(CPPFLAGS) -I$(MAKEFILE_DIR) -Wl,-rpath,$(shell pwd) $^ $(LDFLAGS)  
 
 mcproj: mcproj.cpp libmcfilter.so
+	$(CXX) -o $@ $(CPPFLAGS) -I$(MAKEFILE_DIR) -Wl,-rpath,$(shell pwd) $^ $(LDFLAGS)  
+
+convert_linearmodel: convert_linearmodel.cpp libmcfilter.so
 	$(CXX) -o $@ $(CPPFLAGS) -I$(MAKEFILE_DIR) -Wl,-rpath,$(shell pwd) $^ $(LDFLAGS)  
 
 clean: lib-clean

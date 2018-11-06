@@ -12,6 +12,9 @@
 #include <fstream>
 #include "profile.h"
 
+using namespace std;
+
+
 // ... linearModel magic headers (simplify I/O)
 std::array<char,4> linearModel::magic_Sparse = {0,'W','s','4'}; // values saved as floats
 std::array<char,4> linearModel::magic_Dense  = {0,'W','d','4'}; // values saved as floats
@@ -132,7 +135,7 @@ void linearModel::read( std::string fname ){
 }
 
 // read without magic header. 
-void linearModel::read( ifstream& ifs, bool sparse, bool binary){   
+void linearModel::read( std::ifstream& ifs, bool sparse, bool binary){   
   try{
     if( binary && !sparse){
       detail::eigen_io_bin(ifs, WDense);

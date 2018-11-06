@@ -73,14 +73,14 @@ JOBS:=-j$(NCPUS)
 
 export
 
-C_TARGETS = mcproj mcsolve clean lib
+C_TARGETS = mcproj mcsolve convert_linearmodel clean lib
 
 PROFILE_TARGETS = $(patsubst %,%-prof,$(C_TARGETS))
 DBG_TARGETS = $(patsubst %,%-dbg,$(C_TARGETS))
 
 .PHONY: all clean lib CRoaring clean-all CRoaring-bld
 
-all: lib mcproj mcsolve 
+all: lib mcproj mcsolve convert_linearmodel
 
 $(C_TARGETS):
 	mkdir -p $(BINDIR)

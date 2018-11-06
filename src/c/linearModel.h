@@ -11,7 +11,6 @@
 #include "typedefs.h"
 #include "PredictionSet.h"
 #include <boost/limits.hpp>
-#include <iostream>
 #include <array>
 
 /** A linear model. 
@@ -39,9 +38,11 @@ public:
     std::istream& read_sparse_txt(std::istream& is);
     
 public:
+    void toDense();
+    void toSparse();
 
     void read( std::string modelFile );    ///< read (binary sparse/dense; text sparse ) using magic header for binary
-    void read( ifstream& ifs, bool sparse, bool binary); ///< read without magic header; Keep exposed in case binary files without magic header need to be read
+    void read( std::ifstream& ifs, bool sparse, bool binary); ///< read without magic header; Keep exposed in case binary files without magic header need to be read
     void write( std::string modelFile, bool binary = true ) const; ///< save
 
     template <typename Eigentype>
@@ -53,6 +54,42 @@ public:
     static std::array<char,4> magic_Dense;  ///< 0x00,'W','d','4'  //values saved as floats
     // feel free to add any other [binary] formats.
 };
+
+inline void linearModel::toDense()
+{
+  if (!denseOk)
+    {
+      if(sparseOk)
+	{
+	  WDense = WSparse;
+	  denseOk=true;
+	  WSparse = ovaSparseColM();
+	  sparseOk = false;
+	}
+      else
+	{
+	  throw std::runtime_error("toDense called without valid model");
+	}
+    }
+}
+
+inline void linearModel::toSparse()
+{
+  if (!sparseOk)
+    {
+      if(denseOk)
+	{
+	  WSparse = WDense.sparseView();
+	  sparseOk=true;
+	  WDense = ovaDenseColM();
+	  denseOk = false;
+	}
+      else
+	{
+	  throw std::runtime_error("toSparse called without valid model");
+	}
+    }
+}
 
 #endif //__LINEAEMODEL_H
 

@@ -13,8 +13,6 @@
 #include <boost/numeric/conversion/bounds.hpp>
 #include <boost/limits.hpp>
 
-using namespace std;
-
 struct Prediction
 {
   predtype out;
@@ -142,7 +140,7 @@ inline void PredVec::add_pred(predtype out, size_t cls)
 {
   if (!AddWarned && _preds_removed)
     {
-      cerr << "Warning: addind a new prediction to an already pruned vector" << endl;
+      std::cerr << "Warning: addind a new prediction to an already pruned vector" << std::endl;
       AddWarned = true; 
     }    
   Base::push_back(Prediction{out,cls});
@@ -217,14 +215,14 @@ inline void PredVec::set_prune_params(size_t keep_size, predtype keep_thresh)
 
   if ( !TopWarned && keep_size > _keep_size && _preds_removed )
     {
-      cerr<<"Warning: Asking for top "<<keep_size<<" but predictions have already been pruned"
-	" to keep only top "<<_keep_size<<endl;
+      std::cerr<<"Warning: Asking for top "<<keep_size<<" but predictions have already been pruned"
+	" to keep only top "<<_keep_size<<std::endl;
       TopWarned = true;
     }
   if ( !ThreshWarned && keep_thresh < _keep_thresh && _preds_removed )      
     {
-      cerr<<"Warning: Asking for prediction threshold "<<keep_thresh<<
-	" but predictions under " << _keep_thresh << " have already been pruned."<<endl;
+      std::cerr<<"Warning: Asking for prediction threshold "<<keep_thresh<<
+	" but predictions under " << _keep_thresh << " have already been pruned."<<std::endl;
       ThreshWarned = true;
     }
   _keep_size = keep_size;
@@ -234,13 +232,13 @@ inline void PredVec::set_prune_params(size_t keep_size, predtype keep_thresh)
 inline void PredVec::predict(std::vector<int>& pred_class, double thresh, size_t k)
 {
     if (thresh < _keep_thresh && !ThreshWarned) {
-        cerr<<"Warning: Asking for prediction threshold "<<thresh<<
-            " but predictions have already been pruned using threshold "<<_keep_thresh<<endl;
+        std::cerr<<"Warning: Asking for prediction threshold "<<thresh<<
+            " but predictions have already been pruned using threshold "<<_keep_thresh<<std::endl;
         ThreshWarned = true;
     }
     if ( k > _keep_size && !TopWarned) {	
-        cerr<<"Warning: Asking for top "<<k<<" but predictions have already been pruned"
-            " to keep only top "<<_keep_size<<endl;
+        std::cerr<<"Warning: Asking for top "<<k<<" but predictions have already been pruned"
+            " to keep only top "<<_keep_size<<std::endl;
         TopWarned = true;
     }
     this->sort();
