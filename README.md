@@ -99,7 +99,7 @@ Then the parameters of the label filters are stored in three space separated mat
 
 The linear classifiers are stored in an SVMLight like format.
 
-The first row in the file is a header:
+The first row in the file is an optional header:
 
 ```
 nClasses nFeatures
@@ -108,16 +108,12 @@ nClasses nFeatures
 Next the weights of each classifier are stored, one classifier per line, in the order of the labels (i.e. classifier corresponding to label '0' is first, then the classifier corresponding to label '1' and so on. The format is:
 
 ```
-feature:weight feature:weight ... feature:weight
+intercept feature:weight feature:weight ... feature:weight
 ```
 
-Features are consecutive integers from 0 to nFeatures-1
+Features are consecutive integers from 0 to nFeatures-1.
 
-If the models have intercepts, they are stored in order on the last line:
-
-```
-intercept_0 intercept_1 intercept_2 ... intercept_(nClasses-1)
-```
+The intercept is optional. If not present, it is treated as 0.
 
 The code also supports a binary format with both dense and sparse storage.
 

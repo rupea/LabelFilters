@@ -115,23 +115,11 @@ namespace detail {
 #undef MATRIX
 #undef TMATRIX
 
-#if 0
-    extern std::array<char,4> magicSparseMbBin; ///< "SMbb"
-    extern std::array<char,4> magicSparseMbTxt; ///< "SMbt"
-    /** Compressed SparseMb output, with magic header bytes and only-true values.
-     * \throw if x has any false values or if x is uncompressed. */
-    std::ostream& eigen_io_txtbool( std::ostream& os, SparseMb const& x );
-    /** read a SparseMb matrix of only-true values into compressed \c x.
-     * \throw if bad magic header bytes. */
-    std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x );
-    /** Compressed SparseMb output, with magic header bytes and only-true values.
-     * \throw if x has any false values or if x is uncompressed. */
-    std::ostream& eigen_io_binbool( std::ostream& os, SparseMb const& x );
-    /** read a SparseMb matrix of only-true values into compressed \c x.
-     * \throw if bad magic header bytes. */
-    std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x );
-    //@}
-#endif
+    template<typename Type>
+      std::istream& parse_labels(std::istream& iss, std::vector<Type>& yIdx);
+    template<typename Type>
+      std::istream& parse_features(std::istream& iss, std::vector<size_t>& xIdx, std::vector<Type>& xVal);
+          
     /** input only - read text libsvm-format. \throw on error. */
     std::istream& eigen_read_libsvm( std::istream& is,
                                      SparseM &x,

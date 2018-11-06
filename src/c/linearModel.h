@@ -36,7 +36,8 @@ public:
     bool sparseOk;
     Eigen::RowVectorXd intercept;  //make it vector of doubles to avoid type casting in linearmodel_detail::predict 
     //@}
-
+    std::istream& read_sparse_txt(std::istream& is);
+    
 public:
 
     void read( std::string modelFile );    ///< read (binary sparse/dense; text sparse ) using magic header for binary

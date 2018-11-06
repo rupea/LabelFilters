@@ -320,7 +320,7 @@ int main(int argc, char**argv){
 		}
 	      
 	      // Done. Output the performances 
-	      outputPerfs(cout, *mit, dataargs.xFiles[dta], filterargs.lfFiles[l], nproj, perfs);
+	      outputPerfs(cout, *mit, dataargs.xFiles[dta], filterargs.lfFiles[l], nproj, perfs);	      
 	      perfs.clear();
 	    }
 	  nofilter_ok = false; // data or model has changed, so result with no filter are not valid any more

@@ -386,34 +386,33 @@ namespace detail {
   TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x ){
     using namespace std;
     size_t outer_size,inner_size;
+    std::vector<size_t> xIdx;
+    std::vector<Scalar> xVal;
     io_txt(is,outer_size);
     io_txt(is,inner_size);
     is >> ws;
-    size_t idx;
-    Scalar val;
-    char sep;
     typedef Eigen::Triplet<Scalar> T;
     std::vector<T> Triplets;
     std::string line;
-    for(size_t i = 0; i<outer_size; i++){
-      getline(is,line);
-      istringstream iss(line);
-      iss>>ws;
-      while(iss.good())
+    for (size_t i = 0; i<outer_size; i++){
+      if(!getline(is,line))
 	{
-	  if( !(iss>>idx>>sep>>val))
-	    {
-	      throw std::runtime_error("sparse text format parse error");
-	    }
-	  if( sep != ':' )
-	    {
-	      throw std::runtime_error("sparse text format parse error");
-	    }	  
-	  x.IsRowMajor?Triplets.push_back(T(i,idx,val)):Triplets.push_back(T(idx,i,val));
-	  iss>>ws;
+	  throw runtime_error("Error reading line");
 	}
-      if (!iss.eof()) throw std::runtime_error("sparse text format parse error");
-    }         
+      istringstream iss(line);      
+      try{
+	parse_features(iss, xIdx, xVal);
+	
+	for(size_t f=0U; f<xIdx.size(); ++f){
+	  if( xIdx[f] > inner_size ) throw runtime_error("Column index larger than declared in the header");	
+	  x.IsRowMajor?Triplets.push_back(T(i,xIdx[f],xVal[f])):Triplets.push_back(T(xIdx[f],i,xVal[f]));
+	}
+      }catch(std::exception const& e){
+	cerr<<" Error: " <<e.what() << endl
+	    << "Offending line: " << line <<endl;
+	throw;
+      }
+    }
     x.IsRowMajor?x.resize(outer_size, inner_size):x.resize(inner_size,outer_size);
     x.setFromTriplets(Triplets.begin(),Triplets.end());
     return is;
@@ -605,6 +604,64 @@ namespace detail {
   }
 #undef MATRIX
 #undef TMATRIX
+  
+  template<typename Type>
+  std::istream& parse_labels(std::istream& iss, std::vector<Type>& yIdx)
+  {
+    yIdx.clear();
+    Type idx;
+    char sep;
+    std::streampos pos = iss.tellg();
+    while(iss>>idx){      
+      yIdx.push_back(idx);
+      iss>>std::ws;
+      if (iss.eof()) break;
+      if((sep=iss.peek()) == ':') break;
+      if (sep == ',') iss>>sep>>std::ws;
+      pos = iss.tellg();
+    }
+    if (!iss.eof())
+      {
+	//read a feature index, so pop it from yIdx and reset the stream.  
+	if(sep==':'){
+	  iss.seekg(pos);
+	  yIdx.pop_back();
+	}
+	else
+	  {
+	    throw std::runtime_error(" illegal input line");
+	  }
+      }
+    return iss;
+  }
+
+  template<typename Type>
+  std::istream& parse_features(std::istream& iss, std::vector<size_t>& xIdx, std::vector<Type>& xVal)
+  {
+    xIdx.clear();
+    xVal.clear();
+    size_t idx;
+    char sep;
+    Type val;
+    while(iss.good()){
+      iss>>std::ws;
+      if (iss.eof())
+	break;
+      if(iss.peek() == '#' ) //ignore trailing comments 
+	break;
+      if( !(iss>>idx>>sep>>val))
+	{
+	  throw std::runtime_error(" sparse format parse error");
+	}
+      if( sep != ':' ) throw std::runtime_error(" bad sep");
+      xIdx.push_back(idx);
+      xVal.push_back(val);
+    }		  
+    if (iss.fail()) 
+      {
+	throw std::runtime_error(" sparse format parse error"); 
+      }
+  }    
   
 }//detail::
 

@@ -19,7 +19,7 @@ BOOSTLINK ?= -L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB)
 
 #using gperftools tcmalloc and profiler. Change this to point to your instalation of gperftools 
 GPERFTOOLSDIR ?= $(HOME)/local
-GPERFTOOLSINC ?= $(GPERFTOOLSDIR)/include
+GPERFTOOLSINC ?= -I$(GPERFTOOLSDIR)/include
 GPERFTOOLSLIB ?=  $(GPERFTOOLSDIR)/lib
 GPERFTOOLSLINK ?= -L$(GPERFTOOLSLIB) -Wl,-rpath,$(GPERFTOOLSLIB)
 
