@@ -44,6 +44,9 @@ private:
 
 public:
     //@}
+    void toDense();
+    void toSparse();
+    
     void read (std::string xFile, std::string yFile="");  ///< read x and y
     void xread( std::string xFile );    ///< read x (binary, sparse/dense, libsvm, xml) 
     void yread( std::string yFile );    ///< read y (sparse binary or text)
@@ -89,5 +92,41 @@ public:
     static std::array<char,4> magic_yBin;    ///< 0x00,'Y','s','b'
     // feel free to add any other [binary] formats.
 };
+
+inline void MCxyData::toDense()
+{
+  if (!denseOk)
+    {
+      if(sparseOk)
+	{
+	  xDense = xSparse;
+	  denseOk=true;
+	  xSparse = SparseM();
+	  sparseOk = false;
+	}
+      else
+	{
+	  throw std::runtime_error("toDense called without valid data");
+	}
+    }
+}
+
+inline void MCxyData::toSparse()
+{
+  if (!sparseOk)
+    {
+      if(denseOk)
+	{
+	  xSparse = xDense.sparseView();
+	  sparseOk=true;
+	  xDense = DenseM();
+	  denseOk = false;
+	}
+      else
+	{
+	  throw std::runtime_error("toSparse called without valid data");
+	}
+    }
+}
 
 #endif //__MCXYDATA_H
