@@ -55,22 +55,20 @@ template <typename Scalar1, typename IndexType1,  typename Scalar2, typename Ind
   typename Eigen::SparseMatrix<Scalar1, Eigen::RowMajor, IndexType1>::InnerIterator iter1(rowmat,row);
   typename Eigen::SparseMatrix<Scalar2, Eigen::ColMajor, IndexType2>::InnerIterator iter2(colmat,col);
   double ans = 0.0;
+  int s;
   while (iter1 && iter2)
     {
-      if (iter1.index() == iter2.index())
-  	{
-  	  ans+=iter1.value()*iter2.value();
-  	  ++iter1;
-  	  ++iter2;
-  	}
-      else if (iter1.index() < iter2.index())
-  	{
-  	  ++iter1;
-  	}
+      s = iter1.index() - iter2.index();      
+      if (s)
+	{
+	  s>0?++iter2:++iter1;
+	}
       else
-  	{
-  	  ++iter2;
-  	}
+	{
+	  ans+=iter1.value()*iter2.value();
+	  ++iter1;
+	  ++iter2;
+	}
     }
   return ans;
 }

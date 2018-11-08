@@ -46,10 +46,17 @@ LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring $(GPER
 
 
 #profileing settings 
-PROFILE_OPENMP = 
-PROFILE_OPENMP += -fopenmp
-PROFILE_OPENMP += -DMCTHREADS=1
-#PROFILE_OPENMP += -DEIGEN_DONT_PARALLELIZE
+# OMP options
+# 1. full parallelization 
+PROFILE_OPENMP ?= -fopenmp -DMCTHREADS=1
+# for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
+# 2. no openmp anywhere
+# PROFILE_OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
+# 3. allow Eigen/blas threads, but no MCFilter source code threads
+#PROFILE_OPENMP:= -fopenmp -DMCTHREADS=0
+# 4. allow MCFilter threads but not Eigen threads
+#PROFILE_OPENMP:= -fopenmp -DEIGEN_DONT_PARALLELIZE
+# allow STL experimental threads?
 
 PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP)  -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE $(GPERFTOOLSINC) $(BOOSTINC) $(CROARINGINC) $(EIGENINC) -march=native -ffast-math -m64 -std=c++11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free
 PROFILE_LDFLAGS = $(LDFLAGS) -lprofiler 
