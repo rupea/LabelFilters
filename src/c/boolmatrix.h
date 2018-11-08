@@ -1,9 +1,13 @@
+/*  Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
 #ifndef __BOOLMATRIX_H
 #define __BOOLMATRIX_H
 
 #include <boost/dynamic_bitset.hpp>
-
-//using namespace boost;
 
 class boolmatrix
 {
@@ -12,9 +16,9 @@ class boolmatrix
   ~boolmatrix();
   bool get(size_t i, size_t j) const;
   //set the i,j bit to true; more eficient
-  void set(size_t i, size_t j);
+  bool set(size_t i, size_t j);
   // set the i,j bit to val
-  void set(size_t i, size_t j, bool val);
+  bool set(size_t i, size_t j, bool val);
   void findFirst(size_t& i, size_t& j) const;
   void findNext(size_t& i, size_t& j) const;  
   size_t count() const {return _count;}
@@ -52,12 +56,14 @@ inline bool boolmatrix::get(size_t i, size_t j) const
   return (_data->test(i*_ncol + j));
 }
 //set the i,j bit to val and return the old value
-inline void boolmatrix::set(size_t i, size_t j)
+inline bool boolmatrix::set(size_t i, size_t j)
 {
-  _count += !_data->test_set(i*_ncol + j);
+  bool prev = _data->test_set(i*_ncol + j);
+  _count += !prev;
+  return prev;
 }
 
-inline void boolmatrix::set(size_t i, size_t j, bool val)
+inline bool boolmatrix::set(size_t i, size_t j, bool val)
 {
   bool prev = _data->test_set(i*_ncol + j, val);
   // val  prev
@@ -67,6 +73,7 @@ inline void boolmatrix::set(size_t i, size_t j, bool val)
   //  1    1        0
   //_count += val?(!prev):-(prev); // unary minus of bool is -1
   _count += (int)val - (int)prev;  // perhaps clearer
+  return prev;
 }
 inline void boolmatrix::findFirst(size_t& i, size_t& j) const
 {

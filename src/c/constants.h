@@ -1,11 +1,12 @@
+/*  Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
 #ifndef __CONSTANTS_H
 #define __CONSTANTS_H
 
-// ***********  Constant values used
-const int PRINT_T = 0;                 	// print values in each iteration
-const int PRINT_O = 1;                // print objective function in each epoch
-const int PRINT_M = 0;                 	// print matrix operations
-const int PRINT_I = 0;                 	// print Conditions in each iteration
 /// set to 0 to disable all 'pragma omp' in MCFilter code
 #ifndef MCTHREADS
 #define MCTHREADS 1

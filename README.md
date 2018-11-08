@@ -1,65 +1,136 @@
-To compile: 
+The code implements the Label Filter algorithm for speeding up prediction in Extreme Classification problems (i.e. multi-label classification problems with an extremely large labels set). Label Filters are a computationally efficient technique for pre-selecting a small set of candidate labels for each test example before applying a more expensive multi-label classifier. For details please see the following paper:
 
-> cd src
-> make
+Alexandru Niculescu-Mizil, Ehsan Abbasnejad: "[Label Filters for Large Scale Multilabel Classification](http://www.niculescu-mizil.org/paper.php?p=mcfilter.pdf)" - Proceedings of the 20th International Conference on AI and Statistics (AISTATS `17).
 
-Eigen WILL NOT compile under modern g++ (g++-5.3, for example)
-Please use g++-4.9.x or so.
 
-Main function: src/octave/run_svm_test.m
+## Installation
 
-- This branch is for milde support.
-	> cd src/c
-	> make all test && echo YAY
-- the API has been cleaned up, C++11 is assumed.
-- NO matlab/octave required
-- NO liblinear
-- It makes libmcfilter libraries
-- and provides fully-C++ utilities showing how to:
-  - mcgenx : generate test problems
-  - mcsolve : solve for projections (from scratch or continue a previous soln)
-  - mcdumpsoln : dump above .soln output files
-  - mcproj : apply a .soln to test examples, outputting remaining possible classes.
-- ... and a lot of test code, with lots of assertions in debug mode
-- many bugfixes
+### Dependencies
+The code requires the following libraries:
 
-- it does not work exactly like old code, but the internals of the solver are mostly
-  the same.
+- [boost](https://www.boost.org) for Dynamic Bitset and Program Options libraries
+- [gperftools](https://github.com/gperftools/gperftools) for tcmalloc and profiler
+- [Eigen](http://eigen.tuxfamily.org)  (included as a submodule)
+- [CRoaring](http://roaringbitmap.org)  (included as a submodule)
 
-- DONE:
- - --update=SAFE should be the default
- - --update=SAFE should set the batch size to 1
 
-TODO:
- - per-axis confusion matrix printouts
- - TEST resume / reoptlu options 
- - if ... remove_constraints and none left and still want more projections
-      ... can we do better than early exit?
+### Compiling
 
-- TODO: when within Milde:
-  - remove historical cruft, all matlab, and all liblinear stuff
-  - provide a repo --> eigen conversion utility for dense/sparse, slc/mlc data
-    - Eigen matrices must be memory contiguous
-    - y label are only supported as a integers 0..nClasses-1 (not strings as in repo)
+First modify src/Makefile to point to the correct path for the boost libraries then execute:
 
-SOMEDAY:
- - quadx option for projector too (saving quad dimensions makes them *HUGE*)
- - solver --> projector seamless "continuation"
-   - esp. for lua, where may wish to iteratively determine nice proj,C1,C2
-     values based on confusion matrix (on training data, [opt. test data])
+```
+cd src
+make CRoaring #if using the included submodule
+make
+```
 
-NEVER:
- - add s_rownormx to lua api, to verify update_safe_SGD normalization effects.
-   - Not needed: now --update=SAFE supports non-row-normalized data
- - trying out a change to keep --update=SAFE eta and avoid resetting it to "eta_t"
- - --update=SAFE should have parameters to control the eta schedule
-   - for example, "cautious" problems like mnist might use
-     eta_bigger = 1.01 and eta_smaller = 0.8
+This will compile the label filter library and put the result into the bin/ directory
 
-After seeing how poor mnist results were (without data augmentation)
-I think we need to:
- - add setQuantiles support
- - add per-projection binary projection output
- - add per-projection quantile-based scoring output
-   - and a 'final-score' output
- - consider mixture-of-experts scoring for binary/quantile projectors
+The compilation will produce the following files:
+
+- libmcfilter.so -- label filter library, for dynamic linking
+- libmcfilter.a -- label filter library, for static linking
+- mcsolve -- example program to learn a filter
+- mcpoj -- example program to apply the filter with linear classifiers.
+- convert_data -- program to convert data form XML to binary dense/sparse format
+- convert_linearmodel -- program to convert model files from text to binary format
+
+## Using the code
+
+```
+cd Mediamill
+
+gunzip train_split1_Mediamill_data.txt.gz test_split1_Mediamill_data.txt.gz
+
+# learn the label filters
+../bin/mcsolve -o mediamill_C1_0.1_C2_0.1.filter --C1=0.1 --C2=0.1 --nfilters=2 -x train_split1_Mediamill_data.txt --maxiter=1000000
+
+# classify using an SVM model
+numactl --interleave=all -- ../bin/mcproj --nProj={0,2} -f mediamill_C1_0.1_C2_0.1.filter -x test_split1_Mediamill_data.txt --modelFiles svm_C10_split1_Mediamil.svmmodel
+
+# list all options
+../bin/mcsolve --help
+../bin/mcproj --help
+
+```
+
+
+
+## File formats
+
+### Data file format
+
+The data file uses the XML format.
+
+First line is an optional header line:
+
+```
+nExamples nFeatures nClasses
+```
+
+Subsequently the file should contain one datapoint per line, in the following sparse format:
+
+```
+label1,label2,label3  feature:value feature:value ... feature:value  #comment
+```
+
+Labels are consecutive integers from 0 to nClasses-1.
+Features are consecutive integers from 0 to nFeatures-1.
+
+The code also supports a binary format with both dense and sparse storage. Use convert_data to convert from text to binary format. 
+
+
+### Label filter file format
+
+The label filter file starts with a header row:
+
+```
+nFeatures nFilters nClasses
+```
+
+Then the parameters of the label filters are stored in three space separated matrices:
+
+1. The filter directions as a `nFilters x d` matrix
+2. The lower bounds as a `nFilters x nClass` matrix
+3. The upper bounds as a `nFilters x nClass` matrix
+
+
+
+### Linear model file format
+
+The linear classifiers are stored in an SVMLight like format.
+
+The first row in the file is an optional header:
+
+```
+nClasses nFeatures
+```
+
+Next the weights of each classifier are stored, one classifier per line, in the order of the labels (i.e. classifier corresponding to label '0' is first, then the classifier corresponding to label '1' and so on. The format is:
+
+```
+intercept feature:weight feature:weight ... feature:weight
+```
+
+Features are consecutive integers from 0 to nFeatures-1.
+
+The intercept is optional. If not present, it is treated as 0.
+
+The code also supports a binary format with both dense and sparse storage. Binary model files are smaller and much faster to load. Use convert_linearmodel to convert from text to binary format. 
+
+
+## Important classes
+
+- MClearnFilter -- main class for training the label filters from data.
+- MClinearClass -- main class for testing using a linear model and optional label filters. Handles prediction and evaluation.
+
+- MCxyDataArgs -- defines parameters and command line options for handling the data
+- MCsolveArgs -- defines parameters and command line options for learning the label filter
+- MCprojectorArgs -- defines parameters and command line options for applying the label filters
+- MCclassifierArgs -- defines parameters and command line options for applying the classifier
+
+- MCxyData -- encapsulates the data for training/testing. Handles both dense and sparse data.  Manages loading and
+saving data in various formats.
+- MCsoln -- Encapsulates the label filter parameters. Manages loading and saving label filters in text or binary formats.
+- PredictionSet -- encapsulates the predictions of the model.
+- linearModel -- encapsulates a linear classifier. Handles loading, saving and prediction (not training)

@@ -1,3 +1,9 @@
+/*  Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
 #ifndef __PRINTING_H
 #define __PRINTING_H
 /** \file
@@ -10,7 +16,9 @@
 #include <string>
 #include <iosfwd>
 
-namespace detail {
+class Roaring;
+
+namespace detail {  
     template<typename T> inline std::ostream& io_txt( std::ostream& os, T const& x, char const* ws="\n" );
     template<typename T> inline std::istream& io_txt( std::istream& is, T      & x );
     template<typename T> inline std::ostream& io_bin( std::ostream& os, T const& x );
@@ -26,20 +34,16 @@ namespace detail {
     template<> std::ostream& io_bin( std::ostream& os, std::string const& x );
     template<> std::istream& io_bin( std::istream& is, std::string& x );
 
-    /** \name dynamic_bitset i/o
-     * \b beware that boost and io_txt do BIG-ENDIAN output, </em>msb first</em> */
+    /** \name Roaring i/o */
     //@{
-#define TBITSET template<typename Block, typename Alloc>
-#define BITSET  boost::dynamic_bitset<Block,Alloc>
-    // boost provides a big-endian operator<< and operator>>, so default impl works
-    //TBITSET std::ostream& io_txt( std::ostream& os, BITSET const& x, char const* ws="\n" );
-    //TBITSET std::istream& io_txt( std::istream& is, BITSET      & x );
-    TBITSET std::ostream& io_bin( std::ostream& os, BITSET const& x );
-    TBITSET std::istream& io_bin( std::istream& is, BITSET      & x );
-    TBITSET std::ostream& io_bin( std::ostream& os, std::vector<BITSET> const& x );
-    TBITSET std::istream& io_bin( std::istream& os, std::vector<BITSET> const& x );
-#undef BITSET
-#undef TBITSET
+    std::ostream& io_txt( std::ostream& os, Roaring const& x, char const* ws = "\n" );
+    std::istream& io_txt( std::istream& is, Roaring      & x );
+    std::ostream& io_txt( std::ostream& os, std::vector<Roaring> const& x, char const* ws = "\n" );
+    std::istream& io_txt( std::istream& os, std::vector<Roaring>      & x );
+    std::ostream& io_bin( std::ostream& os, Roaring const& x );
+    std::istream& io_bin( std::istream& is, Roaring      & x );
+    std::ostream& io_bin( std::ostream& os, std::vector<Roaring> const& x );
+    std::istream& io_bin( std::istream& os, std::vector<Roaring>      & x );
     //@}
 
     /** \name std::array<T,N> i/o
@@ -104,33 +108,23 @@ namespace detail {
     TMATRIX std::istream& eigen_io_bin( std::istream& is, MATRIX      & x );
     TMATRIX std::ostream& eigen_io_txt( std::ostream& os, MATRIX const& x, char const *ws="\n" );
     TMATRIX std::istream& eigen_io_txt( std::istream& is, MATRIX      & x );
-    template<int Options, typename Index> // bool override:
-    std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x );
-    template<int Options, typename Index> // bool override:
-    std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index>      & x );
+    /* template<int Options, typename Index> // bool override: */
+    /* std::ostream& eigen_io_bin( std::ostream& os, Eigen::SparseMatrix<bool,Options,Index> const& x ); */
+    /* template<int Options, typename Index> // bool override: */
+    /* std::istream& eigen_io_bin( std::istream& is, Eigen::SparseMatrix<bool,Options,Index>      & x ); */
 #undef MATRIX
 #undef TMATRIX
-    extern std::array<char,4> magicSparseMbBin; ///< "SMbb"
-    extern std::array<char,4> magicSparseMbTxt; ///< "SMbt"
-    /** Compressed SparseMb output, with magic header bytes and only-true values.
-     * \throw if x has any false values or if x is uncompressed. */
-    std::ostream& eigen_io_txtbool( std::ostream& os, SparseMb const& x );
-    /** read a SparseMb matrix of only-true values into compressed \c x.
-     * \throw if bad magic header bytes. */
-    std::istream& eigen_io_txtbool( std::istream& is, SparseMb      & x );
-    /** Compressed SparseMb output, with magic header bytes and only-true values.
-     * \throw if x has any false values or if x is uncompressed. */
-    std::ostream& eigen_io_binbool( std::ostream& os, SparseMb const& x );
-    /** read a SparseMb matrix of only-true values into compressed \c x.
-     * \throw if bad magic header bytes. */
-    std::istream& eigen_io_binbool( std::istream& is, SparseMb      & x );
-    //@}
 
+    template<typename Type>
+      std::istream& parse_labels(std::istream& iss, std::vector<Type>& yIdx);
+    template<typename Type>
+      std::istream& parse_features(std::istream& iss, std::vector<size_t>& xIdx, std::vector<Type>& xVal);
+          
     /** input only - read text libsvm-format. \throw on error. */
-    template< typename X_REAL >
     std::istream& eigen_read_libsvm( std::istream& is,
-                                     typename Eigen::SparseMatrix<X_REAL,Eigen::RowMajor> &x,
-                                     Eigen::SparseMatrix<bool,Eigen::RowMajor> &y );
+                                     SparseM &x,
+                                     SparseMb &y,
+				     int const verbose = 0);
 
 }//detail::
 
@@ -141,6 +135,11 @@ template <typename Block, typename Alloc>
 
 template <typename Block, typename Alloc>
   int load_bitvector(std::istream& in, boost::dynamic_bitset<Block, Alloc>& bs);
+
+void dumpFeasible(std::ostream& os
+		  , std::vector<boost::dynamic_bitset<>> const& vbs
+		  , bool denseFmt=false);
+  
 
 /// \name misc pretty printing
 //@{

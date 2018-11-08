@@ -1,3 +1,9 @@
+/*  Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
 #include <vector>
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -28,24 +34,3 @@ SparseMb labelVec2Mat (const Eigen::VectorXd& yVec)
 }
 
 
-// check if a file exists and is ready for reading
-
-bool fexists(const char *filename)
-{
-  std::ifstream ifile(filename);
-  return ifile;
-}
-
-
-// delete the contents of an ActiveDataSet to free up memory
-
-void free_ActiveDataSet(ActiveDataSet*& active)
-{
-    if (active){   
-        for(ActiveDataSet::iterator actit = active->begin(); actit !=active->end();actit++){
-            delete (*actit);
-        }
-        delete active;
-        active=nullptr;
-    }		
-}

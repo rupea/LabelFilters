@@ -1,10 +1,17 @@
+/*  Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
 #ifndef __FILTER_H
 #define __FILTER_H
 
 #include "Eigen/Dense"
-#include <boost/dynamic_bitset.hpp>
+#include "roaring.hh"
+#include "typedefs.h"
 #include <vector>
-
+#include <list>
 /** Filter with fast random-access by individual projection values.
  * - Best used when
  *   - need to evaluate projections serially in random order, or
@@ -19,6 +26,9 @@
  *     data), data points that fall \em precisely on an {l,u}
  *     class boundary may \b incorrectly be rejected.
  */
+
+struct MutexType;
+
 class Filter
 {
 public:
@@ -34,7 +44,9 @@ public:
      * - the bitset has \b 1 (true) for each possible class.
      * \return bitset pointer \b unusable after \c Filter destructor runs.
      */
-    boost::dynamic_bitset<> const* filter (double xproj) const;
+    Roaring const* filter (double xproj) const;
+    void filter(double xproj, std::list<int>& active) const;
+    void filterBatch (Eigen::VectorXd proj, ActiveSet& active, std::vector<MutexType>& mutex) const;
 
     /** debug... */
     ssize_t idx(double xproj) const{
@@ -42,19 +54,25 @@ public:
                                     std::lower_bound(_sortedLU.data(),
                                                      _sortedLU.data()+_sortedLU.size(),
                                                      xproj
-                                                     //,[](double const i, double const j){return i<=j;}
                                                      ));
         return ret;
     }
-private:
-    void init_map(std::vector<int>& ranks); ///< construction helper
-
-    Eigen::VectorXd _sortedLU; ///< sort the concatenation of all (lower,upper) values
     /** Tabulate {classes} given where projection value falls in \c _sortedLU.
      * - As projection values pass l/u boundaries in \c _sortedLU,
      * - one bit in the class bitmap changes.
      * - So save these easily-constructed bitmaps. */
-    std::vector<boost::dynamic_bitset<> > _map;
+    void init_map(); 
+private:
+    Eigen::VectorXd _l;
+    Eigen::VectorXd _u;
+    Eigen::VectorXd _sortedLU; ///< sort the concatenation of all (lower,upper) values
+    std::vector<int> _sortedClasses; ///< used to recover the classes that coresponds to each in _sortedLU. 
+    /** Tabulate {classes} given where projection value falls in \c _sortedLU.
+     * - As projection values pass l/u boundaries in \c _sortedLU,
+     * - one bit in the class bitmap changes.
+     * - So save these easily-constructed bitmaps. */
+    std::vector<Roaring> _map;
+    bool _mapok;
 #ifndef NDEBUG
     mutable uint64_t nCalls;
 #endif
@@ -68,7 +86,7 @@ private:
  * - Considering highest right boundary, a larger xproj will
  *   yield _sortedLU.end(), so _map.size() must be 2*noClasses+1.
  */
-inline const boost::dynamic_bitset<>* Filter::filter(double xproj) const
+inline const Roaring* Filter::filter(double xproj) const
 {
 #ifndef NDEBUG
     ++nCalls;
@@ -79,27 +97,18 @@ inline const boost::dynamic_bitset<>* Filter::filter(double xproj) const
                                                  xproj))];
 }
 
-#if 0
-/** Filter with fast access for a batch of projection values.
- * - Best used when
- *   - we have a "batch" of values to process, just once, and
- *   - number of calls to \c Filter::filter(double) is << number of classes.
- * \detail
- *   - sort the projection values
- *   - and bitmap can be modified as we ascend the projection values.
- *     - and we can stop whenever we have no more projection values.
- */
-class FilterBatch
-{
-    FilterBatch(const Eigen::VectorXd& l, const Eigen::VectorXd& u);
-    ~FilterBatch();
-    /** Given a projection value, \c xproj, what classes are possible?
-     * \return vector of bitsets, <b>up to client to \c delete returned pointer</b> */
-    std::vector<boost::dynamic_bitset<>>* filter (vector<double> xproj) const;
-private:
-    boost::dynamic_bitset<> bs;
-};
-#endif
 
+// very slow. Do optimized. 
+inline void Filter::filter(double xproj, std::list<int>& active) const
+{
+#ifndef NDEBUG
+  ++nCalls;
+#endif
+  std::list<int>::iterator it = active.begin();
+  while (it != active.end())
+    {
+      (xproj < _l[*it] || xproj > _u[*it])?(it=active.erase(it)):++it;
+    }    
+}
 
 #endif

@@ -1,62 +1,78 @@
-CXX ?= g++
-ifneq ($(wildcard /opt/boost-1.60),)
-BOOSTDIR ?= /opt/boost-1.60/include
-endif
-ifneq ($(wildcard $(HOME)/Programs/boost_1_56_0),)
-BOOSTDIR ?= $(HOME)/Programs/boost_1_56_0
-endif
+THIS_MAKEFILE := $(lastword $(MAKEFILE_LIST))
+MAKEFILE_DIR := $(abspath $(dir $(THIS_MAKEFILE)))
+
+# CRoaring is included as a git submodule. Change this to use your own CRoaring install
+CROARINGDIR ?= $(MAKEFILE_DIR)/../CRoaring
+CROARINGINC ?= -I$(CROARINGDIR)
+CROARINGLIB ?= $(CROARINGDIR)
+CROARINGLINK ?= -L$(CROARINGLIB) -Wl,-rpath,$(CROARINGLIB) 
+
+# Eigen is included as a git submodule. Change this ig you want to use your own Eigen install
+EIGENDIR ?= $(MAKEFILE_DIR)/../Eigen
+EIGENINC ?= -I$(EIGENDIR)/
+
+# using boost program options package. Change this to your instalation of boost
+BOOSTDIR ?= $(HOME)/local
+BOOSTINC ?= -I$(BOOSTDIR)/include
 BOOSTLIB ?= $(BOOSTDIR)/lib
-BOOSTLINK:=-L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
+BOOSTLINK ?= -L$(BOOSTLIB) -Wl,-rpath,$(BOOSTLIB) 
 
-OPENMP ?= -fopenmp
+#using gperftools tcmalloc and profiler. Change this to point to your instalation of gperftools 
+GPERFTOOLSDIR ?= $(HOME)/local
+GPERFTOOLSINC ?= -I$(GPERFTOOLSDIR)/include
+GPERFTOOLSLIB ?=  $(GPERFTOOLSDIR)/lib
+GPERFTOOLSLINK ?= -L$(GPERFTOOLSLIB) -Wl,-rpath,$(GPERFTOOLSLIB)
 
-ifneq ($(wildcard /usr/include/octave-3.8.2),)
-OCTAVEDIR ?= /usr
-BINDIR ?= bin-newmlc
-OCT_INC := -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
-OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.8.2
-endif
-ifneq ($(wildcard $(HOME)/Programs/octave-3.8.2),)
-OCTAVEDIR ?= $(HOME)/Programs/octave-3.8.2
-BINDIR ?= bin-mlc
-OCT_INC := -I$(OCTAVEDIR)/include/octave-3.8.2 -I$(OCTAVEDIR)/include/octave-3.8.2/octave
-OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.8.2
-endif
-ifneq ($(wildcard /usr/include/octave-3.8.1),)
-OCTAVEDIR = /usr
-BINDIR ?= bin_oct3.8.1
-OCT_INC:=-I$(OCTAVEDIR)/include/octave-3.8.1 -I$(OCTAVEDIR)/include/octave-3.8.1/octave
-OCT_LINK:= -Wl,-rpath,$(OCTAVEDIR)/lib64 -Wl,-rpath,$(OCTAVEDIR)/lib64/octave/3.8.1
-endif
+BINDIR ?= $(MAKEFILE_DIR)/../bin
 
-
-HDF5_INC ?= -I/usr/include/hdf5/serial
-OCTAVE_CFLAGS ?= -O3 -fPIC $(OPENMP) -std=c++11 -march=native -ffast-math -m64 -pipe $(OCT_INC) $(HDF5_INC) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR)
-OCTAVE_LDFLAGS ?= -L../c
-OCTAVE_MEX ?= env CXXFLAGS="$(OCTAVE_CFLAGS)" LDFLAGS="$(OCTAVE_LDFLAGS)" CC=$(CXX) $(OCTAVEDIR)/bin/mkoctfile -v -lgomp
-LIBSVM_OCTAVE_CFLAGS ?= -Wall -O3 -fPIC -DNDEBUG $(OCT_INC) -I..
-
-
-
-OPENMP ?= -fopenmp
+# OMP options
+# 1. full parallelization 
+OPENMP ?= -fopenmp -DMCTHREADS=1
 # for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
-# 1. no openmp anywhere
-#OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
-# 2. allow Eigen/blas threads, but no MCFilter source code threads
-#OPENMP:= -DMCTHREADS=0
+# 2. no openmp anywhere
+# OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
+# 3. allow Eigen/blas threads, but no MCFilter source code threads
+#OPENMP:= -fopenmp -DMCTHREADS=0
+# 4. allow MCFilter threads but not Eigen threads
+#OPENMP:= -fopenmp -DEIGEN_DONT_PARALLELIZE
 # allow STL experimental threads?
 
-CPPFLAGS ?= -march=native -ffast-math -m64 -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG -I$(BOOSTDIR) -std=c++11 -pipe -ggdb3 -fPIC $(OCT_INC) $(HDF5_INC)
+CXX ?= g++
+CC ?= gcc
 
-LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(OCT_LINK)
+
+CPPFLAGS ?= -O3 $(OPENMP) -DNDEBUG -DEIGEN_NO_DEBUG $(BOOSTINC) $(CROARINGINC) $(EIGENINC) -march=native -ffast-math -m64  -std=c++11 -pipe -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free 
+LDFLAGS ?= $(BOOSTLINK) -lboost_program_options $(CROARINGLINK) -lroaring $(GPERFTOOLSLINK) -ltcmalloc 
 
 
-PROFILE_OPENMP = $(OPENMP)
-PROFILEDIR = $(HOME)/Programs/gperftools-2.1/install
-PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP) -std=c++11 -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE -I$(PROFILEDIR)/include -I$(BOOSTDIR) $(OCT_INC) $(HDF5_INC)
-PROFILE_CPPFLAGS+=-DMCTHREADS=1
-#PROFILE_CPPFLAGS += -DEIGEN_DONT_PARALLELIZE
-PROFILE_LDFLAGS = $(LDFLAGS) -L$(PROFILEDIR)/lib -lprofiler 
+#profileing settings 
+# OMP options
+# 1. full parallelization 
+PROFILE_OPENMP ?= -fopenmp -DMCTHREADS=1
+# for valgrind debug, compile without openmp... then can see "0 errors from 0 contexts"
+# 2. no openmp anywhere
+# PROFILE_OPENMP:= -Wno-error=unknown-pragmas -Wno-error=unused-variable
+# 3. allow Eigen/blas threads, but no MCFilter source code threads
+#PROFILE_OPENMP:= -fopenmp -DMCTHREADS=0
+# 4. allow MCFilter threads but not Eigen threads
+#PROFILE_OPENMP:= -fopenmp -DEIGEN_DONT_PARALLELIZE
+# allow STL experimental threads?
+
+PROFILE_CPPFLAGS = -ggdb3 -O3 $(PROFILE_OPENMP)  -DNDEBUG -DEIGEN_NO_DEBUG -DPROFILE $(GPERFTOOLSINC) $(BOOSTINC) $(CROARINGINC) $(EIGENINC) -march=native -ffast-math -m64 -std=c++11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free
+PROFILE_LDFLAGS = $(LDFLAGS) -lprofiler 
+
+
+DBGFLAGS ?= $(filter-out -DNDEBUG -DEIGEN_NO_DEBUG,$(CPPFLAGS))
+DBGFLAGS += -ggdb3 -Wall -Wno-sign-compare # -Werror
+# for better tracing...
+# DBGFLAGS += -O1
+
+
+# testing...
+#MKLROOT:=/opt/intel/compilers_and_libraries/linux/mkl/
+#CPPFLAGS += -DEIGEN_USE_MKL_ALL -I$(MKLROOT)/include 
+#LDFLAGS += -Wl,--start-group ${MKLROOT}/lib/intel64/libmkl_intel_lp64.a ${MKLROOT}/lib/intel64/libmkl_core.a ${MKLROOT}/lib/intel64/libmkl_gnu_thread.a -Wl,--end-group -ldl -lpthread -lm
+
 
 
 NCPUS:=$(shell cat /proc/cpuinfo | grep '^processor' | wc -l)
@@ -64,44 +80,50 @@ JOBS:=-j$(NCPUS)
 
 export
 
-C_TARGETS = clean standalone milde lib learn_projection evaluate_projection run_kmeans run_LPSR \
-	octave oct_find_w.oct oct_normalize_data.oct oct_project_data.oct oct_predict_data.oct \
-	oct_get_projection_measures.oct oct_kmeans.oct #oct_evaluate_model.oct oct_calc_objective.oct
-PROFILE_TARGETS = $(patsubst %,profile_%,$(C_TARGETS))
+C_TARGETS = mcproj mcsolve convert_linearmodel convert_data clean lib
 
-.PHONY: all clean octave libsvm liblinear lua libmcfilter
+PROFILE_TARGETS = $(patsubst %,%-prof,$(C_TARGETS))
+DBG_TARGETS = $(patsubst %,%-dbg,$(C_TARGETS))
 
-all: octave libsvm liblinear standalone
+.PHONY: all clean lib CRoaring clean-all CRoaring-bld
+
+all: lib mcproj mcsolve convert_linearmodel convert_data
 
 $(C_TARGETS):
 	mkdir -p $(BINDIR)
-	$(MAKE) -C $(BINDIR) $(JOBS) -f../c/Makefile $@
+	$(MAKE) -C $(BINDIR) $(JOBS) -f../src/c/Makefile $@
 
 #enable profiling
 $(PROFILE_TARGETS):
-	mkdir -p $(BINDIR)-profile
-	$(MAKE) -C $(BINDIR)-profile CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" -f../c/Makefile $(patsubst profile_%,%,$@) 
+	mkdir -p $(BINDIR)-prof
+	$(MAKE) -C $(BINDIR)-prof CPPFLAGS="$(PROFILE_CPPFLAGS)" LDFLAGS="$(PROFILE_LDFLAGS)" -f../src/c/Makefile $(patsubst %-prof,%,$@) 
 
-# lua and libmcfilter targets do not involve octave (just c++ and milde_core's lua)
-lua: libmcfilter | libmcfilter
-	$(MAKE) -C lua-api $(JOBS)
-libmcfilter:
-	$(MAKE) -C c $(JOBS) lib
-
-#standalone: 
-#	$(MAKE) -C $(BINDIR) -f../c/Makefile $(MAKECMDGOALS)
-#octave:
-#	$(MAKE) -C $(BINDIR) -f../octave/Makefile
-
-libsvm:
-	cd libsvm-3.17/matlab && make OCTAVE_CFLAGS="$(LIBSVM_OCTAVE_CFLAGS)" octave
-
-liblinear:
-	cd liblinear-1.94/matlab && make OCTAVE_CFLAGS="$(LIBSVM_OCTAVE_CFLAGS)" octave
+#enable debug
+$(DBG_TARGETS):
+	mkdir -p $(BINDIR)-dbg
+	$(MAKE) -C $(BINDIR)-dbg CPPFLAGS="$(DBGFLAGS)" -f../c/Makefile $(patsubst %-dbg,%,$@) 
 
 
-libsvm_clean: 
-	cd liblinear-1.94/matlab && make clean
-	cd libsvm-3.17/matlab && make clean
-#	$(MAKE) -C $(BINDIR) -f../c/Makefile clean
-#	$(MAKE) -C lua-api clean
+CRoaring:
+	$(MAKE) -C $(CROARINGDIR) -f ../src/Makefile CRoaring-bld
+
+CRoaring-bld:
+	./amalgamation.sh 
+	$(CC) -O3-march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -o roaring.o -c roaring.c 
+	$(AR) -Uvru libroaring.a roaring.o
+	$(CC) -O3 -march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -shared -o libroaring.so -fPIC roaring.c
+
+CRoaring-prof:
+	$(MAKE) -C $(CROARINGDIR) -f ../src/Makefile CRoaring-bld-prof
+
+CRoaring-bld-prof:
+	./amalgamation.sh 
+	$(CC) -ggdb3 -O3 -march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -o roaring.o -c roaring.c
+	$(AR) -Uvru libroaring.a roaring.o
+	$(CC) -ggdb3 -O3 -march=native -std=c11 -fno-builtin-malloc -fno-builtin-calloc -fno-builtin-realloc -fno-builtin-free -shared -o libroaring.so -fPIC roaring.c
+
+CRoaring-clean:
+	cd $(CROARINGDIR) && rm roaring.o libroaring.a libroaring.so roaring.c roaring.h roaring.hh
+
+clean-all: clean CRoaring-clean
+

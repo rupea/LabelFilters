@@ -1,24 +1,30 @@
+/*  Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
 #include "filter.h"
 #include "Eigen/Dense"
 #include "utils.h"
-#include <boost/dynamic_bitset.hpp>
+#include "roaring.hh"
+#include "mutexlock.h"
 #include <vector>
 #include <iostream>
 
 using Eigen::VectorXd;
-using namespace boost;
 using namespace std;
 
 int const Filter::verbose = 0;
 
     Filter::Filter(const VectorXd& l, const VectorXd& u)
-    : _sortedLU( 2*l.size() )
+      :_l(l), _u(u), _sortedLU( 2*l.size() ), _sortedClasses(2*l.size())
       , _map()
+      , _mapok(false)
 #ifndef NDEBUG
       , nCalls(0)
 #endif
 {
-    //_sortedLU = new VectorXd(2*l.size());
     for(size_t i=0; i<l.size(); ++i){
         _sortedLU.coeffRef(2*i) = l.coeff(i);
         if (l.coeff(i) >= u.coeff(i)) {
@@ -31,28 +37,21 @@ int const Filter::verbose = 0;
             _sortedLU.coeffRef(2*i+1) = u.coeff(i);
         }
     }
-    vector<int> ranks(_sortedLU.size());
-    sort_index(_sortedLU, ranks);
+    //    vector<int> ranks(_sortedLU.size());
+    //    sort_index(_sortedLU, ranks);
+    sort_index(_sortedLU, _sortedClasses);
     std::sort(_sortedLU.data(), _sortedLU.data()+_sortedLU.size());
+    for (auto &c :_sortedClasses) c = c/2;
     if(verbose>=2){
         cout<<" Filter    lower : "<<l.transpose()<<endl;
         cout<<" Filter    upper : "<<u.transpose()<<endl;
         cout<<" Filter _sortedLU: "<<_sortedLU.transpose()<<endl;
-        cout<<" Filter     ranks: "; for(auto const r: ranks) cout<<" "<<r; cout<<endl;
+        cout<<" Filter     ranks: "; for(auto const r: _sortedClasses) cout<<" "<<r; cout<<endl;
     }
-    init_map(ranks);
 }
 
 Filter::~Filter()
 {
-#if 0
-    for (vector<dynamic_bitset<>*>::iterator map_it=_map->begin(); map_it != _map->end();++map_it)
-    {
-        delete (*map_it);
-    }
-    delete _map;
-    delete _sortedLU;
-#endif
 #ifndef NDEBUG
     if(verbose>=1){
         uint64_t nClass = _sortedLU.size() / 2U;
@@ -63,33 +62,56 @@ Filter::~Filter()
 #endif
 }
 
-void Filter::init_map(vector<int>& ranks)
+void Filter::init_map()
 {
-#if 0 //old
-    size_t noClasses = ranks.size()/2;
-    _map = new vector<dynamic_bitset<>*>(2*noClasses+1);
-    vector<dynamic_bitset<>*>::iterator map_it = _map->begin();
-    size_t i = 0;
-    *map_it++ = new dynamic_bitset<>(noClasses);
-    while (map_it != _map->end())
-    {
-        *map_it = new dynamic_bitset<>(**(map_it-1));
-        (*map_it)->set(ranks[i]/2,!(ranks[i]&1));
-        map_it++;
-        i++;
-    }
-#endif
-    size_t const noClasses = ranks.size()/2U;
-    size_t const nBitmaps = 2U*noClasses + 1U;
-    assert( _map.size() == 0U );
-    _map.reserve( nBitmaps );
-    _map.emplace_back(noClasses);                     // begin with a default [empty] bitset
-    if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back()<<endl;
-    for(size_t i=0U; i<nBitmaps-1U; ++i){
-        _map.emplace_back( _map.back() );             // push a copy of the last bitmap
-        _map.back().set( ranks[i]/2, !(ranks[i]&1) ); // toggle 1 bit as cross a lower or upper bound
-        if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back()<<endl;
-    }
-    assert( _map.size() == nBitmaps );
+  if (_mapok) return; // already initialized 
+  size_t const noClasses = _sortedLU.size()/2;
+  size_t const nBitmaps = 2U*noClasses + 1U;
+  assert( _map.size() == 0U );
+  _map.reserve( nBitmaps );
+  _map.emplace_back();  // begin with a default [empty] bitset
+  _map.back().setCopyOnWrite(true);
+  if(verbose>=2) cout<<" Filter map["<<_map.size()-1U<<"]="<<_map.back().toString()<<endl;
+  for(size_t i=0U; i<nBitmaps-1U; ++i){
+    _map.emplace_back( _map.back() ); // push a copy of the last bitmap
+    // this depends on lower bounds being smaller than upper bounds.
+    _map.back().flip( _sortedClasses[i], _sortedClasses[i]+1 ); 
+  }
+  assert( _map.size() == nBitmaps );
+  _mapok = true;
 }
 
+void Filter::filterBatch (Eigen::VectorXd proj, ActiveSet& active, vector<MutexType>& mutex) const
+{
+  size_t nEx = proj.size();
+
+  if (active.size() != nEx)
+    {
+      throw("ERROR: Filter::filterBatch, proj and active not the same size");
+    }
+  if (mutex.size() != nEx)
+    {
+      throw("ERROR: Filter::filterBatch, active and mutex not the same size");
+    }
+  
+  vector<int> ranks(nEx);
+  sort_index(proj, ranks);
+  
+  std::sort(proj.data(), proj.data()+proj.size());
+  size_t n = 0;
+  size_t i = 0;
+  Roaring current;
+  while (n < nEx)
+    {
+      while (proj[n] > _sortedLU[i] && i < _sortedLU.size())
+	{
+	  int c=_sortedClasses[i++];
+	  current.flip(c,c+1);
+	}
+      mutex[ranks[n]].Lock();
+      active[ranks[n]] &= current;
+      mutex[ranks[n]].Unlock();
+      n++;
+    }
+}
+  

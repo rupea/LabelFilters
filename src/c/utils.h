@@ -1,3 +1,9 @@
+/*  Copyright (C) 2017 NEC Laboratories America, Inc. ("NECLA"). All rights reserved.
+ *
+ * This source code is licensed under the license found in the LICENSE file in
+ * the root directory of this source tree. An additional grant of patent rights
+ * can be found in the PATENTS file in the same directory.
+ */
 #ifndef __UTILS_H
 #define __UTILS_H
 
@@ -5,11 +11,8 @@
 #include <exception>
 #include <iostream>
 
-//#include <sstream>
-//#include <iomanip>
 #define OUTWIDE( OSTREAM, WIDTH, STUFF ) do{ std::ostringstream oss; oss<<STUFF; OSTREAM<<setw(WIDTH)<<oss.str(); }while(0)
 
-//using Eigen::VectorXd;
 
 
 // *********************************
@@ -26,23 +29,6 @@ void sort_index( Eigen::VectorXd const& m, std::vector<IntType>& cranks)
   std::sort(cranks.begin(), cranks.end(), [&m](int const i, int const j)
             {return m[i] < m[j];} );
 };
-#if 0 // plainer implementation
-struct Cmp {
-Cmp( Eigen::VectorXd const& m ) : m(m) {}
-  bool operator()( int const i, int const j ){
-    //return m.coeff(i) < m.coeff(j);
-    return m(i) < m(j);   // with checking
-  }
-  Eigen::VectorXd const& m;
-};
-for(size_t i=0U; i<cranks.size(); ++i)
-  cranks[i] = i;
-std::cout<<" copy..."<<std::endl;
-Eigen::VectorXd n(m);
-std::cout<<" std::sort ... "<<std::endl; std::cout.flush();
-Cmp cmp(n);
-std::sort(cranks.begin(), cranks.end(), cmp );
-#endif
 
 
 //**********************************
@@ -69,20 +55,18 @@ template <typename Scalar1, typename IndexType1,  typename Scalar2, typename Ind
   typename Eigen::SparseMatrix<Scalar1, Eigen::RowMajor, IndexType1>::InnerIterator iter1(rowmat,row);
   typename Eigen::SparseMatrix<Scalar2, Eigen::ColMajor, IndexType2>::InnerIterator iter2(colmat,col);
   double ans = 0.0;
+  int s;
   while (iter1 && iter2)
     {
-      if (iter1.index() == iter2.index())
+      s = iter1.index() - iter2.index();      
+      if (s)
 	{
-	  ans+=iter1.value()*iter2.value();
-	  ++iter1;
-	  ++iter2;
-	}
-      else if (iter1.index() < iter2.index())
-	{
-	  ++iter1;
+	  s>0?++iter2:++iter1;
 	}
       else
 	{
+	  ans+=iter1.value()*iter2.value();
+	  ++iter1;
 	  ++iter2;
 	}
     }
@@ -112,7 +96,6 @@ template <typename Scalar1, typename IndexType1, typename Scalar2>
     {
       double c = colmat.coeff(iter1.index(),col);
       ans += c*iter1.value();
-      //      ans += colmat.coeff(iter1.index(),col)*iter1.value();
     }  
   return ans;
 }
@@ -136,31 +119,6 @@ template <typename RowMatType, typename ColMatType>
       result(col)=DotProductInnerVector(rowmat, row, colmat ,col);
     }
 }
-    
-/* template <typename EigenType> */
-/* double DotProductInnerVector (const Eigen::Ref<const Eigen::VectorXf>& vec, const EigenType& mat, size_t outerIndex) */
-/* { */
-/*   assert(vec.size() == mat.innerSize()); */
-/*   double val = 0.0; */
-/*   typename EigenType::InnerIterator iter(mat,outerIndex);  */
-/*   for  (; iter; ++iter)  */
-/*     { */
-/*       val += vec(iter.index())*iter.value(); */
-/*     }   */
-/*   return val; */
-/* } */
-
-/* template <typename EigenType> */
-/* void DotProductInnerVector (Eigen::Ref<Eigen::VectorXd> result, const Eigen::Ref<const DenseColMf>& mat1, const EigenType& mat2, size_t outerIndex) */
-/* { */
-/*   assert(result.size() == mat1.cols()); */
-
-/*   for (size_t i=0;i<mat1.cols();++i) */
-/*     { */
-/*       result(i)=DotProductInnerVector(mat1.col(i),mat2,outerIndex); */
-/*     } */
-/* } */
-
 
 // ************************************
 // Convert a label vector to a label matrix
@@ -168,12 +126,5 @@ template <typename RowMatType, typename ColMatType>
 
 SparseMb labelVec2Mat (const Eigen::VectorXd& yVec);
 
-
-// check if a file exists and is ready for reading
-
-bool fexists(const char *filename);
-
-/** delete an ActiveDataSet to free up memory. \post \c active==nullptr. */
-void free_ActiveDataSet(ActiveDataSet*& active);
 
 #endif
