@@ -32,7 +32,8 @@ The compilation will produce the following files:
 - libmcfilter.a -- label filter library, for static linking
 - mcsolve -- example program to learn a filter
 - mcpoj -- example program to apply the filter with linear classifiers.
-
+- convert_data -- program to convert data form XML to binary dense/sparse format
+- convert_linearmodel -- program to convert model files from text to binary format
 
 ## Using the code
 
@@ -76,7 +77,7 @@ label1,label2,label3  feature:value feature:value ... feature:value  #comment
 Labels are consecutive integers from 0 to nClasses-1.
 Features are consecutive integers from 0 to nFeatures-1.
 
-The code also supports a binary format with both dense and sparse storage.
+The code also supports a binary format with both dense and sparse storage. Use convert_data to convert from text to binary format. 
 
 
 ### Label filter file format
@@ -115,7 +116,7 @@ Features are consecutive integers from 0 to nFeatures-1.
 
 The intercept is optional. If not present, it is treated as 0.
 
-The code also supports a binary format with both dense and sparse storage.
+The code also supports a binary format with both dense and sparse storage. Binary model files are smaller and much faster to load. Use convert_linearmodel to convert from text to binary format. 
 
 
 ## Important classes
