@@ -68,7 +68,7 @@ First line is an optional header line:
 nExamples nFeatures nClasses
 ```
 
-Subsequently the file should contain one datapoint per line, in the following sparse format:
+Subsequently the file should contain one data point per line, in the following sparse format:
 
 ```
 label1,label2,label3  feature:value feature:value ... feature:value  #comment
@@ -82,18 +82,19 @@ The code also supports a binary format with both dense and sparse storage. Use c
 
 ### Label filter file format
 
-The label filter file starts with a header row:
+The label filter file is composed of three matrices:
 
-```
-nFeatures nFilters nClasses
-```
-
-Then the parameters of the label filters are stored in three space separated matrices:
-
-1. The filter directions as a `nFilters x d` matrix
+1. The filter directions as a `nFilters x nFeatures` matrix
 2. The lower bounds as a `nFilters x nClass` matrix
 3. The upper bounds as a `nFilters x nClass` matrix
 
+Each matrix starts with a header:
+
+```
+nRows nCols
+```
+
+followed by nRows rows of nCols space separated floats.
 
 
 ### Linear model file format
